@@ -1,0 +1,19 @@
+{
+  "build": {
+    "core": "stm32",
+    "cpu": "cortex-m3",
+    "extra_flags": "-DSTM32F2 -DSTM32F205RE",
+    "f_cpu": "120000000L",
+    "ldscript": "stm32f20x.ld",
+    "mcu": "stm32f205re"
+  },
+  "frameworks": [],
+  "name": "Aceinna IMU380",
+  "upload": {
+    "maximum_ram_size": 131072,
+    "maximum_size": 524288,
+    "protocol": "stlink"
+  },
+  "url": "https://www.aceinna.com/inertial-systems/",
+  "vendor": "ST"
+}

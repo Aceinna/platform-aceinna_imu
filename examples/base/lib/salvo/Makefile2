@@ -1,0 +1,528 @@
+###########################################################################################
+# The contents of this file are subject to the Pumpkin Salvo
+# License (the "License").  You may not use this file except
+# in compliance with the License. You may obtain a copy of
+# the License at http://www.pumpkininc.com, or from
+# warranty@pumpkininc.com.
+# 
+# Software distributed under the License is distributed on an
+# "AS IS" basis, WITHOUT WARRANTY OF ANY KIND, either express
+# or implied. See the License for specific language governing
+# the warranty and the rights and limitations under the
+# License.
+# 
+# The Original Code is Salvo - the Cooperative, Multitasking
+# RTOS. Copyright (C) 1995-2001 Pumpkin, Inc. and its
+# Licensor(s). All Rights Reserved.
+# 
+# $Source: C:\\RCS\\D\\Pumpkin\\Salvo\\src\\Makefile2,v $
+# $Author: aek $
+# $Revision: 3.94 $
+# $Date: 2011-07-06 16:36:34-07 $
+# 
+#   For use with \salvo\src\Makefile.
+# 
+#   Runs under Cygwin's bash shell, and presumably others, too. Created and tested
+# under GNU make 3.79.1.
+#
+#	The basic idea here is that for each type of library (i.e. simple multitasking,
+# etc.) there's a specific set of configuration options required. These are "enabled"
+# via defined symbols that are passed to the compiler, and are acted upon in salvolib.h.
+#
+# 	Each library type requires certain (but not all) salvo user services. However, each
+# library is compiled with all of the source code modules (less ones that are not
+# part of any freeware distribution). Therefore the linker reports many 
+#
+#	"modulexyz.obj defines no symbols (warning)" 
+#
+# warnings but that's OK.
+#
+#	For each target processor there's a specific library (due to precompiled issues
+# surrounding banking, etc.). The target processor specified for a given library is just
+# one of several possible target processors that have the same banking architecture.
+#
+#	To use the makefile, invoke it as below:
+#
+#		make -f Makefile2 target T=lib_type F=lib_family C=lib_configuration V=lib_variant 
+#
+# e.g.
+#
+#		make -f Makefile2 sfp412mb.lib T=OSF F=p412 C=OSM V=OSB
+#
+# 	This will create the sfp412mb.lib freeware library, for use with 16C773 and similar PICmicros, 
+# using salvo\include\salvolib.h, and placing the resultant library in salvo\library.
+#
+#
+
+
+###########################################################################################
+#
+#   Salvo Object Files
+#
+#	unused modules: salvoarray
+#
+OBJS = salvobinsem salvobinsem2 salvochk salvocyclic salvocyclic2 salvocyclic3 \
+salvocyclic4 salvocyclic5 salvocyclic6 salvocyclic7 salvodebug salvodelay salvodelay2 \
+salvodelay3 salvodestroy salvoeflag salvoeflag2 salvoeid salvoevent salvoinit \
+salvoinit2 salvoinit3 salvoinit4 salvolicense salvomsg salvomsg2 salvomsgq salvomsgq2 \
+salvomsgq3 salvomsgq4 salvoprio salvoprio2 salvoqdel salvoqins salvosched salvorpt \
+salvosem salvosem2 salvostop salvotask salvotask2 salvotask3 salvotask4 salvotask5 \
+salvotask6 salvotask7 salvotask8 salvotick salvotid salvotimer salvoutil 
+
+
+###########################################################################################
+#
+# Set LIB_FLY to 1 for building libraries on-the-fly (i.e. modules are added to library as
+#  they are compiled) ... compiler-dependent
+#
+LIB_FLY        =0
+
+
+###########################################################################################
+#
+# Set CUSTOM_RULES to 1 when out-of-the-ordinary rules are required for building
+#  object modules (e.g. two-pass like GCC ARM).
+#
+CUSTOM_CC_RULES =0
+
+
+###########################################################################################
+#
+# Directory Definitions. Everything is relative to Salvo's Src directory.
+#
+INC            =../Inc
+DOS_INC        =..\Inc
+INC2           =../../Inc
+DOS_INC2       =..\..\Inc
+SRC            =../Src
+DOS_SRC        =..\Src
+LIB            =../Lib
+DOS_LIB        =..\Lib
+
+###########################################################################################
+#
+#   Select compiler and necessary command-line arguments. 
+#
+CS-RCS         =c:/progra~1/compon~1/cs-rcs/system/csrcs.exe
+
+
+###########################################################################################
+#
+# a shorthand is sometimes required because non-Win32 compilers are overwhelmed by overly long
+#  command lines ... 
+# LIBRARY-OPTS-A is the limit for HT's V8C and 8.1 filenames -- beyond that, you get "invalid argument"
+#  errors, etc.
+#
+LIBRARY-OPTS-A =-DOSMAKE_LIBRARY -DOSL_T=$(T) -DOSL_C=$(C) -DOSL_V=$(V) -DOSCLC=$(CLC)
+
+LIBRARY-OPTS-d   =-dOSMAKE_LIBRARY -dOSLIBRARY_TYPE=$(T) -dOSLIBRARY_GLOBALS=$(G) -dOSLIBRARY_CONFIG=$(C) -dOSLIBRARY_VARIANT=$(V) -dOSCUSTOM_LIBRARY_CONFIG=$(CLC)
+LIBRARY-OPTS-D   =-DOSMAKE_LIBRARY -DOSLIBRARY_TYPE=$(T) -DOSLIBRARY_GLOBALS=$(G) -DOSLIBRARY_CONFIG=$(C) -DOSLIBRARY_VARIANT=$(V) -DOSCUSTOM_LIBRARY_CONFIG=$(CLC)
+LIBRARY-OPTS-E   =-DOSMAKE_LIBRARY -DOSLIBRARY_TYPE=$(T) -DOSLIBRARY_CONFIG=$(C) -DOSCUSTOM_LIBRARY_CONFIG=$(CLC)
+LIBRARY-OPTS-DF  =DF\(OSMAKE_LIBRARY="1",OSLIBRARY_TYPE="$(T)",OSLIBRARY_GLOBALS="$(G)",OSLIBRARY_CONFIG="$(C)",OSLIBRARY_VARIANT="$(V)",OSCUSTOM_LIBRARY_CONFIG="$(CLC)"\)
+LIBRARY-OPTS-DF2 =DF\(OSMAKE_LIBRARY="1",OSLIBRARY_TYPE="$(T)",OSLIBRARY_CONFIG="$(C)",OSCUSTOM_LIBRARY_CONFIG="$(CLC)"\)
+LIBRARY-OPTS-define =-define:OSMAKE_LIBRARY=1 -define:OSLIBRARY_TYPE=$(T) -define:OSLIBRARY_GLOBALS=$(G) -define:OSLIBRARY_CONFIG=$(C) -define:OSLIBRARY_VARIANT=$(V) -define:OSCUSTOM_LIBRARY_CONFIG=$(CLC)
+
+LIBRARY-OPTS-G   =/D "OSMAKE_LIBRARY" /D "OSLIBRARY_TYPE=$(T)" /D "OSLIBRARY_CONFIG=$(C)" /D "OSLIBRARY_VARIANT=$(V)" /D "OSCUSTOM_LIBRARY_CONFIG=$(CLC)"
+
+
+###########################################################################################
+#
+# This solution to Keil's LIB51 requiring a comma-delimited list is cheesy with a capital C, as it
+#  seeks to avoid the "final comma" after the last file. Beware if making changes. "CS"="comma separated".
+#
+OBJS_LIST      =$(addsuffix $(OBJ_SUFFIX), $(OBJS)) $(addsuffix $(OBJ_SUFFIX), $(EXTRA_OBJS))
+OBJS_LIST_CS   =$(addsuffix $(OBJ_SUFFIX2), $(OBJS)) $(addsuffix $(OBJ_SUFFIX), $(EXTRA_OBJS))
+
+
+###########################################################################################
+#
+#	All rules explicit.
+#   Failure to define a suffix here will result in problems involving "missing" filenames
+#    when building libraries.
+#
+.SUFFIXES:
+.SUFFIXES: .c .obj .o .opp .hzo .asm .s .S .lib .hza .a .r43 .r49 .r79 .r90
+
+
+###########################################################################################
+#
+#	Target-specific Makefiles and Library Target Files. Ignored if not present.
+#
+# Note that because all present target-specific Makefiles are included during
+#  a build, it's imperative that each makefile have a conditional include guard
+#  inside it to prevent "bleeding" variable definitions into the sole active
+#  Makefile in a build.
+#
+-include Make/ARMRV/Makefile		Make/ARMRV/targets.mk
+-include Make/EPS1C17/Makefile 	Make/EPS1C17/targets.mk
+-include Make/GCCARM/Makefile 	Make/GCCARM/targets.mk
+-include Make/GCCAVR/Makefile		Make/GCCAVR/targets.mk
+-include Make/IAR430/Makefile		Make/IAR430/targets.mk
+-include Make/IARARM/Makefile		Make/IARARM/targets.mk
+-include Make/IARAVR/Makefile   Make/IARAVR/targets.mk
+-include Make/ICCARM/Makefile		Make/ICCARM/targets.mk
+-include Make/ICCAVR/Makefile		Make/ICCAVR/targets.mk
+-include Make/KCARM/Makefile		Make/KCARM/targets.mk
+-include Make/MCC30/Makefile		Make/MCC30/targets.mk
+-include Make/MCC32/Makefile		Make/MCC32/targets.mk
+-include Make/MSCX86/Makefile		Make/MSCX86/targets.mk
+-include Make/RA430/Makefile		Make/RA430/targets.mk
+
+#-include Make/AQ430/Makefile		Make/AQ430/targets.mk
+#-include Make/GCC6811/Makefile		Make/GCC6811/targets.mk
+
+#-include Make/GCCX86/Makefile		Make/GCCX86/targets.mk
+#-include Make/HT430C/Makefile		Make/HT430C/targets.mk
+#-include Make/HT8051C/Makefile		Make/HT8051C/targets.mk
+#-include Make/HTPIC/Makefile		Make/HTPIC/targets.mk
+#-include Make/HTPICC18/Makefile		Make/HTPICC18/targets.mk
+#-include Make/HTV8C/Makefile		Make/HTV8C/targets.mk
+#-include Make/IARPIC18/Makefile		Make/IARPIC18/targets.mk
+#-include Make/ICC11/Makefile		Make/ICC11/targets.mk
+#-include Make/ICC430/Makefile		Make/ICC430/targets.mk
+
+#-include Make/KC51/Makefile			Make/KC51/targets.mk
+#-include Make/MCC18/Makefile		Make/MCC18/targets.mk
+
+#-include Make/TICC2000/Makefile		Make/TICC2000/targets.mk
+#-include Make/TICC2000/Makefile		Make/TICC2000/targets.mk
+#-include Make/ZIZ8/Makefile			Make/ZIZ8/targets.mk
+
+
+
+###########################################################################################
+#
+#   .c --> .obj and other dependency definitions. 
+#
+#   Like default implicit rule. User can override by redfining CFLAGS on make's command line.
+#
+#   Dependencies on files in LIBDIR subdirectories are for target-specific user hook files.
+#
+#
+ifeq ($(CUSTOM_CC_RULES),0)
+
+ifeq ($(LIB_FLY),0)
+%.obj %.o %.hzo: %.c $(INC)/salvo.h
+	$(CC) $(CC_OPT1) $(CPPFLAGS) $(CFLAGS) $(CC_OPT2)
+	
+%.obj %.o %.hzo: $(LIBDIR)/%.c $(INC)/salvo.h
+	$(CC) $(CC_OPT1) $(CPPFLAGS) $(CFLAGS) $(CC_OPT2)
+endif
+
+
+ifeq ($(LIB_FLY),1)
+%.obj %.o %.hzo: %.c $(INC)/salvo.h
+	$(CC) $(CC_OPT1) $(CPPFLAGS) $(CFLAGS) $(CC_OPT2)
+	$(LIBRARIAN) $(LIBFLAGS)
+	
+%.obj %.o %.hzo: $(LIBDIR)/%.c $(INC)/salvo.h
+	$(CC) $(CC_OPT1) $(CPPFLAGS) $(CFLAGS) $(CC_OPT2)
+	$(LIBRARIAN) $(LIBFLAGS)
+endif
+
+endif
+
+
+
+#
+# if the user has specified a custom library config, build the library with the -clcN
+#  suffix in its name.
+#
+ifeq ($(CLC),0)
+  CLC_SUFFIX=
+else
+  CLC_SUFFIX=-clc$(CLC)
+endif
+
+
+###########################################################################################
+#
+#   Remove existing object files. Defined in individual compiler's Makefile.
+#
+#	Legacy types: *.obj *.OBJ *.o *.opp *.O *.hzo *.r43 *.r49 *.r79 *.r90 *.r90
+#
+rmobjs:
+	@rm -f $(RMOBJS_LIST)
+
+
+
+###########################################################################################
+#
+#   remove existing library file. While one could argue that it's OK to simply
+# replace modules in the library, by removing it altogether and rebuilding it from
+# scratch we can be sure that all its modules are current.
+#
+rmlib:
+	@rm -f $(LIB)/$@
+
+   
+
+###########################################################################################
+#
+# Full file name (with path and optional CLC suffix) of library file being built.
+#
+
+LIB_FILE=$(LIB)/$(LIBDIR)/$*$(CLC_SUFFIX)$(LIB_SUFFIX)
+
+
+###########################################################################################
+#
+#   targets: the freeware and standard libraries:
+#
+$(HT_430_LIBRARIES) \
+$(HT_PICC_p2xx_LIBRARIES) \
+$(HT_PICC_p4xx_LIBRARIES) \
+$(HT_PICC_p7xx_LIBRARIES) \
+$(HT_PICC_p8xx_LIBRARIES) \
+$(HT_V8C_cv8_LIBRARIES)   \
+$(HT_C51_LIBRARIES)       \
+$(GCC_x86_LIBRARIES)      \
+$(GCC_6811_LIBRARIES) : rmobjs rmlib $(OBJS_LIST)
+	$(LIBRARIAN) r $(LIB_FILE) $(OBJS_LIST)
+	@ls -al $(LIB_FILE)
+		
+$(KEIL_C51_LIBRARIES) \
+$(KEIL_Cx51_LIBRARIES) : rmobjs rmlib $(OBJS_LIST)
+	$(LIBRARIAN) TRANSFER $(OBJS_LIST_CS) TO $(LIB_FILE) 
+	@ls -al $(LIB_FILE)
+		
+$(ICC_11_LIBRARIES) : rmobjs rmlib $(OBJS_LIST) osicc11.o
+	$(LIBRARIAN) -a $(LIB_NAME) osicc11.o
+	@mv $(LIB_NAME) $(LIB_FILE)
+	@cp $(LIB_FILE) $(ICC-LIBDIR)
+	@ls -al $(LIB_FILE)
+		
+$(ICC_430_LIBRARIES) : rmobjs rmlib $(OBJS_LIST) osicc430.o
+	$(LIBRARIAN) -a $(LIB_NAME) osicc430.o
+	@mv $(LIB_NAME) $(LIB_FILE)
+	@cp $(LIB_FILE) $(ICC-LIBDIR)
+	@ls -al $(LIB_FILE)
+	
+
+	
+$(ICC_ATMEGA_LIBRARIES) : rmobjs rmlib $(OBJS_LIST) osiccatmega.o
+	$(LIBRARIAN) -a $(LIB_NAME) osiccatmega.o
+	@mv $(LIB_NAME) $(LIB_FILE)
+	@cp $(LIB_FILE) $(ICC-LIBDIR)
+	@ls -al $(LIB_FILE)
+
+
+$(AQ_430_LIBRARIES) : rmobjs rmlib $(OBJS_LIST) osaq430.obj
+	$(LIBRARIAN) +s +clear l=$(LIB_FILE) $(OBJS_LIST) osaq430.obj
+	@ls -al $(LIB_FILE)
+
+				
+$(IAR_PIC18_LIBRARIES) : rmobjs rmlib $(OBJS_LIST)
+	@mv $(LIB_NAME) $(LIB_FILE)
+	@ls -al $(LIB_FILE)
+		
+$(MPLAB_C18_LIBRARIES) : rmobjs rmlib $(OBJS_LIST)
+	$(LIBRARIAN) /c $(LIB_FILE)
+	$(LIBRARIAN) /r $(LIB_FILE) $(OBJS_LIST)
+	@ls -al $(LIB_FILE)
+
+$(TI_C2400_LIBRARIES) : rmobjs rmlib $(OBJS_LIST) ostic24x.obj
+	$(LIBRARIAN) -rq $(LIB_FILE) $(OBJS_LIST) ostic24x.obj
+	@ls -al $(LIB_FILE)
+		
+$(TI_C2800_LIBRARIES) : rmobjs rmlib $(OBJS_LIST) ostic28x.obj
+	$(LIBRARIAN) -rq $(LIB_FILE) $(OBJS_LIST) ostic28x.obj
+	@ls -al $(LIB_FILE)
+		
+$(ZLG_EZ8_LIBRARIES) : rmobjs rmlib $(OBJS_LIST) osez8.obj
+	$(LIBRARIAN) $(LIB_NAME) =-+osez8.obj
+	@mv $(LIB_NAME) $(LIB_FILE)
+	@ls -al $(LIB_FILE)
+
+
+
+###########################################################################################
+#
+#	ARM libraries
+#
+$(GCC_ARM_STD_LIBRARIES) \
+$(GCC_ARM_OPT_LIBRARIES) : rmobjs rmlib $(OBJS_LIST) salvoportgccarm.o
+	$(LIBRARIAN) rcs $(LIB_NAME) $(OBJS_LIST)
+	$(LIBRARIAN2) $(LIB_NAME)
+	@mv $(LIB_NAME) $(LIB_FILE)
+	@ls -al $(LIB_FILE)
+				
+$(GCC_ARMCM3_STD_LIBRARIES) \
+$(GCC_ARMCM3_OPT_LIBRARIES) : rmobjs rmlib $(OBJS_LIST) salvoportgccarmcm3.o
+	$(LIBRARIAN) rcs $(LIB_NAME) $(OBJS_LIST)
+	$(LIBRARIAN2) $(LIB_NAME)
+	@mv $(LIB_NAME) $(LIB_FILE)
+	@ls -al $(LIB_FILE)
+				
+				
+				
+				
+#$(IAR_ARM_STD_LIBRARIES) \
+#$(IAR_ARM_OPT_LIBRARIES) : rmobjs rmlib $(OBJS_LIST) salvoportiararm.r79
+#	$(LIBRARIAN) -c "FETCH-MODULES salvoportiararm.r79 $(LIB_NAME)"
+#	@mv $(LIB_NAME) $(LIB_FILE)
+#	@ls -al $(LIB_FILE)
+
+
+
+
+
+$(ICC_ARM_STD_LIBRARIES) \
+$(ICC_ARM_OPT_LIBRARIES) : rmobjs rmlib $(OBJS_LIST) salvoporticcarm.o
+	$(LIBRARIAN) -a $(LIB_NAME) $(OBJS_LIST) salvoporticcarm.o
+	@mv $(LIB_NAME) $(LIB_FILE)
+	@cp $(LIB_FILE) $(ICC-LIBDIR)
+	@ls -al $(LIB_FILE)
+	
+	
+$(KEIL_ARM_STD_LIBRARIES) \
+$(KEIL_ARM_OPT_LIBRARIES): rmobjs rmlib $(OBJS_LIST) salvoportkcarm.obj
+	$(LIBRARIAN) TRANSFER $(OBJS_LIST_CS) TO $(LIB_FILE) 
+	@ls -al $(LIB_FILE)
+
+
+$(ARM_RV4_STD_LIBRARIES) \
+$(ARM_RV4_OPT_LIBRARIES): rmobjs rmlib $(OBJS_LIST) salvoportarmrv4.o
+	$(LIBRARIAN) $(LIBFLAGS) $(LIB_FILE) $(OBJS_LIST) salvoportarmrv4.o
+	@ls -al $(LIB_FILE)
+
+
+$(ARM_RVCM3_STD_LIBRARIES) \
+$(ARM_RVCM3_OPT_LIBRARIES): rmobjs rmlib $(OBJS_LIST) salvoportarmrvcm3.o
+	$(LIBRARIAN) $(LIBFLAGS) $(LIB_FILE) $(OBJS_LIST) salvoportarmrvcm3.o
+	@ls -al $(LIB_FILE)
+
+
+###########################################################################################
+#
+#	S1C17 libraries
+#
+# GCC
+#
+# GCC modules are added to the library all-at-once.
+#
+$(GCC_S1C17_STD_LIBRARIES) \
+$(GCC_S1C17_OPT_LIBRARIES): rmobjs rmlib $(OBJS_LIST) $(CTXSW_OBJ)
+	$(LIBRARIAN) $(LIBFLAGS) $(OBJS_LIST) $(CTXSW_OBJ)
+	@mv $(LIB_NAME) $(LIB_FILE)	
+	@ls -al $(LIB_FILE)	
+	@rm -f $(RMOBJS_LIST)
+		
+
+###########################################################################################
+#
+#	AVR libraries
+#
+# GCC, IAR & ImageCraft
+#
+# GCC modules are added to the library all-at-once.
+# IAR modules are added to the library on-the-fly.
+# ImageCraft modules are added to the library on-the-fly.
+#
+$(GCC_AVR_STD_LIBRARIES) \
+$(GCC_AVR_OPT_LIBRARIES) \
+$(GCC_ATM256_STD_LIBRARIES) \
+$(GCC_ATM256_OPT_LIBRARIES): rmobjs rmlib $(OBJS_LIST) $(CTXSW_OBJ)
+	$(LIBRARIAN) $(LIBFLAGS) $(OBJS_LIST) $(CTXSW_OBJ)
+	@mv $(LIB_NAME) $(LIB_FILE)	
+	@ls -al $(LIB_FILE)	
+		
+
+$(IAR_AVR_STD_LIBRARIES) \
+$(IAR_AVR_OPT_LIBRARIES): rmobjs rmlib $(OBJS_LIST) $(CTXSW_OBJ)
+	@mv $(LIB_NAME) $(LIB_FILE)
+	@ls -al $(LIB_FILE)
+	
+	
+$(ICC_AVR_STD_LIBRARIES) \
+$(ICC_AVR_OPT_LIBRARIES) \
+$(ICC_ATMEGA_STD_LIBRARIES) \
+$(ICC_ATMEGA_OPT_LIBRARIES) \
+$(ICC_ATM128_STD_LIBRARIES) \
+$(ICC_ATM128_OPT_LIBRARIES) \
+$(ICC_ATM256_STD_LIBRARIES) \
+$(ICC_ATM256_OPT_LIBRARIES) : rmobjs rmlib $(OBJS_LIST) $(CTXSW_OBJ)
+	$(LIBRARIAN) -a $(LIB_NAME) $(CTXSW_OBJ)
+	@mv $(LIB_NAME) $(LIB_FILE)
+#	@cp $(LIB_FILE) $(ICC-LIBDIR)
+	@ls -al $(LIB_FILE)
+
+
+###########################################################################################
+#
+#	MSP430 libraries
+#
+# IAR and Rowley Associates
+#
+# IAR modules are added to the library on-the-fly.
+# Rowley modules are added to the library all-at-once.
+#
+$(IAR_430_STD_LIBRARIES) \
+$(IAR_430_OPT_LIBRARIES) \
+$(IAR_430X_STD_LIBRARIES) \
+$(IAR_430X_OPT_LIBRARIES) : rmobjs rmlib $(OBJS_LIST) $(CTXSW_OBJ)
+	@mv $(LIB_NAME) $(LIB_FILE)
+	@ls -al $(LIB_FILE)
+			
+$(RA_430_STD_LIBRARIES) \
+$(RA_430_OPT_LIBRARIES) \
+$(RA_430X_STD_LIBRARIES) \
+$(RA_430X_OPT_LIBRARIES) : rmobjs rmlib $(OBJS_LIST) $(CTXSW_OBJ)
+	$(LIBRARIAN) -c $(LIB_FILE) $(OBJS_LIST) $(CTXSW_OBJ)
+	@ls -al $(LIB_FILE)
+	
+	
+	
+				
+$(IAR_ARM_STD_LIBRARIES) \
+$(IAR_ARM_OPT_LIBRARIES) : rmobjs rmlib $(OBJS_LIST) $(CTXSW_OBJ)
+	$(LIBRARIAN) --create $(LIB_FILE) $(OBJS_LIST) $(CTXSW_OBJ)
+	@ls -al $(LIB_FILE)
+
+
+
+	
+
+###########################################################################################
+#
+#	PIC24/dsPIC libraries
+#
+# Microchip MPLAB C30 + PIC24/dsPIC
+#
+# salvoportmcc30-[sm|lm].o -> salvoportmcc30.o
+#
+$(MCC_PIC24_STD_LIBRARIES) \
+$(MCC_PIC24_OPT_LIBRARIES) : rmobjs rmlib $(OBJS_LIST) salvoportmcc30.o
+	$(LIBRARIAN) -r $(LIB_NAME) $(OBJS_LIST) salvoportmcc30.o
+	@mv $(LIB_NAME) $(LIB_FILE)
+	@ls -al $(LIB_FILE)
+
+	
+###########################################################################################
+#
+# PIC32 libraries
+#
+# Microchip MPLAB C32 + PIC32
+#
+$(MCC_PIC32_STD_LIBRARIES) \
+$(MCC_PIC32_OPT_LIBRARIES) : rmobjs rmlib $(OBJS_LIST) salvoportmcc32.o
+	$(LIBRARIAN) -r $(LIB_NAME) $(OBJS_LIST) salvoportmcc32.o
+	@mv $(LIB_NAME) $(LIB_FILE)
+	@ls -al $(LIB_FILE)
+	
+
+###########################################################################################
+#
+#	x86 libraries
+#
+# Microsoft Visual C/C++
+#
+$(MSC_X86_STD_LIBRARIES) \
+$(MSC_X86_OPT_LIBRARIES): rmobjs rmlib $(OBJS_LIST) $(CTXSW_OBJ)
+	$(LIBRARIAN) $(LIBFLAGS) $(OBJS_LIST) $(CTXSW_OBJ)
+	@mv $(LIB_NAME) $(LIB_FILE)	
+	@ls -al $(LIB_FILE)	
+	@rm -f $(RMOBJS_LIST)
+		
+
+

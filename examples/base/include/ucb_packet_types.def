@@ -1,0 +1,98 @@
+/** ***************************************************************************
+ * @file ucb_packet_types.def UCB packet type definitions
+ * @Author rhilles
+ * @date   September, 2008
+ * @brief  Copyright (c) 2013, 2014 All Rights Reserved.
+ *
+ * THIS CODE AND INFORMATION ARE PROVIDED "AS IS" WITHOUT WARRANTY O ANY
+ * KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
+ * PARTICULAR PURPOSE.
+ *
+ *****************************************************************************/
+/// ASCII code to 16-bit code
+#define CODE(first, second)	(((first << 8) | second) & 0xffff)
+
+/// packets defined as: PACKET_TYPE(<constant name>, <variable name>, <16-bit field code>
+
+#if defined(INPUT_PACKET_TYPES) || defined(ALL_PACKET_TYPES)
+/// UCB input (and acknowledgement) packet types
+PACKET_TYPE(UCB_PING, 					UcbPing,				CODE('P','K'))
+PACKET_TYPE(UCB_ECHO,					UcbEcho,				CODE('C','H'))
+PACKET_TYPE(UCB_GET_PACKET,				UcbGetPacket,			CODE('G','P'))
+PACKET_TYPE(UCB_SET_FIELDS,				UcbSetFields,			CODE('S','F'))
+PACKET_TYPE(UCB_GET_FIELDS,				UcbGetFields,			CODE('G','F'))
+PACKET_TYPE(UCB_READ_FIELDS,			UcbReadFields,			CODE('R','F'))
+PACKET_TYPE(UCB_WRITE_FIELDS,			UcbWriteFields,			CODE('W','F'))
+PACKET_TYPE(UCB_UNLOCK_EEPROM,			UcbUnlockEeprom,		CODE('U','E'))
+PACKET_TYPE(UCB_READ_EEPROM,			UcbReadEeprom,			CODE('R','E'))
+PACKET_TYPE(UCB_WRITE_EEPROM,			UcbWriteEeprom,			CODE('W','E'))
+PACKET_TYPE(UCB_PROGRAM_RESET,			UcbProgramReset,		CODE('P','R'))
+PACKET_TYPE(UCB_SOFTWARE_RESET,			UcbSoftwareReset,		CODE('S','R'))
+PACKET_TYPE(UCB_ALGORITHM_RESET,		UcbAlgorithmReset,		CODE('A','R'))
+PACKET_TYPE(UCB_WRITE_CAL,				UcbWriteCal,			CODE('W','C'))
+#endif
+
+#if defined(OUTPUT_PACKET_TYPES) || defined(ALL_PACKET_TYPES)
+/// UCB output packet types
+PACKET_TYPE(UCB_IDENTIFICATION,			UcbIdentification,		CODE('I','D'))
+PACKET_TYPE(UCB_VERSION_DATA,			UcbVersionData,			CODE('V','R'))
+PACKET_TYPE(UCB_VERSION_ALL_DATA,		UcbVersionAllData,		CODE('V','A'))
+PACKET_TYPE(UCB_ANGLE_U,				UcbAngleU,				CODE('A','U'))
+PACKET_TYPE(UCB_SCALED_0,				UcbScaled0,				CODE('S','0'))
+PACKET_TYPE(UCB_SCALED_1,				UcbScaled1,				CODE('S','1'))
+PACKET_TYPE(UCB_TEST_0,					UcbTest0,				CODE('T','0'))
+PACKET_TYPE(UCB_TEST_1,					UcbTest1,				CODE('T','1'))
+PACKET_TYPE(UCB_FACTORY_1,				UcbFactory1,			CODE('F','1'))
+PACKET_TYPE(UCB_FACTORY_2,				UcbFactory2,			CODE('F','2'))
+PACKET_TYPE(UCB_FACTORY_3,				UcbFactory3,			CODE('F','3'))
+#endif
+
+#if defined(UPDATE_PACKET_TYPES) || defined(ALL_PACKET_TYPES)
+/// status update output packets
+PACKET_TYPE(UCB_MAG_CAL_1_COMPLETE,		UcbMagCal1Complete,		CODE('C','B'))
+PACKET_TYPE(UCB_MAG_CAL_3_COMPLETE,		UcbMagCal3Complete,		CODE('C','D'))
+#endif
+
+#if defined(OUTPUT_ERROR_PACKET_TYPES) || defined(ALL_PACKET_TYPES)
+/// error condition output packets
+PACKET_TYPE(UCB_NAK,				UcbNak,				 0x1515)
+#endif
+
+#if defined(INPUT_ERROR_PACKET_TYPES) || defined(ALL_PACKET_TYPES)
+/// error condition internal packets, used internally in the DUP for packet error handling
+PACKET_TYPE(UCB_ERROR_INVALID_TYPE,	UcbErrorInvalidType, 0x1515) // invalid packet type ID
+PACKET_TYPE(UCB_ERROR_TIMEOUT,		UcbErrorTimeout,	 0x1515) // timeout reached before entire packet was received
+PACKET_TYPE(UCB_ERROR_CRC_FAIL,		UcbErrorCrcFail,	 0x1515) // packet CRC failed
+#endif
+
+#undef CODE
+
+#ifndef	OUTPUT_PACKET_PAYLOAD_LENGTHS
+#define OUTPUT_PACKET_PAYLOAD_LENGTHS
+
+#define UCB_IDENTIFICATION_LENGTH		69
+#define UCB_VERSION_DATA_LENGTH			 5
+#define UCB_VERSION_ALL_DATA_LENGTH		15
+#define UCB_ANGLE_3_LENGTH				52
+#define UCB_ANGLE_5_LENGTH			    62
+#define UCB_ANGLE_U_LENGTH			    42
+#define UCB_SCALED_0_LENGTH			    30
+#define UCB_SCALED_1_LENGTH			    24
+#define UCB_SCALED_3_LENGTH			    54
+#define UCB_TEST_0_LENGTH				28
+#define UCB_TEST_1_LENGTH				32
+#define UCB_FACTORY_1_LENGTH			54
+#define UCB_FACTORY_2_LENGTH			66
+#define UCB_FACTORY_3_LENGTH            38
+#define UCB_FACTORY_4_LENGTH			54
+#define UCB_FACTORY_5_LENGTH			70
+#define UCB_FACTORY_6_LENGTH			66
+#define UCB_FACTORY_7_LENGTH           134
+#define UCB_MAG_CAL_1_COMPLETE_LENGTH	 4
+#define UCB_MAG_CAL_3_COMPLETE_LENGTH	10
+
+#endif
+
+
+

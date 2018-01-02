@@ -1,0 +1,14 @@
+{
+	"name": "ACEINNA",
+	"version": "1.0.0",
+	"build": {
+		"flags": [
+			"-I algorithm",
+			"-I board",
+			"-I gps",
+			"-I math",
+			"-I userProtocol",
+			"-I utilities"
+		]
+	}
+}

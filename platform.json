@@ -1,0 +1,36 @@
+{
+  "name": "aceinna_imu",
+  "title": "Aceinna IMU",
+  "description": "Open-source, embedded development platform for Aceinna IMU hardware. Run custom algorithms and navigation code on Aceinna IMU/INS hardware.",
+  "url": "https://www.aceinna.com",
+  "homepage": "http://platformio.org/platforms/aceinna_imu",
+  "license": "Apache-2.0",
+  "engines": {
+    "platformio": "^3.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/platformio/platform-aceinna_imu.git"
+  },
+  "version": "0.0.0",
+  "packageRepositories": [
+    "https://dl.bintray.com/platformio/dl-packages/manifest.json",
+    "http://dl.platformio.org/packages/manifest.json"
+  ],
+  "packages": {
+    "toolchain-gccarmnoneeabi": {
+      "type": "toolchain",
+      "version": ">=1.60301.0"
+    },
+    "tool-stlink": {
+      "type": "uploader",
+      "optional": true,
+      "version": "~1.10400.0"
+    },
+    "tool-openocd": {
+      "type": "debugger",
+      "optional": true,
+      "version": "~1.1000.0"
+    }
+  }
+}
