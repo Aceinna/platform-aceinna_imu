@@ -76,9 +76,12 @@ env.Replace(
 
     SIZEPRINTCMD='$SIZETOOL -B -d $SOURCES',
 
-    PROGNAME="firmware",
     PROGSUFFIX=".elf"
 )
+
+# Allow user to override via pre:script
+if env.get("PROGNAME", "program") == "program":
+    env.Replace(PROGNAME="firmware")
 
 if "BOARD" in env:
     env.Append(
@@ -129,7 +132,7 @@ if env.subst("$UPLOAD_PROTOCOL") == "gdb":
     env.Replace(
         UPLOADER="arm-none-eabi-gdb",
         UPLOADERFLAGS=[
-            join("$BUILD_DIR", "firmware.elf"),
+            join("$BUILD_DIR", "${PROGNAME}.elf"),
             "-batch",
             "-x",
             join("$PROJECT_DIR", "upload.gdb")
@@ -145,10 +148,10 @@ if env.subst("$UPLOAD_PROTOCOL") == "gdb":
 
 target_elf = None
 if "nobuild" in COMMAND_LINE_TARGETS:
-    target_firm = join("$BUILD_DIR", "firmware.bin")
+    target_firm = join("$BUILD_DIR", "${PROGNAME}.bin")
 else:
     target_elf = env.BuildProgram()
-    target_firm = env.ElfToBin(join("$BUILD_DIR", "firmware"), target_elf)
+    target_firm = env.ElfToBin(target_elf)
 
 AlwaysBuild(env.Alias("nobuild", target_firm))
 target_buildprog = env.Alias("buildprog", target_firm, target_firm)
