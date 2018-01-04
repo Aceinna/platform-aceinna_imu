@@ -25,8 +25,7 @@
             "-c", "transport select hla_swd",
             "-f", "scripts/target/stm32f2x.cfg"
           ]
-        },
-        "onboard": true
+        }
       }
     }
   },
