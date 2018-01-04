@@ -14,6 +14,22 @@
     "maximum_size": 524288,
     "protocol": "stlink"
   },
+  "debug": {
+    "tools": {
+      "stlink-v2-1": {
+        "server": {
+          "package": "tool-openocd",
+          "executable": "bin/openocd",
+          "arguments": [
+            "-f", "scripts/interface/stlink-v2-1.cfg",
+            "-c", "transport select hla_swd",
+            "-f", "scripts/target/stm32f2x.cfg"
+          ]
+        },
+        "onboard": true
+      }
+    }
+  },
   "url": "https://www.aceinna.com/inertial-systems/",
-  "vendor": "ST"
+  "vendor": "Aceinna"
 }
