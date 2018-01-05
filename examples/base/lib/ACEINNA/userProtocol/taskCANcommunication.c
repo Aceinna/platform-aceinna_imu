@@ -15,6 +15,7 @@
  *    extern_port.c, ucb_packet.c comm_buffers.c
  * - SPI communication is an external interrupt driven (asynchronous) bus
  ******************************************************************************/
+#ifdef MEMSIC_CAN
 #include "salvodefs.h"
 #include "stm32f2xx.h"
 #include "dmu.h"
@@ -112,3 +113,4 @@ void TaskCANCommunication(void)
 
     }
 }
+#endif

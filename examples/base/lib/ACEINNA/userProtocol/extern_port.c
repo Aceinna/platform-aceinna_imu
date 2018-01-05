@@ -87,7 +87,7 @@ void ExternPortInit (void)
 	static uint8_t port1_rx [PORT_1_RX_BUF_SIZE], port1_tx [PORT_1_TX_BUF_SIZE];
 
     /// set baud rates from configuration
-    gPort0.hw.baud = baudEnumToBaudRate(gConfiguration.baudRateUser);
+   // gPort0.hw.baud = baudEnumToBaudRate(gConfiguration.baudRateUser);
 
     /// initialize software circular buffers comm_buffers.c User com
     COM_buf_init(&gPort0,
