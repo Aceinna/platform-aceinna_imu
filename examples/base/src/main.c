@@ -70,7 +70,7 @@ int main(void)
 {
     // Initialize the system clock, PLL, etc
     SystemInit();            // system_stm32f2xx.c
-    SetIntVectorOffset(APP_NVIC_OFFSET);
+    //SetIntVectorOffset(APP_NVIC_OFFSET);
 
     SystemCoreClockUpdate(); // system_stm32f2xx.c
 
@@ -106,14 +106,9 @@ int main(void)
     }
 
     // Initialize the DEBUG USART (serial) port
-#if STREAM_GPS == GPS_NMEA_DEBUG_STREAM
-    // max GPS baud rate for debug
-    // InitDebugSerialCommunication( 115200 ); // debug_usart.c  (FIXME: JSM - Feb 18)
-#else
     // normal debug baud rate - Disable the debug derial communication for release builds
-    InitDebugSerialCommunication( 460800, DISABLE ); // debug_usart.c
-#endif
-    INFO_STRING("\r\nDMU380 system\r\n");
+    InitDebugSerialCommunication( 38400); // debug_usart.c
+    DEBUG_STRING("\r\nDMU380 System\r\n");
 
     // Add a delay to allow the system to stabilize after the reset line (nRst)
     //   is released
@@ -150,8 +145,9 @@ int main(void)
     ///   Col. 1: function name, Col. 2: pointer to the task control block, Col. 3: task priority
     OSCreateTask( TaskUserCommunication, USER_COMMUNICATION_TASK, USER_COMMUNICATION_PRIORITY ); // priority 8
     OSCreateTask( TaskDataAcquisition,   DATA_ACQ_TASK,           DATA_ACQ_PRIORITY           ); // priority 3
-    //    OSCreateTask( _TaskCommandLine,      COMMAND_LINE_TASK,       COMMAND_LINE_PRIORITY       ); // priority 10  (FIXME: JSM - Feb 18)
+    OSCreateTask( _TaskCommandLine,      COMMAND_LINE_TASK,       COMMAND_LINE_PRIORITY       ); // priority 10  (FIXME: JSM - Feb 18)
 
+#ifdef GPS
     // Start GPS task if the system in not using SPI to communicate with the
     //   user AND the device is NEITHER an IMU nor an unaided-AHRS/VG
     if (getUserCommunicationType() == UART_COMM) {
@@ -161,8 +157,13 @@ int main(void)
             OSCreateTask( TaskWorldMagneticModel, WMM_TASK, WMM_PRIORITY ); // priority 15
         }
     }
+#endif
 
+#ifdef MEMSIC_CAN
     OSCreateTask( TaskCANCommunication,                CAN_TASK, CAN_PRIORITY ); // priority 9
+#endif
+
+
 
 
     /// Assign an event control block (ecb) to each semaphore.  Signaling a
