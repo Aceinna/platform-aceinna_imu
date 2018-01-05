@@ -103,7 +103,7 @@ void EKF_Algorithm(void)
             std::cout << "Press enter to finish ...";
             std::cin.get();
 #endif
-            exit(EXIT_FAILURE);
+            return;
     }
 
     // Dynamic motion logic (to revert back to HG AHRS)
