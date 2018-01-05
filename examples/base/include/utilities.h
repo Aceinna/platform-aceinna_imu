@@ -19,7 +19,7 @@
 extern char* strtok_r1(char *str, char const token, char **cursor);
 extern void strrep(char *str, const char find, const char rep);
 extern int strcmpi(char const *a, char const *b);
-extern void itoa(int value, char *sp, int radix);
+//extern void itoa(int value, char *sp, int radix);
 uint16_t byteSwap16(uint16_t b);
 uint32_t byteSwap32( uint32_t val );
 
