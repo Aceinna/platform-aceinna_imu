@@ -32,7 +32,7 @@ extern void GetGpsExternPortAndChannel(unsigned int* uartChannel,
  * @param [in] baudRate - enumeration to translate extern_port_config.h
  * @retval actual baud rate value
  ******************************************************************************/
-int32_t baudEnumToBaudRate(int baudEnum)
+extern "C" uint32_t baudEnumToBaudRane(int baudEnum)
 {   // -1 (invalid) can be sent in. Passed through to gGpsDataPtr->GPSConfigureOK
     uint32_t baudRate = baudEnum;
 

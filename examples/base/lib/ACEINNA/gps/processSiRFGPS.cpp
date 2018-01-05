@@ -11,6 +11,8 @@
  * @details This file includes all specific processing, including configuring,
  *   for SiRF GPS receiver.
  *****************************************************************************/
+#include <stdlib.h>
+
 #include <math.h>
 #define LOGGING_LEVEL LEVEL_DEBUG
 #include "debug.h"

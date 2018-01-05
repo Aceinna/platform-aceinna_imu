@@ -22,7 +22,7 @@
 
 void initGPSHandler(void); /// note: should pass in SPI or UART
 void GPSHandler(void);
-void TaskGps(void);
+extern void TaskGps(void);
 
 // FIXME ECW: implement GpsWhoAmI and GpsSelfTest
 uint8_t  GpsWhoAmI(uint32_t *whoami); /// returns true if value is as expected

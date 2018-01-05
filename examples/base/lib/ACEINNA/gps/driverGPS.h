@@ -194,7 +194,8 @@ void processNovAtelBinaryMsg(char *msg,unsigned int *msgLength, GpsData_t* GPSDa
 void processNovAtelBinaryMsg_Fast(char *msg, unsigned int *msgLength, GpsData_t *GPSData);
 
 // driver interface driverGPS.cpp
-int32_t  baudEnumToBaudRate(int baudRate);
+extern uint32_t  baudEnumToBaudRate(int baudRate);
+
 int      gpsBytesAvailable();
 void     initGpsUart(int baud);
 void     initOnePpsUart( void );
