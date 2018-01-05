@@ -144,6 +144,7 @@ char* strtok_r1(char       *str,
 #define MAX_INT32_STRING 11 // 10 digits plus a NULL
 #define RADIX_DECIMAL    10
 
+#ifdef FL
 void itoa(int value, char *sp, int radix)
 {
     char tmp[MAX_INT32_STRING];
@@ -183,6 +184,7 @@ void itoa(int value, char *sp, int radix)
     *sp = '\0';
 
 }
+#endif
 
 /** ****************************************************************************
  * @name byteSwap16
