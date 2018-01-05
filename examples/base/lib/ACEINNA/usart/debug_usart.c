@@ -221,7 +221,7 @@ void InitDebugSerialCommunication( uint32_t baudRate )
     if ( UseExtUSARTGps() == true) { // using the USART for an external GPS
         NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x8;
         NVIC_InitStructure.NVIC_IRQChannelSubPriority        = 0x0;
-        setExternalPortPtr(&debugPort);
+        //setExternalPortPtr(&debugPort);
     } else { // Debug console
         NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0xC;
         NVIC_InitStructure.NVIC_IRQChannelSubPriority        = 0x0;

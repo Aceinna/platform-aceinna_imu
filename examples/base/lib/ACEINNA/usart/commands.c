@@ -97,7 +97,7 @@ void CmdReadSensors(uint32_t inputParameters)
 
         // start everybody off
         AccelerometerStartReading();
-        GyroStartReading();
+        //GyroStartReading();
 
         if (magStart) {
             OSClrEFlag(EFLAGS_DATA_READY, EF_DATA_MAG_READY);
@@ -385,7 +385,7 @@ void CmdReadGyro(uint32_t readInDegPerSec)
 
     while (numReads) {
         OSClrEFlag(EFLAGS_DATA_READY, EF_DATA_GYRO_READY);
-        GyroStartReading();
+        //GyroStartReading();
         while (!IsGyroDoneReading())
         { /* spin */ ; }
         GyroGetLastReading(readings);
@@ -434,7 +434,7 @@ void CmdReadGyroTemp(uint32_t readInC)
 
     while (numReads) {
         OSClrEFlag(EFLAGS_DATA_READY, EF_DATA_GYRO_READY);
-        GyroStartReading();
+        //GyroStartReading();
         while (!IsGyroDoneReading())
         { /* spin */ ; }
         GyroGetLastReading(NULL);
@@ -548,7 +548,7 @@ void CmdInertialCalib(uint32_t inputParameters)
             MagnetometerStartReading();
             magStart = FALSE;
         }
-        GyroStartReading();
+        //GyroStartReading();
 
         // Wait then display the time it took to read and convert the sensor data
         DelayMs(msApart);
@@ -675,7 +675,7 @@ void CmdSelfTest(uint32_t data)
         DEBUG_HEX("FAIL (", whoami);
         DEBUG_STRING(") - check accel inited and I2C open \r\n");
     }
-
+#ifdef FL
     DEBUG_STRING("Checking gryoscope:\t");
     if (GyroWhoAmI(&whoami)) {
         if (GyroSelfTest()) {
@@ -689,6 +689,7 @@ void CmdSelfTest(uint32_t data)
         DEBUG_HEX("FAIL (", whoami);
         DEBUG_STRING(") - check gyro inited and SPI open \r\n");
     }
+#endif
 }
 
 /** ***************************************************************************
@@ -1147,7 +1148,7 @@ void CmdInitSPIPeripheral( uint32_t data )
 }
 
 #include "driverGPS.h"
-extern void processMsg(char *msg, unsigned int *msgLength, GpsData_t *GPSData);
+//extern void processMsg(char *msg, unsigned int *msgLength, GpsData_t *GPSData);
 
 /** ***************************************************************************
  * @name PrintGPSPositionHeader() send header lables out to USART debug console
@@ -1195,7 +1196,7 @@ void CmdParseGPS(uint32_t data)
     unsigned int len;
     CmdLineGetArgString((uint8_t**)&s);
     len = strlen(s) + 2; // process needs /r and /n to make gps processing happy
-    processMsg(s, &len, gGpsDataPtr);
+    //processMsg(s, &len, gGpsDataPtr);
     PrintGPSPositionHeader();
     PrintGPSPosition();
 }
@@ -1217,7 +1218,7 @@ void CmdGpsInit(uint32_t data)
 
     SetConfigurationProtocolGPS(protocol);
     SetConfigurationBaudRateGps(baudRate);
-    initGPSHandler();
+    //initGPSHandler();
 }
 
 /** ***************************************************************************
@@ -1240,7 +1241,7 @@ void CmdGpsHandler(uint32_t data)
     PrintGPSPositionHeader();
 
     do {
-        GPSHandler();
+        //GPSHandler();
     if  ( (gGpsDataPtr->GPSFix == 0) && (gGpsDataPtr->GPSProtocol == SIRF_BINARY) || // SiRF 0 = fix non-zero less than ideal fix
           (gGpsDataPtr->GPSFix != 0) && (gGpsDataPtr->GPSProtocol == NMEA_TEXT) ) {  // NMEA > 0 = fix, zero no fix
             PrintGPSPosition();
@@ -1268,7 +1269,7 @@ void CmdGpsInternal(uint32_t data)
     CmdLineGetArgInt( &config );
 
     gCalibration.productConfiguration.bit.hasGps = config;
-    initGPSHandler(); //reinit for internal
+    //initGPSHandler(); //reinit for internal
 }
 
 /** ***************************************************************************
