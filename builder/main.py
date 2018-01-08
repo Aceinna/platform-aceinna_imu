@@ -50,9 +50,7 @@ env.Replace(
     ],
 
     CPPDEFINES=[
-        ("F_CPU", "$BOARD_F_CPU"),
-        "STM32F205xx",
-        "GYRO_MAXIM21000"
+        ("F_CPU", "$BOARD_F_CPU")
     ],
 
     LINKFLAGS=[
