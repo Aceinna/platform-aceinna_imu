@@ -163,8 +163,6 @@
   */
 void FLASH_SetLatency(uint32_t FLASH_Latency)
 {
-  /* Check the parameters */
-  assert_param(IS_FLASH_LATENCY(FLASH_Latency));
   
   /* Perform Byte access to FLASH_ACR[8:0] to set the Latency value */
   *(__IO uint8_t *)ACR_BYTE0_ADDRESS = (uint8_t)FLASH_Latency;
@@ -178,8 +176,6 @@ void FLASH_SetLatency(uint32_t FLASH_Latency)
   */
 void FLASH_PrefetchBufferCmd(FunctionalState NewState)
 {
-  /* Check the parameters */
-  assert_param(IS_FUNCTIONAL_STATE(NewState));
   
   /* Enable or disable the Prefetch Buffer */
   if(NewState != DISABLE)
@@ -200,8 +196,6 @@ void FLASH_PrefetchBufferCmd(FunctionalState NewState)
   */
 void FLASH_InstructionCacheCmd(FunctionalState NewState)
 {
-  /* Check the parameters */
-  assert_param(IS_FUNCTIONAL_STATE(NewState));
   
   if(NewState != DISABLE)
   {
@@ -221,8 +215,6 @@ void FLASH_InstructionCacheCmd(FunctionalState NewState)
   */
 void FLASH_DataCacheCmd(FunctionalState NewState)
 {
-  /* Check the parameters */
-  assert_param(IS_FUNCTIONAL_STATE(NewState));
   
   if(NewState != DISABLE)
   {
@@ -341,10 +333,6 @@ FLASH_Status FLASH_EraseSector(uint32_t FLASH_Sector, uint8_t VoltageRange)
   uint32_t tmp_psize = 0x0;
   FLASH_Status status = FLASH_COMPLETE;
 
-  /* Check the parameters */
-  assert_param(IS_FLASH_SECTOR(FLASH_Sector));
-  assert_param(IS_VOLTAGERANGE(VoltageRange));
-  
   if(VoltageRange == VoltageRange_1)
   {
      tmp_psize = FLASH_PSIZE_BYTE;
@@ -408,7 +396,6 @@ FLASH_Status FLASH_EraseAllSectors(uint8_t VoltageRange)
   
   /* Wait for last operation to be completed */
   status = FLASH_WaitForLastOperation();
-  assert_param(IS_VOLTAGERANGE(VoltageRange));
   
   if(VoltageRange == VoltageRange_1)
   {
@@ -458,9 +445,6 @@ FLASH_Status FLASH_ProgramDoubleWord(uint32_t Address, uint64_t Data)
 {
   FLASH_Status status = FLASH_COMPLETE;
 
-  /* Check the parameters */
-  assert_param(IS_FLASH_ADDRESS(Address));
-
   /* Wait for last operation to be completed */
   status = FLASH_WaitForLastOperation();
   
@@ -495,9 +479,6 @@ FLASH_Status FLASH_ProgramDoubleWord(uint32_t Address, uint64_t Data)
 FLASH_Status FLASH_ProgramWord(uint32_t Address, uint32_t Data)
 {
   FLASH_Status status = FLASH_COMPLETE;
-
-  /* Check the parameters */
-  assert_param(IS_FLASH_ADDRESS(Address));
 
   /* Wait for last operation to be completed */
   status = FLASH_WaitForLastOperation();
@@ -534,9 +515,6 @@ FLASH_Status FLASH_ProgramHalfWord(uint32_t Address, uint16_t Data)
 {
   FLASH_Status status = FLASH_COMPLETE;
 
-  /* Check the parameters */
-  assert_param(IS_FLASH_ADDRESS(Address));
-
   /* Wait for last operation to be completed */
   status = FLASH_WaitForLastOperation();
   
@@ -571,9 +549,6 @@ FLASH_Status FLASH_ProgramHalfWord(uint32_t Address, uint16_t Data)
 FLASH_Status FLASH_ProgramByte(uint32_t Address, uint8_t Data)
 {
   FLASH_Status status = FLASH_COMPLETE;
-
-  /* Check the parameters */
-  assert_param(IS_FLASH_ADDRESS(Address));
 
   /* Wait for last operation to be completed */
   status = FLASH_WaitForLastOperation();
@@ -688,10 +663,6 @@ void FLASH_OB_WRPConfig(uint32_t OB_WRP, FunctionalState NewState)
 { 
   FLASH_Status status = FLASH_COMPLETE;
   
-  /* Check the parameters */
-  assert_param(IS_OB_WRP(OB_WRP));
-  assert_param(IS_FUNCTIONAL_STATE(NewState));
-    
   status = FLASH_WaitForLastOperation();
 
   if(status == FLASH_COMPLETE)
@@ -723,9 +694,6 @@ void FLASH_OB_RDPConfig(uint8_t OB_RDP)
 {
   FLASH_Status status = FLASH_COMPLETE;
 
-  /* Check the parameters */
-  assert_param(IS_OB_RDP(OB_RDP));
-
   status = FLASH_WaitForLastOperation();
 
   if(status == FLASH_COMPLETE)
@@ -756,11 +724,6 @@ void FLASH_OB_UserConfig(uint8_t OB_IWDG, uint8_t OB_STOP, uint8_t OB_STDBY)
   uint8_t optiontmp = 0xFF;
   FLASH_Status status = FLASH_COMPLETE; 
 
-  /* Check the parameters */
-  assert_param(IS_OB_IWDG_SOURCE(OB_IWDG));
-  assert_param(IS_OB_STOP_SOURCE(OB_STOP));
-  assert_param(IS_OB_STDBY_SOURCE(OB_STDBY));
-
   /* Wait for last operation to be completed */
   status = FLASH_WaitForLastOperation();
   
@@ -786,8 +749,6 @@ void FLASH_OB_UserConfig(uint8_t OB_IWDG, uint8_t OB_STOP, uint8_t OB_STDBY)
   */
 void FLASH_OB_BORConfig(uint8_t OB_BOR)
 {
-  /* Check the parameters */
-  assert_param(IS_OB_BOR(OB_BOR));
 
   /* Set the BOR Level */
   *(__IO uint8_t *)OPTCR_BYTE0_ADDRESS &= (~FLASH_OPTCR_BOR_LEV);
@@ -900,10 +861,6 @@ uint8_t FLASH_OB_GetBOR(void)
   */
 void FLASH_ITConfig(uint32_t FLASH_IT, FunctionalState NewState)
 {
-  /* Check the parameters */
-  assert_param(IS_FLASH_IT(FLASH_IT)); 
-  assert_param(IS_FUNCTIONAL_STATE(NewState));
-
   if(NewState != DISABLE)
   {
     /* Enable the interrupt sources */
@@ -932,8 +889,6 @@ void FLASH_ITConfig(uint32_t FLASH_IT, FunctionalState NewState)
 FlagStatus FLASH_GetFlagStatus(uint32_t FLASH_FLAG)
 {
   FlagStatus bitstatus = RESET;
-  /* Check the parameters */
-  assert_param(IS_FLASH_GET_FLAG(FLASH_FLAG));
 
   if((FLASH->SR & FLASH_FLAG) != (uint32_t)RESET)
   {
@@ -961,9 +916,6 @@ FlagStatus FLASH_GetFlagStatus(uint32_t FLASH_FLAG)
   */
 void FLASH_ClearFlag(uint32_t FLASH_FLAG)
 {
-  /* Check the parameters */
-  assert_param(IS_FLASH_CLEAR_FLAG(FLASH_FLAG));
-  
   /* Clear the flags */
   FLASH->SR = FLASH_FLAG;
 }
