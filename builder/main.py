@@ -42,8 +42,6 @@ env.Replace(
         "-Wall",
         #"-mthumb",
         #"-Dthumb2",
-        "-DSTM32F205xx"
-        "-DGYRO_MAXIM21000"
     ],
 
     CXXFLAGS=[
@@ -53,7 +51,8 @@ env.Replace(
 
     CPPDEFINES=[
         ("F_CPU", "$BOARD_F_CPU"),
-        # "__GNU__"
+        "STM32F205xx",
+        "GYRO_MAXIM21000"
     ],
 
     LINKFLAGS=[
@@ -76,9 +75,13 @@ env.Replace(
 
     SIZEPRINTCMD='$SIZETOOL -B -d $SOURCES',
 
-    PROGNAME="firmware",
     PROGSUFFIX=".elf"
 )
+
+# Allow user to override via pre:script
+if env.get("PROGNAME", "program") == "program":
+    env.Replace(PROGNAME="firmware")
+
 
 if "BOARD" in env:
     env.Append(
