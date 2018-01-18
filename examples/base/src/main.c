@@ -70,7 +70,7 @@ int main(void)
 {
     // Initialize the system clock, PLL, etc
     SystemInit();            // system_stm32f2xx.c
-    //SetIntVectorOffset(APP_NVIC_OFFSET);
+    SetIntVectorOffset(APP_NVIC_OFFSET);
 
     SystemCoreClockUpdate(); // system_stm32f2xx.c
 
