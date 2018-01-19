@@ -10,8 +10,8 @@ WMMInternal.h
 
 #include <stdint.h>
 
-#define pi   3.1415926535897f
-#define M_PI pi
+//#define pi   3.1415926535897f
+//#define M_PI pi
 
 // internal constants
 //#define TRUE        ((uint16_t)1)

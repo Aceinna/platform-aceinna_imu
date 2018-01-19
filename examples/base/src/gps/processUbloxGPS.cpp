@@ -97,9 +97,9 @@ union NAV_STATUSPayload
 char         msgIDTurnedOFF[TEST_ID_RECORD][2];
 char         msgIDOn[TEST_ID_RECORD][2];
 unsigned int totalUnwantedMsg   = 0;
-char         IDCounter1         = 0;
-char         IDCounter2         = 0;
-char         processedIDcounter = 0;
+unsigned char   IDCounter1         = 0;
+unsigned char   IDCounter2         = 0;
+unsigned char   processedIDcounter = 0;
 
 //void decodeUbloxGPSBinary(int *numInBuffPrt, GpsData_t* GPSData);
 //unsigned char configurate_uBloxGPS (GpsData_t* GPSData);
@@ -226,7 +226,7 @@ void processUbloxBinaryMessage(char          *msg,
     unsigned int         checksumBCalcu;
 	unsigned int         checksumARec;
     unsigned int         checksumBRec;
-	int                  i;
+	unsigned int         i;
     int                  j;
 	ubloxIDTypeSTRUCT    msgID;
 	unsigned short       classIDMessID;

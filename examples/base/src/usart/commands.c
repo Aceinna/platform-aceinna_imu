@@ -15,6 +15,7 @@
 
 #include "stm32f2xx_conf.h"
 #include "commands.h"
+#include "commandLine.h"
 #include "salvodefs.h"
 
 #define LOGGING_LEVEL LEVEL_INFO
@@ -25,6 +26,7 @@
 #include "magnetometer.h"
 #include "accelerometer.h"
 #include "gyroscope.h"
+#include "gyroMAX21000.h"
 #include "gps.h"
 #include "Indices.h"
 #include "timer.h"
@@ -1193,9 +1195,9 @@ static void PrintGPSPosition()
 void CmdParseGPS(uint32_t data)
 {
     char *s;
-    unsigned int len;
+    //unsigned int len;
     CmdLineGetArgString((uint8_t**)&s);
-    len = strlen(s) + 2; // process needs /r and /n to make gps processing happy
+    //len = strlen(s) + 2; // process needs /r and /n to make gps processing happy
     //processMsg(s, &len, gGpsDataPtr);
     PrintGPSPositionHeader();
     PrintGPSPosition();
@@ -1230,7 +1232,7 @@ void CmdGpsInit(uint32_t data)
  ******************************************************************************/
 void CmdGpsHandler(uint32_t data)
 {
-    int  initialBytes      = COM_buf_bytes_available(&(gPort1.rec_buf));
+ //   int  initialBytes      = COM_buf_bytes_available(&(gPort1.rec_buf));
     int i;
 
     int32_t time = 0;
@@ -1242,8 +1244,8 @@ void CmdGpsHandler(uint32_t data)
 
     do {
         //GPSHandler();
-    if  ( (gGpsDataPtr->GPSFix == 0) && (gGpsDataPtr->GPSProtocol == SIRF_BINARY) || // SiRF 0 = fix non-zero less than ideal fix
-          (gGpsDataPtr->GPSFix != 0) && (gGpsDataPtr->GPSProtocol == NMEA_TEXT) ) {  // NMEA > 0 = fix, zero no fix
+    if  ( ((gGpsDataPtr->GPSFix == 0) && (gGpsDataPtr->GPSProtocol == SIRF_BINARY)) || // SiRF 0 = fix non-zero less than ideal fix
+          ((gGpsDataPtr->GPSFix != 0) && (gGpsDataPtr->GPSProtocol == NMEA_TEXT))) {  // NMEA > 0 = fix, zero no fix
             PrintGPSPosition();
 
             DEBUG_STRING("Vel: ");

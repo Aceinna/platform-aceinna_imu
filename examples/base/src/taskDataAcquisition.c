@@ -49,6 +49,7 @@
 #include <math.h>
 
 #include "AlgorithmLimits.h"
+#include "BIT.h"
 
 //#include "CompilerFlags.h"   // for GYRO_MAXIM21000 and GYRO_BMI160
 
@@ -508,7 +509,7 @@ static double tmp[6][2] = { {0.0, 0.0},
  ******************************************************************************/
 void TaskDataAcquisition(void)
 {
-    uint8_t functionStatus = 0;
+ //   uint8_t functionStatus;
 
     // This routine sets up the timer. Can use the structure below this point.
     _TaskDataAcquisition_Init();
@@ -675,7 +676,7 @@ void TaskDataAcquisition(void)
             //   calculates the euler angles and the magnetic vector in the
             //   NED-frame)
             if( gCalibration.productConfiguration.bit.hasMags ) {
-                functionStatus = MagAlign(); // only does this on align
+                /*functionStatus = */MagAlign(); // only does this on align
             }
         }
         //} // calibrate table check

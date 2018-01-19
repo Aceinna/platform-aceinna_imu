@@ -38,7 +38,7 @@ void _siRFStaticNavMsg(uint8_t flag);
 static uint16_t _computeSirfChecksum(uint8_t      *payload,
                                      unsigned int payloadLen)
 {
-    int      i;
+    unsigned int      i;
     uint16_t checksum = 0;
 
     for ( i = 0; i < payloadLen; i++) {
@@ -226,7 +226,7 @@ void pollSiRFVersionMsg()
  * @param [in] flag 1 = enable, 0 = disable
  * @retval N/A
  * @details Static navigation is a position filter for use with motor vehicle
- *          applications. When the vehicle’s speed falls below a threshold, the
+ *          applications. When the vehicleï¿½s speed falls below a threshold, the
  *          position and heading are frozen, and speed is set to 0. This
  *          condition continues until the computed speed rises above 1.2 times
  *          the threshold, or until the computed position is at least a set
@@ -293,6 +293,7 @@ static void _SiRFSendMessageRateMsg(uint8_t mode,
  * @param [in] rate - new rate to be set
  * @retval byte swappeed word
  ******************************************************************************/
+/*
 static void _SiRFSendModeControlMsg(void)
 {
     tSiRFSetModeControl msg;
@@ -313,7 +314,7 @@ static void _SiRFSendModeControlMsg(void)
     _SiRFSendMessage((uint8_t *)&msg,
                      sizeof(msg));
 }
-
+*/
 
 //#define FIVE_HZ_GPS
 
@@ -444,7 +445,7 @@ static void _processSiRFNavigationData(char          *msg,
     tSiRFNav nav;
     int      axis;
     int      index;
-    int      i;
+    unsigned int      i;
 
     if (msgLength < sizeof(nav))
         return; // error
@@ -491,8 +492,8 @@ static void _processSiRFMeasuredTrackerData(char          *msg,
 {
     tSiRFTracker tracker;
     int          index = 0;
-    int          i;
-    int          c;
+    unsigned int          i;
+    unsigned int          c;
 
     if (msgLength < (sizeof(tracker) - sizeof(tracker.channel)) ) {
         return;
@@ -502,11 +503,11 @@ static void _processSiRFMeasuredTrackerData(char          *msg,
 
     tracker.numChannels = msg[index]; index++;
 
-    for ( i = 0; i < tracker.numChannels && index < msgLength; i++) {
+    for ( i = 0; i < tracker.numChannels && (unsigned int)index < msgLength; i++) {
         tracker.channel[i].id      = msg[index]; index++;
         tracker.channel[i].azimuth = msg[index]; index++;
         tracker.channel[i].state   = msg[index]; index++;
-        for ( c = 0; c < NUM_CNO_VALUES && index < msgLength; c++) {
+        for ( c = 0; c < (unsigned int)NUM_CNO_VALUES && (unsigned int)index < msgLength; c++) {
             tracker.channel[i].cno[c] = msg[index]; index++;
         }
     }

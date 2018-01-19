@@ -170,7 +170,7 @@ void _UcbAngle1 (ExternPortTypeEnum port,
                  UcbPacketStruct   *ptrUcbPacket)
 {
 	uint16_t  packetIndex = 0;
-    uint32_t  time        = TimeNow();
+ //   uint32_t  time        = TimeNow();
 	Crc32Type payloadCrc;
 
 	ptrUcbPacket->payloadLength = UCB_ANGLE_1_LENGTH; /// set packet length
@@ -235,7 +235,7 @@ void _UcbAngle2 (ExternPortTypeEnum port,
                  UcbPacketStruct   *ptrUcbPacket)
 {
 	uint16_t  packetIndex = 0;
-    uint32_t  time        = TimeNow();
+    //uint32_t  time        = TimeNow();
 	Crc32Type payloadCrc;
 
 	ptrUcbPacket->payloadLength = UCB_ANGLE_2_LENGTH; /// set packet length
@@ -467,7 +467,7 @@ void _UcbAngleU (ExternPortTypeEnum port,
                  UcbPacketStruct   *ptrUcbPacket)
 {
 	uint16_t  packetIndex = 0;
-    uint32_t  time        = TimeNow();
+    //uint32_t  time        = TimeNow();
 	Crc32Type payloadCrc;
 
 	ptrUcbPacket->payloadLength = UCB_ANGLE_U_LENGTH; /// set packet length

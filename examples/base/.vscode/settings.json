@@ -1,0 +1,13 @@
+{
+    "terminal.integrated.env.windows": {
+        "PATH": "C:\\Users\\aceinna\\.platformio\\penv\\Scripts;C:\\Users\\aceinna\\.platformio\\penv;C:\\WINDOWS\\system32;C:\\WINDOWS;C:\\WINDOWS\\System32\\Wbem;C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\;C:\\Program Files\\Symantec.cloud\\PlatformAgent\\;C:\\Program Files\\Git\\cmd;C:\\Users\\aceinna\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Program Files\\Microsoft VS Code\\bin;C:\\Users\\aceinna\\AppData\\Local\\GitHubDesktop\\bin;C:\\WINDOWS\\system32;C:\\WINDOWS;C:\\WINDOWS\\System32\\Wbem;C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\;C:\\Program Files\\Symantec.cloud\\PlatformAgent\\;C:\\Program Files\\Git\\cmd;C:\\Users\\aceinna\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Program Files\\Microsoft VS Code\\bin;C:\\Users\\aceinna\\AppData\\Local\\GitHubDesktop\\bin"
+    },
+    "files.associations": {
+        "gyromax21000.h": "c",
+        "gyroscope.h": "c",
+        "accelerometer.h": "c",
+        "salvodefs.h": "c",
+        "salvo.h": "c",
+        "salvodef.h": "c"
+    }
+}

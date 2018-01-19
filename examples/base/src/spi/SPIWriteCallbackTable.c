@@ -393,7 +393,7 @@ void _Filter_Taps_Config_Write(uint8_t data)   // 0x38
             // Only look at the data in the lower 5 bits
             switch( data & 0x1F ) ///  lower nibble valid?
             {
-                // The Maxim MAX21000 has a full-scale of ±31.25/±62.5/±125/±250/±500/±1000/±2000 dps
+                // The Maxim MAX21000 has a full-scale of ï¿½31.25/ï¿½62.5/ï¿½125/ï¿½250/ï¿½500/ï¿½1000/ï¿½2000 dps
                 //  -200:  250 dps
                 //  -400:  500 dps
                 //  -600: 1000 dps
@@ -728,52 +728,52 @@ void UserSPI_BytesInBurstRegister( void )
     uint8_t BurstRegisterIndex = 2;  ///< Status bytes
 
     /// Check the rate sensor configuration
-    if( gUserSpi.DataRegister[ SPI_REG_RATE_OUTPUT_CONFIG_READ ] & 0x01 != 0 )
+    if( (gUserSpi.DataRegister[ SPI_REG_RATE_OUTPUT_CONFIG_READ ] & 0x01) != 0 )
     {
-        if( gUserSpi.DataRegister[ SPI_REG_RATE_OUTPUT_CONFIG_READ ] & 0x02 != 0 ) {
+        if( (gUserSpi.DataRegister[ SPI_REG_RATE_OUTPUT_CONFIG_READ ] & 0x02) != 0 ) {
             BurstRegisterIndex++; }
 
-        if( gUserSpi.DataRegister[ SPI_REG_RATE_OUTPUT_CONFIG_READ ] & 0x04 != 0 ) {
+        if( (gUserSpi.DataRegister[ SPI_REG_RATE_OUTPUT_CONFIG_READ ] & 0x04) != 0 ) {
             BurstRegisterIndex++; }
 
-        if( gUserSpi.DataRegister[ SPI_REG_RATE_OUTPUT_CONFIG_READ ] & 0x08 != 0 ) {
+        if( (gUserSpi.DataRegister[ SPI_REG_RATE_OUTPUT_CONFIG_READ ] & 0x08) != 0 ) {
             BurstRegisterIndex++; }
     }
 
     /// Check the accelerometer configuration
-    if( gUserSpi.DataRegister[ SPI_REG_ACCEL_OUTPUT_CONFIG_READ ] & 0x01 != 0 )
+    if( (gUserSpi.DataRegister[ SPI_REG_ACCEL_OUTPUT_CONFIG_READ ] & 0x01) != 0 )
     {
-        if( gUserSpi.DataRegister[ SPI_REG_ACCEL_OUTPUT_CONFIG_READ ] & 0x02 != 0 ) {
+        if( (gUserSpi.DataRegister[ SPI_REG_ACCEL_OUTPUT_CONFIG_READ ] & 0x02) != 0 ) {
             BurstRegisterIndex++; }
 
-        if( gUserSpi.DataRegister[ SPI_REG_ACCEL_OUTPUT_CONFIG_READ ] & 0x04 != 0 ) {
+        if( (gUserSpi.DataRegister[ SPI_REG_ACCEL_OUTPUT_CONFIG_READ ] & 0x04) != 0 ) {
             BurstRegisterIndex++; }
 
-        if( gUserSpi.DataRegister[ SPI_REG_ACCEL_OUTPUT_CONFIG_READ ] & 0x08 != 0 ) {
+        if( (gUserSpi.DataRegister[ SPI_REG_ACCEL_OUTPUT_CONFIG_READ ] & 0x08) != 0 ) {
             BurstRegisterIndex++; }
     }
 
     /// Check the accelerometer configuration
-    if( gUserSpi.DataRegister[ SPI_REG_MAG_OUTPUT_CONFIG_READ ] & 0x01 != 0 )
+    if( (gUserSpi.DataRegister[ SPI_REG_MAG_OUTPUT_CONFIG_READ ] & 0x01) != 0 )
     {
-        if( gUserSpi.DataRegister[ SPI_REG_MAG_OUTPUT_CONFIG_READ ] & 0x02 != 0 ) {
+        if( (gUserSpi.DataRegister[ SPI_REG_MAG_OUTPUT_CONFIG_READ ] & 0x02) != 0 ) {
             BurstRegisterIndex++; }
 
-        if( gUserSpi.DataRegister[ SPI_REG_MAG_OUTPUT_CONFIG_READ ] & 0x04 != 0 ) {
+        if( (gUserSpi.DataRegister[ SPI_REG_MAG_OUTPUT_CONFIG_READ ] & 0x04) != 0 ) {
             BurstRegisterIndex++; }
 
-        if( gUserSpi.DataRegister[ SPI_REG_MAG_OUTPUT_CONFIG_READ ] & 0x08 != 0 ) {
-            BurstRegisterIndex++; }
-    }
-
-    /// Check the rate-sensor and temp sensor configurations
-    if( gUserSpi.DataRegister[ SPI_REG_RATE_OUTPUT_CONFIG_READ ] & 0x01 != 0 ) {
-        if( gUserSpi.DataRegister[ SPI_REG_TEMP_OUTPUT_CONFIG_READ ] & 0x04 != 0 ) {
+        if( (gUserSpi.DataRegister[ SPI_REG_MAG_OUTPUT_CONFIG_READ ] & 0x08) != 0 ) {
             BurstRegisterIndex++; }
     }
 
     /// Check the rate-sensor and temp sensor configurations
-    if( gUserSpi.DataRegister[ SPI_REG_TEMP_OUTPUT_CONFIG_READ ] & 0x02 != 0 ) {
+    if( (gUserSpi.DataRegister[ SPI_REG_RATE_OUTPUT_CONFIG_READ ] & 0x01) != 0 ) {
+        if( (gUserSpi.DataRegister[ SPI_REG_TEMP_OUTPUT_CONFIG_READ ] & 0x04) != 0 ) {
+            BurstRegisterIndex++; }
+    }
+
+    /// Check the rate-sensor and temp sensor configurations
+    if( (gUserSpi.DataRegister[ SPI_REG_TEMP_OUTPUT_CONFIG_READ ] & 0x02) != 0 ) {
         BurstRegisterIndex++;
     }
     FillSpiDataRegister_OutputBytesExpected( BurstRegisterIndex );
@@ -843,7 +843,7 @@ void _Write_EEPROM_Cmd_Write(uint8_t data)   // 0x76
     uint8_t  numFields = 1;
     uint8_t tmp;
 
-    if( data == 0x00 | data == 0x74 ) {
+    if( data == 0x00 || data == 0x74 ) {
         fieldId = ORIENTATION_FIELD_ID;
         /// check if data to set is valid xbowsp_fields.c
         tmp = gUserSpi.DataRegister[ 0x75 ];

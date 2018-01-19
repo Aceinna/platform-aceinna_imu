@@ -29,8 +29,9 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f2xx.h"
+#include "stm32f2xx_conf.h"
 
-#define assert_param(x...)
+//#define assert_param(x...)
 
 /** @addtogroup STM32F2xx_StdPeriph_Driver
   * @{

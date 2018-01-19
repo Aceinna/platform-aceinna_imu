@@ -88,10 +88,10 @@ void _handleNMEAmsg(char          *msgID,
                     char          *msgBody,
                     GpsData_t     *GPSData)
 {
-    if( strncmp((char *)msgID, "$GPGGA", 6) == NULL ) {
+    if( strncmp((char *)msgID, "$GPGGA", 6) == 0 ) {
 		_parseGPGGA(msgBody, GPSData);
     }
-    if( strncmp((char *)msgID, "$GPVTG", 6) == NULL ) {
+    if( strncmp((char *)msgID, "$GPVTG", 6) == 0 ) {
 		_parseVTG(msgBody, GPSData);
     }
 }
@@ -138,8 +138,8 @@ char extractNMEAfield(char *msgBody,
     /// Next element in the array is a delimter or empty: return a empty buffer
     if( (msgBody[searchIndex] == ',' ||
          msgBody[searchIndex] == '*' ||
-         msgBody[searchIndex] == NULL) ) {
-        outField[0] = '\0';
+         msgBody[searchIndex] == '\x0') ) {
+        outField[0] = '\x0';
         return 0; // check for end of buffer
     }
 
@@ -277,18 +277,19 @@ char _parseGPGGA(char          *msgBody,
     }
 
     /// NMEA - DGPS bit
-    if (GPSFix == 2 ||
-        GPSFix == 4 ||
-        GPSFix == 5) /// on
+    if (GPSFix == 2 || GPSFix == 4 || GPSFix == 5){ /// on
         SetAlgorithmUseDgps(0);
-    else
+	}
+    else{
         SetAlgorithmUseDgps(1);
+	}
 
 	/// Altitude
 	if( extractNMEAfield(msgBody, field, 8, parseReset) )	{
 		GPSData->alt = atof((char *)field);
-	} else
+	} else{
         status = 1;
+	}
 
     if(GPSFix >= 1) {
         _NMEA2UbloxAndLLA(&nmeaLatLon, GPSData);
@@ -399,7 +400,7 @@ char _parseRMC(char          *msgBody,
 char computeNMEAChecksum(char         *NMEAMsg,
                          unsigned int *lengthBeforeStar)
 {
-	int  i;
+	unsigned int  i;
 	char msgChecksumComputed = 0;
 
 	for (i = 0; i < (*lengthBeforeStar - 1); i++) {

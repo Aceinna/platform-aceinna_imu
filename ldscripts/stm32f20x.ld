@@ -60,7 +60,7 @@ _Min_Stack_Size = 0x400; /* required amount of stack */
 /* Specify the memory areas */
 MEMORY
 {
-FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 384K
+FLASH (rx)      : ORIGIN = 0x8010000, LENGTH = 320K
 EEPROM (rw)     : ORIGIN = 0x8060000, LENGTH = 128K 
 RAM (xrw)       : ORIGIN = 0x20000000, LENGTH = 128K
 }
@@ -173,9 +173,10 @@ SECTIONS
     . = ALIGN(8);
   } >RAM
 
-  .eeprom :
+  .eeprom 0x8060000:
   {
     . = ALIGN(4);
+    KEEP(*(.myEeprom)) /* keep my variable even if not referenced */
     . = ALIGN(4);
     _eeeprom = .;        /* define a global symbols at end of code */
   } >EEPROM

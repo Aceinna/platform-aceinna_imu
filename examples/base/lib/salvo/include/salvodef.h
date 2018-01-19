@@ -37,7 +37,7 @@ Salvocfg.h contains user-definable SALVO configurations.
 ****                                                     ****
 ************************************************************/
 #define FALSE                   0
-#define TRUE                    (!FALSE)  
+#define TRUE                    1  
 
 #define OSUNDEF                 0   /* generic const       */
 #define OSNONE                  0   /*  ""                 */

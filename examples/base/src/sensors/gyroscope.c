@@ -39,6 +39,7 @@ static uint8_t BMI160DataBuffer[GYRO_MAX_CACHED_NUM][BMI160_BUFFER_SIZE];
 #else
 static uint8_t MAX21000DataBuffer[GYRO_MAX_CACHED_NUM][MAX21000_BUFFER_SIZE];
 #endif
+static gRate_t gRate;
 
 /** ****************************************************************************
  * @name: _ReadGyroRegister LOCAL
@@ -193,7 +194,7 @@ uint8_t GyroGetLastReading(int16_t *readings)
     uint8_t *data;
     int i;
     static int32_t  gyroFilteredVal[NUM_AXIS];
-    uint8_t count, cutoff_freq;
+    uint8_t count, cutoff_freq = GYRO_COF_LPF_50HZ;      // FIXME if it will be used
     static uint8_t input_data_rate;
 
     //

@@ -24,7 +24,7 @@ extern void readEEPROMCalOffsetAndLength(uint16_t *offset, uint16_t *length);
 
 extern void readEEPROMCalibration(void* destination);
 extern void readEEPROMConfiguration(void* destination);
-
+extern BOOL    setJumpFlag(uint32_t dat);
 #endif /* S_EEPROM_H */ 
 
 

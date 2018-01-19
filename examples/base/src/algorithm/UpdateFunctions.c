@@ -548,12 +548,12 @@ real SInverse[ROWS_IN_H][ROWS_IN_H];
 real PxHTranspose[ROWS_IN_P][ROWS_IN_H], HxPxHTranspose[ROWS_IN_H][ROWS_IN_H];
 real PxHTranspose_Q[ROWS_IN_P][4], HxPxHTranspose_Q[4][4];
 
-real KxH[NUMBER_OF_EKF_STATES][COLS_IN_H] = { 0.0 };
+real KxH[NUMBER_OF_EKF_STATES][COLS_IN_H] = {{ 0.0 }};
 real deltaP[ROWS_IN_P][COLS_IN_P];
 real deltaP_tmp[ROWS_IN_P][COLS_IN_P];
 
-real KxH_RP[NUMBER_OF_EKF_STATES][NUMBER_OF_EKF_STATES] = { 0.0 };
-real KxH_Y[NUMBER_OF_EKF_STATES][NUMBER_OF_EKF_STATES]  = { 0.0 };
+real KxH_RP[NUMBER_OF_EKF_STATES][NUMBER_OF_EKF_STATES] = {{ 0.0 }};
+real KxH_Y[NUMBER_OF_EKF_STATES][NUMBER_OF_EKF_STATES]  = {{ 0.0 }};
 
 real stateUpdate[NUMBER_OF_EKF_STATES];
 

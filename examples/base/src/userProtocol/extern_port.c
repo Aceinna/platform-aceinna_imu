@@ -87,7 +87,23 @@ void ExternPortInit (void)
 	static uint8_t port1_rx [PORT_1_RX_BUF_SIZE], port1_tx [PORT_1_TX_BUF_SIZE];
 
     /// set baud rates from configuration
-   // gPort0.hw.baud = baudEnumToBaudRate(gConfiguration.baudRateUser);
+    switch (gConfiguration.baudRateUser) {
+        case BAUD_38400:
+            gPort0.hw.baud = (unsigned int)38400; 
+            break;
+        case BAUD_57600:
+            gPort0.hw.baud = (unsigned int)57600;
+            break;
+        case BAUD_115200:
+            gPort0.hw.baud = (unsigned int)115200;
+            break;
+        case BAUD_230400:
+            gPort0.hw.baud = (unsigned int)230400;
+            break;
+        default:
+            gPort0.hw.baud = (unsigned int)57600;
+            break;
+     }
 
     /// initialize software circular buffers comm_buffers.c User com
     COM_buf_init(&gPort0,
@@ -438,10 +454,10 @@ void ExternPortWaitOnTxIdle (void)
     static uint16_t channel = 0;
     kick_dog(); /// prevent watchdog timeout
 
-	if (&gPort0 != 0) {
+//	if (&gPort0 != 0) {     // walways will evaluate as true
 		while ( bytes_remaining(channel, &gPort0) > 0 ) {
             uart_write(0, portMap); // uart.c run transmit cycle on port
 		}
-	}
+//	}
     kick_dog(); /// prevent watchdog timeout
 }

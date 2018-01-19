@@ -293,6 +293,9 @@ void _parseGPSMsg(int           *numInBuf,
                     } else
                         return;
                     break;
+                default:
+                    break;
+
             }
             /// pop out rest of msg if it is complete
             if(	bytesInCircularBuf >= msgLength) {
@@ -319,6 +322,8 @@ void _parseGPSMsg(int           *numInBuf,
                     case NOVATEL_BINARY : // pass in the body of the message
 //                        processNovAtelBinaryMsg(&gpsMsg[0], &msgLength, GPSData);
                         processNovAtelBinaryMsg_Fast(&gpsMsg[0], &msgLength, GPSData);
+                        break;
+                    default:
                         break;
                 }
                 memset(gpsMsg, 0, sizeof( gpsMsg ) );
@@ -434,6 +439,8 @@ void _setGPSMessageSignature(GpsData_t* GPSData)
 			GPSData->GPSMsgSignature.binaryOrAscii          = 1;
 			GPSData->GPSMsgSignature.lengthOfHeaderIDLength = 3;
 		    break;
+        default:
+            break;
 	}
     GPSData->GPSMsgSignature.startByte = GPSData->GPSMsgSignature.GPSheader >> ( (GPSData->GPSMsgSignature.GPSheaderLength * 8) - 8);
 }

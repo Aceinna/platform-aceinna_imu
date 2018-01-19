@@ -632,8 +632,8 @@
 *	BIG_ENDIAN 	- 0x00
 *	LITTLE_ENDIAN	- 0x40
 */
-#define BIG_ENDIAN	    0x00
-#define LITTLE_ENDIAN	0x04
+//#define BIG_ENDIAN	    0x00
+//#define LITTLE_ENDIAN	0x04
 
 /// part of ITF_OTP
 #define ENDIAN_BNK		BANK_00
@@ -1038,4 +1038,5 @@
 
 extern uint8_t MAX21000WhoAmI(uint32_t *);
 extern uint8_t MAX21000Config(uint32_t *, uint32_t *);
+extern uint16_t GyroGetGain();
 #endif /* MAX21000_H */

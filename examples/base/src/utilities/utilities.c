@@ -21,8 +21,11 @@
  * @param [in] c - character of interest
  * @retval the character of interest (lowercase if it was upper)
  ******************************************************************************/
-static char tolower(char c) {
-  if ('A' <= c && c <= 'Z') { return (c-'A')+'a';}
+//char tolower(char c) {
+char tlwr(char c) {
+  if ('A' <= c && c <= 'Z') { 
+    return (char)((c-'A')+'a');
+  }
   return c;
 }
 
@@ -39,7 +42,7 @@ static char tolower(char c) {
 int strcmpi(char const *a,
             char const *b) {
 
-  while ((*a) && (*b) && tolower(*a) == tolower(*b)) {
+  while ((*a) && (*b) && tlwr(*a) == tlwr(*b)) {
     a++;
     b++;
   }

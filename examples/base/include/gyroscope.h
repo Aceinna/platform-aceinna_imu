@@ -54,13 +54,16 @@ typedef enum {
   GYRO_BUFFER_OVERFLOW = 3
 } GYRO_BUFFER_STATUS;
 
-static struct {      
+
+//static struct {      
+typedef struct {      
       uint8_t cached_num;
       uint8_t temp_buff_num;
       int16_t gyroData[GYRO_MAX_CACHED_NUM][NUM_AXIS];
       uint32_t errorNum;
       GYRO_BUFFER_STATUS status;
-} gRate;
+} gRate_t;
+
 
 uint8_t InitGyro(); // This will use boardDefinition.h to set up the IO lines
                     //   returns TRUE if init was successful
@@ -85,5 +88,7 @@ extern void GyroSelfTest_Bias( uint8_t apply );
 
 extern uint8_t GyroTempGetLastReading(int16_t* reading);
 extern uint8_t GyroTempGetTemperature(int16_t reading, float *out);
+
+#define GYRO_COF_LPF_50HZ    0     //FIXME - redefine if it will be used
 
 #endif /* GYROSCOPE_H */

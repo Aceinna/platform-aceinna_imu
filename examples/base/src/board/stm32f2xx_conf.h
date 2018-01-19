@@ -89,8 +89,11 @@
 //#else
 //  #define assert_param(expr) ((void)0)
 //#endif /* USE_FULL_ASSERT */
+#ifndef USE_FULL_ASSERT
 #define assert_param(expr) ((void)0)
-
+#else
+#define assert_param(expr) ((expr) ? (void)0 : assert_failed((uint8_t *)__FILE__, __LINE__))
+#endif
 #endif /* __STM32F2xx_CONF_H */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

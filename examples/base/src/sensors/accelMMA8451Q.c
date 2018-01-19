@@ -378,10 +378,10 @@ uint8_t AccelerometerGetLastReading(int16_t *readings)
     int32_t count;
     int i;
     int32_t  accelFilteredVal[NUM_AXIS];
-    uint8_t cutoff_freq;
+    uint8_t cutoff_freq = ACCEL_COF_LPF_50HZ;      // FIXME if it will be used
     static uint8_t input_data_rate;
-    uint32_t range;
-    uint32_t outputDataRate;
+//    uint32_t range;
+//    uint32_t outputDataRate;
 
     if( initFlag ) {
         initFlag = 0;

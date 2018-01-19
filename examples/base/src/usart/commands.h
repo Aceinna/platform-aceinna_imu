@@ -10,7 +10,7 @@ void CmdDisplayDebugMessages_SensorData( uint32_t data );
 // FIXME: remove after faster RS232 chips become available
 void CmdUsartBaudRate( uint32_t data );
 
-static uint8_t _WriteSPI3Register(uint8_t address, uint8_t data);
+//static uint8_t _WriteSPI3Register(uint8_t address, uint8_t data);
 
 void CmdWriteSingleSpiByte( uint32_t data );
 void CmdInitSPIPeripheral( uint32_t data );

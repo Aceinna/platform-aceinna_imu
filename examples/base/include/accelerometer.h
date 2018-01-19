@@ -41,5 +41,5 @@ void AccelDataReadyInt( FunctionalState enable );
 
 #define BUSY      1
 #define NOT_BUSY  0
-
+#define ACCEL_COF_LPF_50HZ  0   // FIXME if it will be used 
 #endif /* ACCELEROMETER_H */

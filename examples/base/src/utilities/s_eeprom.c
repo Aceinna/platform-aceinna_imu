@@ -130,9 +130,9 @@ typedef union  {
 
 // memory map for flash
 #define ERASE_EEPROM_ON_LOADING_CODE 0
-#pragma location = "FLASH_BASED_EEPROM"  ///< defined in the linker's ICF file
+//#pragma location = "FLASH_BASED_EEPROM"  ///< defined in the linker's ICF file
 #if ERASE_EEPROM_ON_LOADING_CODE
-__root const uEeprom gEepromInFlash = {
+const uEeprom gEepromInFlash __attribute__((section (".myEeprom"))) = {
     .table = {
         .configuration = {
             .calibrationCRC = 0,// 43007,   // 0xA7FF at
@@ -212,7 +212,7 @@ __root const uEeprom gEepromInFlash = {
             .MagSensorRange   = MAG_RANGE_4000_MILLI_GA, // [4000]
         },
     },
-};
+} ;
 #else
 const uEeprom gEepromInFlash;
 //__root __no_init const uEeprom gEepromInFlash;

@@ -80,6 +80,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f2xx_iwdg.h"
+#include "stm32f2xx_conf.h"
 
 /** @addtogroup STM32F2xx_StdPeriph_Driver
   * @{
