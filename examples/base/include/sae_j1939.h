@@ -139,7 +139,7 @@ typedef enum {
 #define SAE_J1939_REQUEST_LEN                          3
 
 #define MEMSIC_SAE_J1939_VERSION_PACKET_LEN            6
-#define MEMSIC_SAE_J1939_ECU_PACKET_LEN                4
+#define MEMSIC_SAE_J1939_ECU_PACKET_LEN                8
 
 #define MEMSIC_SAE_J1939_ALGO_RST_LEN                  3
 #define MEMSIC_SAE_J1939_SAVE_CONFIG_LEN               3
@@ -217,9 +217,10 @@ typedef enum {
   _ECU_INVALID_NAME          =   -1,
   _ECU_TX_OVERFLOW           =   -2,
   _ECU_RX_OVERFLOW           =   -3,
-  _ECU_WAIT_ADDRESS          =   1,
-  _ECU_CHECK_ADDRESS         =   2,
-  _ECU_ALGORITHM_RESET       =   3,
+  _ECU_BAUDRATE_DETECT       =   1,
+  _ECU_WAIT_ADDRESS          =   2,
+  _ECU_CHECK_ADDRESS         =   3,
+  _ECU_ALGORITHM_RESET       =   4,
   _ECU_READY                 =   64,
   _ECU_WAIT_ID               =   65,
   _ECU_WAIT_SOFTWARE_VER     =   66,
@@ -336,8 +337,7 @@ typedef struct {
 
 typedef struct {
     uint8_t dest_address;
-    uint8_t rate_orien;
-    uint8_t accel_orien;
+    uint8_t orien_bits[2];
 } ORIENTATION_SETTING;
 
 typedef struct {
@@ -405,21 +405,14 @@ typedef struct {
     uint16_t pitch_rate;
     uint16_t roll_rate;
     uint16_t yaw_rate;
-    uint16_t pitch_rate_merit         :    2;
-    uint16_t roll_rate_merit          :    2;
-    uint16_t yaw_rate_merit           :    2;
-    uint16_t reserve                  :    10;
+    uint16_t time_stamp;
 } AUGULAR_RATE;
 
 typedef struct {
     uint16_t   acceleration_x;
     uint16_t   acceleration_y;
     uint16_t   acceleration_z;
-    uint8_t    acceleration_x_merit              :   2;
-    uint8_t    acceleration_y_merit              :   2;
-    uint8_t    acceleration_z_merit              :   2;
-    uint8_t    acceleration_transmission_rate    :   2;  
-    uint8_t    reserve                           :   8;
+    uint16_t   time_stamp;
 } ACCELERATION_SENSOR;
 
 typedef enum {
@@ -445,14 +438,14 @@ typedef struct {
 typedef struct {
   SAE_J1939_NAME_FIELD ecu_name;
   uint8_t  address;
+  uint8_t  baud_rate_detect_enable;
   _ECU_BAUD_RATE  baudRate;
   uint8_t  version[5];
   uint16_t packet_rate;
   uint16_t packet_type;
   uint8_t  accel_cut_off;
   uint8_t  rate_cut_off;
-  uint8_t  accel_orien;
-  uint8_t  rate_orien;
+  uint16_t  orien_bits;
   uint8_t  restart_on_overrange;
   uint8_t  dynamic_motion;
   uint8_t roll_upper;
@@ -547,6 +540,7 @@ typedef struct {
 #define MEMSIC_ECU_ADDRESS_MAX              120
 
 extern ECU_INSTANCE gEcuInst;
+extern EcuConfigurationStruct gEcuConfig;
 extern EcuConfigurationStruct *gEcuConfigPtr;
 
 extern void sae_j1939_initialize();
@@ -566,7 +560,7 @@ extern MEMSIC_J1939_PACKET_TYPE is_valid_data_packet(SAE_J1939_IDENTIFIER_FIELD 
 extern MEMSIC_J1939_PACKET_TYPE is_valid_config_command(SAE_J1939_IDENTIFIER_FIELD *);
 extern MEMSIC_J1939_PACKET_TYPE is_data_packet(SAE_J1939_IDENTIFIER_FIELD *);\
 extern MEMSIC_J1939_PACKET_TYPE is_valid_address_claim(SAE_J1939_IDENTIFIER_FIELD *);
-extern void ecu_process(void);
+
 extern uint8_t send_j1939_packet(struct sae_j1939_tx_desc *);
 extern void send_address_claim(ECU_INSTANCE *);
 extern void build_set_pkt(struct sae_j1939_tx_desc *, MEMSIC_SAE_J1939_CONTROL, _ECU_CATEGORY);

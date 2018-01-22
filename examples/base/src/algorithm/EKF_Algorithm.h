@@ -78,6 +78,9 @@ typedef struct {
 //    double Position_E[3];
 
     real wTrueTimesDtOverTwo[3];
+
+// Not in v18.1.10 but keep
+    real turnSwitchMultiplier;
 } KalmanFilterStruct;
 
 extern KalmanFilterStruct gKalmanFilter;

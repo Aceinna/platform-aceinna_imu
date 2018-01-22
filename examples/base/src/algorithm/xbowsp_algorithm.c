@@ -84,7 +84,8 @@ void InitializeAlgorithmStruct(AlgorithmStruct *algorithmStruct)
     //   taskDataAcquisition).  Time must be in [count] based on ODR.
     gAlgorithm.Limit.Free_Integration_Cntr = gAlgorithm.callingFreq * LIMIT_FREE_INTEGRATION_CNTR;
 
-    gAlgorithm.Limit.accelSwitch   = (real)(0.0055);   // [g]
+// Change in the latest code.  Doesn't match v18.1.10
+    gAlgorithm.Limit.accelSwitch   = (real)(0.0080); //0.0055);   // [g]
     gAlgorithm.Limit.linAccelSwitchDelay = (uint32_t)(4.5 * gAlgorithm.callingFreq);
 }
 

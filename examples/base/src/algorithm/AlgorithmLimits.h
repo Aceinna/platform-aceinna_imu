@@ -26,7 +26,8 @@
 #define LIMIT_OBS_JACOBIAN_DENOM    1e-3;
 
 // The following times are compared against ITOW (units in [msec])
-#define LIMIT_MAX_GPS_DROP_TIME                     3    // 3 [sec]
+//#define LIMIT_MAX_GPS_DROP_TIME                     3    // 3 [sec]
+#define LIMIT_MAX_GPS_DROP_TIME                     5    // 3 [sec]
 #define LIMIT_MAX_REST_TIME_BEFORE_DROP_TO_AHRS     60000 // 60000 [ msec ] = 60 [ sec ]
 #define LIMIT_DECL_EXPIRATION_TIME                  60000  // 60,000 [ counts ] = 10 [ min ]
 

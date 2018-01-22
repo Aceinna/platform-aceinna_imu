@@ -177,8 +177,6 @@
   */
 void USART_DeInit(USART_TypeDef* USARTx)
 {
-  /* Check the parameters */
-  assert_param(IS_USART_ALL_PERIPH(USARTx));
 
   if (USARTx == USART1)
   {
@@ -231,19 +229,9 @@ void USART_Init(USART_TypeDef* USARTx, USART_InitTypeDef* USART_InitStruct)
   uint32_t fractionaldivider = 0x00;
   RCC_ClocksTypeDef RCC_ClocksStatus;
 
-  /* Check the parameters */
-  assert_param(IS_USART_ALL_PERIPH(USARTx));
-  assert_param(IS_USART_BAUDRATE(USART_InitStruct->USART_BaudRate));
-  assert_param(IS_USART_WORD_LENGTH(USART_InitStruct->USART_WordLength));
-  assert_param(IS_USART_STOPBITS(USART_InitStruct->USART_StopBits));
-  assert_param(IS_USART_PARITY(USART_InitStruct->USART_Parity));
-  assert_param(IS_USART_MODE(USART_InitStruct->USART_Mode));
-  assert_param(IS_USART_HARDWARE_FLOW_CONTROL(USART_InitStruct->USART_HardwareFlowControl));
-
   /* The hardware flow control is available only for USART1, USART2, USART3 and USART6 */
   if (USART_InitStruct->USART_HardwareFlowControl != USART_HardwareFlowControl_None)
   {
-    assert_param(IS_USART_1236_PERIPH(USARTx));
   }
 
 /*---------------------------- USART CR2 Configuration -----------------------*/
@@ -360,12 +348,6 @@ void USART_StructInit(USART_InitTypeDef* USART_InitStruct)
 void USART_ClockInit(USART_TypeDef* USARTx, USART_ClockInitTypeDef* USART_ClockInitStruct)
 {
   uint32_t tmpreg = 0x00;
-  /* Check the parameters */
-  assert_param(IS_USART_1236_PERIPH(USARTx));
-  assert_param(IS_USART_CLOCK(USART_ClockInitStruct->USART_Clock));
-  assert_param(IS_USART_CPOL(USART_ClockInitStruct->USART_CPOL));
-  assert_param(IS_USART_CPHA(USART_ClockInitStruct->USART_CPHA));
-  assert_param(IS_USART_LASTBIT(USART_ClockInitStruct->USART_LastBit));
 
 /*---------------------------- USART CR2 Configuration -----------------------*/
   tmpreg = USARTx->CR2;
@@ -407,9 +389,6 @@ void USART_ClockStructInit(USART_ClockInitTypeDef* USART_ClockInitStruct)
   */
 void USART_Cmd(USART_TypeDef* USARTx, FunctionalState NewState)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_ALL_PERIPH(USARTx));
-//  assert_param(IS_FUNCTIONAL_STATE(NewState));
 
   if (NewState != DISABLE)
   {
@@ -433,8 +412,6 @@ void USART_Cmd(USART_TypeDef* USARTx, FunctionalState NewState)
   */
 void USART_SetPrescaler(USART_TypeDef* USARTx, uint8_t USART_Prescaler)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_ALL_PERIPH(USARTx));
 
   /* Clear the USART prescaler */
   USARTx->GTPR &= USART_GTPR_GT;
@@ -454,9 +431,6 @@ void USART_SetPrescaler(USART_TypeDef* USARTx, uint8_t USART_Prescaler)
   */
 void USART_OverSampling8Cmd(USART_TypeDef* USARTx, FunctionalState NewState)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_ALL_PERIPH(USARTx));
-//  assert_param(IS_FUNCTIONAL_STATE(NewState));
 
   if (NewState != DISABLE)
   {
@@ -480,9 +454,6 @@ void USART_OverSampling8Cmd(USART_TypeDef* USARTx, FunctionalState NewState)
   */
 void USART_OneBitMethodCmd(USART_TypeDef* USARTx, FunctionalState NewState)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_ALL_PERIPH(USARTx));
-//  assert_param(IS_FUNCTIONAL_STATE(NewState));
 
   if (NewState != DISABLE)
   {
@@ -537,9 +508,6 @@ void USART_OneBitMethodCmd(USART_TypeDef* USARTx, FunctionalState NewState)
   */
 void USART_SendData(USART_TypeDef* USARTx, uint16_t Data)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_ALL_PERIPH(USARTx));
-//  assert_param(IS_USART_DATA(Data));
 
   /* Transmit Data */
   USARTx->DR = (Data & (uint16_t)0x01FF);
@@ -553,8 +521,6 @@ void USART_SendData(USART_TypeDef* USARTx, uint16_t Data)
   */
 uint16_t USART_ReceiveData(USART_TypeDef* USARTx)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_ALL_PERIPH(USARTx));
 
   /* Receive Data */
   return (uint16_t)(USARTx->DR & (uint16_t)0x01FF);
@@ -604,9 +570,6 @@ uint16_t USART_ReceiveData(USART_TypeDef* USARTx)
   */
 void USART_SetAddress(USART_TypeDef* USARTx, uint8_t USART_Address)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_ALL_PERIPH(USARTx));
-//  assert_param(IS_USART_ADDRESS(USART_Address));
 
   /* Clear the USART address */
   USARTx->CR2 &= (uint16_t)~((uint16_t)USART_CR2_ADD);
@@ -624,9 +587,6 @@ void USART_SetAddress(USART_TypeDef* USARTx, uint8_t USART_Address)
   */
 void USART_ReceiverWakeUpCmd(USART_TypeDef* USARTx, FunctionalState NewState)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_ALL_PERIPH(USARTx));
-//  assert_param(IS_FUNCTIONAL_STATE(NewState));
 
   if (NewState != DISABLE)
   {
@@ -651,9 +611,6 @@ void USART_ReceiverWakeUpCmd(USART_TypeDef* USARTx, FunctionalState NewState)
   */
 void USART_WakeUpConfig(USART_TypeDef* USARTx, uint16_t USART_WakeUp)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_ALL_PERIPH(USARTx));
-//  assert_param(IS_USART_WAKEUP(USART_WakeUp));
 
   USARTx->CR1 &= (uint16_t)~((uint16_t)USART_CR1_WAKE);
   USARTx->CR1 |= USART_WakeUp;
@@ -720,9 +677,6 @@ void USART_WakeUpConfig(USART_TypeDef* USARTx, uint16_t USART_WakeUp)
   */
 void USART_LINBreakDetectLengthConfig(USART_TypeDef* USARTx, uint16_t USART_LINBreakDetectLength)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_ALL_PERIPH(USARTx));
-//  assert_param(IS_USART_LIN_BREAK_DETECT_LENGTH(USART_LINBreakDetectLength));
 
   USARTx->CR2 &= (uint16_t)~((uint16_t)USART_CR2_LBDL);
   USARTx->CR2 |= USART_LINBreakDetectLength;
@@ -738,9 +692,6 @@ void USART_LINBreakDetectLengthConfig(USART_TypeDef* USARTx, uint16_t USART_LINB
   */
 void USART_LINCmd(USART_TypeDef* USARTx, FunctionalState NewState)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_ALL_PERIPH(USARTx));
-//  assert_param(IS_FUNCTIONAL_STATE(NewState));
 
   if (NewState != DISABLE)
   {
@@ -762,8 +713,6 @@ void USART_LINCmd(USART_TypeDef* USARTx, FunctionalState NewState)
   */
 void USART_SendBreak(USART_TypeDef* USARTx)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_ALL_PERIPH(USARTx));
 
   /* Send break characters */
   USARTx->CR1 |= USART_CR1_SBK;
@@ -815,9 +764,6 @@ void USART_SendBreak(USART_TypeDef* USARTx)
   */
 void USART_HalfDuplexCmd(USART_TypeDef* USARTx, FunctionalState NewState)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_ALL_PERIPH(USARTx));
-//  assert_param(IS_FUNCTIONAL_STATE(NewState));
 
   if (NewState != DISABLE)
   {
@@ -900,9 +846,6 @@ void USART_HalfDuplexCmd(USART_TypeDef* USARTx, FunctionalState NewState)
   */
 void USART_SetGuardTime(USART_TypeDef* USARTx, uint8_t USART_GuardTime)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_1236_PERIPH(USARTx));
-
   /* Clear the USART Guard time */
   USARTx->GTPR &= USART_GTPR_PSC;
   /* Set the USART guard time */
@@ -919,9 +862,6 @@ void USART_SetGuardTime(USART_TypeDef* USARTx, uint8_t USART_GuardTime)
   */
 void USART_SmartCardCmd(USART_TypeDef* USARTx, FunctionalState NewState)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_1236_PERIPH(USARTx));
-//  assert_param(IS_FUNCTIONAL_STATE(NewState));
   if (NewState != DISABLE)
   {
     /* Enable the SC mode by setting the SCEN bit in the CR3 register */
@@ -944,9 +884,6 @@ void USART_SmartCardCmd(USART_TypeDef* USARTx, FunctionalState NewState)
   */
 void USART_SmartCardNACKCmd(USART_TypeDef* USARTx, FunctionalState NewState)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_1236_PERIPH(USARTx));
-//  assert_param(IS_FUNCTIONAL_STATE(NewState));
   if (NewState != DISABLE)
   {
     /* Enable the NACK transmission by setting the NACK bit in the CR3 register */
@@ -1015,9 +952,6 @@ void USART_SmartCardNACKCmd(USART_TypeDef* USARTx, FunctionalState NewState)
   */
 void USART_IrDAConfig(USART_TypeDef* USARTx, uint16_t USART_IrDAMode)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_ALL_PERIPH(USARTx));
-//  assert_param(IS_USART_IRDA_MODE(USART_IrDAMode));
 
   USARTx->CR3 &= (uint16_t)~((uint16_t)USART_CR3_IRLP);
   USARTx->CR3 |= USART_IrDAMode;
@@ -1033,9 +967,6 @@ void USART_IrDAConfig(USART_TypeDef* USARTx, uint16_t USART_IrDAMode)
   */
 void USART_IrDACmd(USART_TypeDef* USARTx, FunctionalState NewState)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_ALL_PERIPH(USARTx));
-//  assert_param(IS_FUNCTIONAL_STATE(NewState));
 
   if (NewState != DISABLE)
   {
@@ -1079,10 +1010,6 @@ void USART_IrDACmd(USART_TypeDef* USARTx, FunctionalState NewState)
   */
 void USART_DMACmd(USART_TypeDef* USARTx, uint16_t USART_DMAReq, FunctionalState NewState)
 {
-  /* Check the parameters */
-//  assert_param(IS_USART_ALL_PERIPH(USARTx));
-//  assert_param(IS_USART_DMAREQ(USART_DMAReq));
-//  assert_param(IS_FUNCTIONAL_STATE(NewState));
 
   if (NewState != DISABLE)
   {
@@ -1209,15 +1136,10 @@ void USART_ITConfig(USART_TypeDef* USARTx, uint16_t USART_IT, FunctionalState Ne
 {
   uint32_t usartreg = 0x00, itpos = 0x00, itmask = 0x00;
   uint32_t usartxbase = 0x00;
-  /* Check the parameters */
-  assert_param(IS_USART_ALL_PERIPH(USARTx));
-  assert_param(IS_USART_CONFIG_IT(USART_IT));
-  assert_param(IS_FUNCTIONAL_STATE(NewState));
 
   /* The CTS interrupt is not available for UART4 and UART5 */
   if (USART_IT == USART_IT_CTS)
   {
-    assert_param(IS_USART_1236_PERIPH(USARTx));
   }
 
   usartxbase = (uint32_t)USARTx;
@@ -1272,14 +1194,10 @@ void USART_ITConfig(USART_TypeDef* USARTx, uint16_t USART_IT, FunctionalState Ne
 FlagStatus USART_GetFlagStatus(USART_TypeDef* USARTx, uint16_t USART_FLAG)
 {
   FlagStatus bitstatus = RESET;
-  /* Check the parameters */
-//  assert_param(IS_USART_ALL_PERIPH(USARTx));
-//  assert_param(IS_USART_FLAG(USART_FLAG));
 
   /* The CTS flag is not available for UART4 and UART5 */
   if (USART_FLAG == USART_FLAG_CTS)
   {
-    assert_param(IS_USART_1236_PERIPH(USARTx));
   }
 
   if ((USARTx->SR & USART_FLAG) != (uint16_t)RESET)
@@ -1320,14 +1238,10 @@ FlagStatus USART_GetFlagStatus(USART_TypeDef* USARTx, uint16_t USART_FLAG)
   */
 void USART_ClearFlag(USART_TypeDef* USARTx, uint16_t USART_FLAG)
 {
-  /* Check the parameters */
-  assert_param(IS_USART_ALL_PERIPH(USARTx));
-  assert_param(IS_USART_CLEAR_FLAG(USART_FLAG));
 
   /* The CTS flag is not available for UART4 and UART5 */
   if ((USART_FLAG & USART_FLAG_CTS) == USART_FLAG_CTS)
   {
-    assert_param(IS_USART_1236_PERIPH(USARTx));
   }
 
   USARTx->SR = (uint16_t)~USART_FLAG;
@@ -1355,14 +1269,10 @@ ITStatus USART_GetITStatus(USART_TypeDef* USARTx, uint16_t USART_IT)
 {
   uint32_t bitpos = 0x00, itmask = 0x00, usartreg = 0x00;
   ITStatus bitstatus = RESET;
-  /* Check the parameters */
-  assert_param(IS_USART_ALL_PERIPH(USARTx));
-  assert_param(IS_USART_GET_IT(USART_IT));
 
   /* The CTS interrupt is not available for UART4 and UART5 */
   if (USART_IT == USART_IT_CTS)
   {
-    assert_param(IS_USART_1236_PERIPH(USARTx));
   }
 
   /* Get the USART register index */
@@ -1428,14 +1338,10 @@ ITStatus USART_GetITStatus(USART_TypeDef* USARTx, uint16_t USART_IT)
 void USART_ClearITPendingBit(USART_TypeDef* USARTx, uint16_t USART_IT)
 {
   uint16_t bitpos = 0x00, itmask = 0x00;
-  /* Check the parameters */
-  assert_param(IS_USART_ALL_PERIPH(USARTx));
-  assert_param(IS_USART_CLEAR_IT(USART_IT));
 
   /* The CTS interrupt is not available for UART4 and UART5 */
   if (USART_IT == USART_IT_CTS)
   {
-    assert_param(IS_USART_1236_PERIPH(USARTx));
   }
 
   bitpos = USART_IT >> 0x08;

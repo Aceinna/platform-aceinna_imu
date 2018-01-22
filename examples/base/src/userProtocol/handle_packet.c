@@ -37,6 +37,9 @@ uint8_t currentMagSerialNumber [RMAG_SERIAL_NUMBER_SIZE] = { 0, 0, 0, 0 };
 
 static void _SetNak(ExternPortTypeEnum port, UcbPacketStruct *ptrUcbPacket);
 
+void WriteMagAlignParamsToMemory( ExternPortTypeEnum port,
+                                  UcbPacketStruct    *ptrUcbPacket );
+
 /** ****************************************************************************
  * @name _UcbPing
  * @brief Reply to a PING command
@@ -355,10 +358,9 @@ static void _UcbWriteFields (ExternPortTypeEnum port,
     SetMaxDelay_Watchdog(); // Set the watchdog delay to its maximum value
 
     /// verify that the packet length matches packet specification
-    if ((numFields > 0) &&
-    	(ptrUcbPacket->payloadLength ==
-        (1 + numFields * 4))) {
-
+    if( ( numFields > 0 ) &&
+        ( ptrUcbPacket->payloadLength == (1 + numFields * 4) ) )
+    {
         /// loop through all fields and data specified in set fields request
         for (fieldCount = 0; fieldCount < numFields; ++fieldCount) {
             /// read field ID and field data from packet into usable arrays
@@ -696,16 +698,7 @@ static void _UcbWriteCal (ExternPortTypeEnum port,
                         _SetNak(port, ptrUcbPacket);                }
                 break;
             case MAG_ALIGN_STATUS_SAVE2EEPROM:
-                /// end of phase 2 calibration?
-                if (gAlgorithm.calState == MAG_ALIGN_STATUS_TERMINATION) {
-                    /// write gConfiguration with the new mag fields
-                   if (writeEEPROMWords(CONFIGURATION_START, sizeof(gConfiguration), &gConfiguration)) {
-                        _SetNak(port, ptrUcbPacket);
-                   }
-                } else { /// phase 2 calibration hasn't been completed, not
-                         /// allowed to write the results
-                    _SetNak(port, ptrUcbPacket);
-                }
+                WriteMagAlignParamsToMemory(port, ptrUcbPacket);
                 break;
             default: /// unrecognized calibration request
                 _SetNak(port, ptrUcbPacket);
@@ -857,5 +850,42 @@ void HandleUcbPacket (ExternPortTypeEnum port,
 void SystemReset(void)
 {
 	*((u32 *)0xE000ED0C) = 0x05fa0004; 
+}
+
+/** ****************************************************************************
+ * @name _WriteMagAlignParamsToMemory
+ * @brief writes the magnetic alignment parameters to the EEPROM
+ * Trace: [SDD_HANDLE_PKT <-- SRC_HANDLE_PACKET]
+ * @retval N/A
+ ******************************************************************************/
+void WriteMagAlignParamsToMemory( ExternPortTypeEnum port,
+                                  UcbPacketStruct    *ptrUcbPacket )
+{
+    // Array sizes are based on maximum number of fields to change
+    uint16_t fieldId   [UCB_MAX_PAYLOAD_LENGTH / 4];
+    fieldId[0] = 0x0009;   // X-Axis Hard-Iron
+    fieldId[1] = 0x000A;   // Y-Axis Hard-Iron
+    fieldId[2] = 0x000B;   // Soft-Iron Scale-Ratio
+    fieldId[3] = 0x000E;   // Soft-Iron Angle
+
+    uint16_t fieldData [UCB_MAX_PAYLOAD_LENGTH / 4];
+    fieldData[0] = gConfiguration.hardIronBias[0];      // [G]
+    fieldData[1] = gConfiguration.hardIronBias[1];      // [G]
+    fieldData[2] = gConfiguration.softIronScaleRatio;   // [N/A]
+    fieldData[3] = gConfiguration.softIronAngle;        // [deg]
+
+    uint8_t numFields = 0x4;
+    ptrUcbPacket->payloadLength = 1 + 4*numFields;
+    ptrUcbPacket->payload[0]    = numFields;
+
+    // first two are field ID, second two are data
+    for( uint8_t fieldNum = 0; fieldNum < numFields; fieldNum++ ) {
+        ptrUcbPacket->payload[(fieldNum*numFields)+1] = fieldId[fieldNum] >> 8;
+        ptrUcbPacket->payload[(fieldNum*numFields)+2] = fieldId[fieldNum] & 0x00FF;
+        ptrUcbPacket->payload[(fieldNum*numFields)+3] = fieldData[fieldNum] >> 8;
+        ptrUcbPacket->payload[(fieldNum*numFields)+4] = fieldData[fieldNum] & 0x00FF;
+    }
+
+    _UcbWriteFields( port, ptrUcbPacket );
 }
 

@@ -204,7 +204,7 @@ void HG_To_LG_Transition_Test(void)
         gAlgorithm.bitStatus.swStatus.bit.highGain = FALSE;
 
         // Populate Q (constant values) for the low-gain state (only a few variables changed)
-        GenerateProcessCovariance();
+        //GenerateProcessCovariance();
     }
 }
 

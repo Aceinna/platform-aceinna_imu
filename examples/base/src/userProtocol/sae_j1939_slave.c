@@ -10,7 +10,7 @@
  * PARTICULAR PURPOSE.
  *
  *****************************************************************************/
-#ifdef MEMSIC_CAN_380
+#ifdef SAEJ1939
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -23,11 +23,15 @@
 #include "xbowsp_fields.h"
 #include "scaling.h"
 #include "EKF_Algorithm.h"
+#include "xbowsp_algorithm.h"
 #include "..\math\qmath.h"
 
 #include "sae_j1939.h"
 
+#define CAN_OUTPUT_INTERVAL                         15
+
 extern uint32_t can_bus_heart_beat;
+uint32_t can_output_counter = 0;
 
 ECU_INSTANCE * gEcu = &gEcuInst;
 
@@ -481,10 +485,10 @@ static uint8_t ecu_config_save(void)
     gConfiguration.OrienUserBehvPs = ((uint16_t)gEcuConfigPtr->orientation_ps << 8) | gEcuConfigPtr->user_behavior_ps;
     gConfiguration.AngConeAlarmPs = ((uint16_t)gEcuConfigPtr->angle_alarm_ps << 8) | gEcuConfigPtr->cone_alarm_ps;
   
-    return WriteFieldData();
+    return writeEEPROMByte(ECU_ADDRESS_FIELD_ID, 24, (void *)&gConfiguration.ecuAddress);
 }
 
-void ecu_command_set(void * command, uint8_t ps)
+void ecu_command_set(void * command, uint8_t ps, uint8_t addr)
 { 
   if (command == NULL)
     return;
@@ -493,20 +497,26 @@ void ecu_command_set(void * command, uint8_t ps)
   case SAE_J1939_GROUP_EXTENSION_ALGORITHM_RESET:
       if ((((COMMAND_SET_PAYLOAD *)command)->request == MEMSIC_SAE_J1939_REQUEST) &&
           (((COMMAND_SET_PAYLOAD *)command)->dest_address == *(uint8_t *)gEcu->addr)) {
+          ECU_ADDRESS_ENTRY target;
           ecu_alg_reset();
+          target.address = addr;
+          memsic_j1939_send_algrst_cfgsave(&target, 1, 1)  ;        
       }
       break;
   case SAE_J1939_GROUP_EXTENSION_SAVE_CONFIGURATION:
       if ((((COMMAND_SET_PAYLOAD *)command)->request == MEMSIC_SAE_J1939_REQUEST) &&
           (((COMMAND_SET_PAYLOAD *)command)->dest_address == *(uint8_t *)gEcu->addr)) {
+          ECU_ADDRESS_ENTRY target;
           ecu_config_save();
+          target.address = addr;
+          memsic_j1939_send_algrst_cfgsave(&target, 0, 1);  
       }
       break;
   case SAE_J1939_GROUP_EXTENSION_PACKET_RATE:
     if (((RATE_CONFIG_PAYLOAD *)command)->dest_address == *(uint8_t *)gEcu->addr) {
-      gEcuConfigPtr->packet_rate = ((RATE_CONFIG_PAYLOAD *)command)->odr;
-      gEcuConfigPtr->config_changed = _ECU_CONFIG_PACKET_RATE;
-      can_bus_heart_beat = TIM5_OUTPUT_DATA_RATE / gEcuConfig.packet_rate;
+      gEcuConfigPtr->packet_rate = MEMSIC_SAE_J1939_PACKET_RATE_100 / ((RATE_CONFIG_PAYLOAD *)command)->odr;
+      gEcuConfigPtr->config_changed |= _ECU_CONFIG_PACKET_RATE;
+      can_bus_heart_beat = TIM5_OUTPUT_DATA_RATE / gEcuConfigPtr->packet_rate;
     }
     break;
   case SAE_J1939_GROUP_EXTENSION_PACKET_TYPE:
@@ -524,8 +534,7 @@ void ecu_command_set(void * command, uint8_t ps)
     break;   
   case SAE_J1939_GROUP_EXTENSION_ORIENTATION:
     if (((ORIENTATION_SETTING *)command)->dest_address == *(uint8_t *)gEcu->addr) {
-      gEcuConfigPtr->rate_orien = ((ORIENTATION_SETTING *)command)->rate_orien;
-      gEcuConfigPtr->accel_orien = ((ORIENTATION_SETTING *)command)->accel_orien;
+      gEcuConfigPtr->orien_bits = ((ORIENTATION_SETTING *)command)->orien_bits[0] << 8 | ((ORIENTATION_SETTING *)command)->orien_bits[1];
       gEcuConfigPtr->config_changed |= _ECU_CONFIG_ORIENTATION;
     }
     break;   
@@ -618,7 +627,7 @@ void process_config_set(struct sae_j1939_rx_desc *desc)
   if (pf_val != SAE_J1939_PDU_FORMAT_GLOBAL)
     return;
   
-  ecu_command_set(command, ps_val);
+  ecu_command_set(command, ps_val, ident->source);
   
   return;
   
@@ -694,6 +703,7 @@ static void send_tilt_sensor_data()
   float rate[3];
   int i;
   
+  can_output_counter++;
   if( UcbGetSysType() > IMU_9DOF_SYS ) {
       if (gEcuConfigPtr->packet_type & MEMSIC_SAE_J1939_PACKET_SLOPE_SENSOR) {
           slope_data.pitch = (uint32_t)((gKalmanFilter.eulerAngles[PITCH] * 57.296 + 250.00) * 32768);
@@ -707,59 +717,36 @@ static void send_tilt_sensor_data()
   
           memsic_j1939_send_slope_sensor(&slope_data);  
       }
-  
-      if (gEcuConfigPtr->packet_type & MEMSIC_SAE_J1939_PACKET_ACCELERATOR) {
-        accel_data.acceleration_x = (uint16_t)((gKalmanFilter.correctedAccel_B[X_AXIS] + 320.00) * 100);
-        accel_data.acceleration_y = (uint16_t)((gKalmanFilter.correctedAccel_B[Y_AXIS] + 320.00) * 100);
-        accel_data.acceleration_z = (uint16_t)((gKalmanFilter.correctedAccel_B[Z_AXIS] + 320.00) * 100);
-     }
-  
-     if (gEcuConfigPtr->packet_type & MEMSIC_SAE_J1939_PACKET_ANGULAR_RATE) {
-        rate[0] = gKalmanFilter.correctedRate_B[Y_AXIS] * 57.296;
-        rate[1] = gKalmanFilter.correctedRate_B[X_AXIS] * 57.296;
-        rate[2] = gKalmanFilter.correctedRate_B[Z_AXIS] * 57.296;
+   }
     
+   if (gEcuConfigPtr->packet_type & MEMSIC_SAE_J1939_PACKET_ACCELERATOR) {
+        accel_data.acceleration_x = (uint16_t)(((gAlgorithm.scaledSensors[XACCEL] * GRAVITY) + 320.00) * 100);
+        accel_data.acceleration_y = (uint16_t)(((gAlgorithm.scaledSensors[YACCEL] * GRAVITY) + 320.00) * 100);
+        accel_data.acceleration_z = (uint16_t)(((gAlgorithm.scaledSensors[ZACCEL] * GRAVITY) + 320.00) * 100);
         
-     }
-  } else {
-    if (gEcuConfigPtr->packet_type & MEMSIC_SAE_J1939_PACKET_ACCELERATOR) {
-        accel_data.acceleration_x = (uint16_t)((gAlgorithm.scaledSensors[XACCEL] + 320.00) * 100);
-        accel_data.acceleration_y = (uint16_t)((gAlgorithm.scaledSensors[YACCEL] + 320.00) * 100);
-        accel_data.acceleration_z = (uint16_t)((gAlgorithm.scaledSensors[ZACCEL] + 320.00) * 100);
-     }
+        accel_data.time_stamp = gAlgorithm.counter;
+        memsic_j1939_send_acceleration(&accel_data);
+   }
   
-     if (gEcuConfigPtr->packet_type & MEMSIC_SAE_J1939_PACKET_ANGULAR_RATE) {
+   if (gEcuConfigPtr->packet_type & MEMSIC_SAE_J1939_PACKET_ANGULAR_RATE) {
         rate[0] = (float)(gAlgorithm.scaledSensors[YRATE] * 57.296);
         rate[1] = (float)(gAlgorithm.scaledSensors[XRATE] * 57.296);
         rate[2] = (float)(gAlgorithm.scaledSensors[ZRATE] * 57.296);
-     }
-  }
-  
-    
-  accel_data.acceleration_x_merit = 0;
-  accel_data.acceleration_y_merit = 0;
-  accel_data.acceleration_z_merit = 0;
-  accel_data.acceleration_transmission_rate = 0;
-    
-  memsic_j1939_send_acceleration(&accel_data);
-  
-  for (i = 0; i < 3; i++) {
-    if (rate[i] < -250.00)
-      rate[i] = -250.00;
+        
+        for (i = 0; i < 3; i++) {
+          if (rate[i] < -250.00)
+            rate[i] = -250.00;
       
-    if (rate[i] > 250.00)
-      rate[i] = 250.00;
-  }
-      
-  angle_data.pitch_rate = (uint16_t)((rate[0] + 250.00) * 128);
-  angle_data.roll_rate = (uint16_t)((rate[1] + 250.00) * 128);
-  angle_data.yaw_rate = (uint16_t)((rate[2] + 250.00) * 128);
-  
-  angle_data.pitch_rate_merit = 0;
-  angle_data.roll_rate_merit = 0;
-  angle_data.yaw_rate_merit = 0;
+          if (rate[i] > 250.00)
+            rate[i] = 250.00;
+        }   
+        angle_data.pitch_rate = (uint16_t)((rate[0] + 250.00) * 128);
+        angle_data.roll_rate = (uint16_t)((rate[1] + 250.00) * 128);
+        angle_data.yaw_rate = (uint16_t)((rate[2] + 250.00) * 128);
+        angle_data.time_stamp = gAlgorithm.counter;
     
-  memsic_j1939_send_angular_rate(&angle_data);
+        memsic_j1939_send_angular_rate(&angle_data);
+  }
   
   return;  
 }
@@ -817,16 +804,8 @@ void ecu_process(void)
   gEcu->curr_process_desc =  rx_desc;
 
 
-  {
-    ECU_ADDRESS_ENTRY target;
-    char test_pkt[8] = {1, 2, 3, 4, 5, 6, 7, 8};
-    target.address = 0x87;
-    
-    gEcuConfigPtr->packet_type = MEMSIC_SAE_J1939_PACKET_SLOPE_SENSOR | MEMSIC_SAE_J1939_PACKET_ACCELERATOR | 
-                                 MEMSIC_SAE_J1939_PACKET_ANGULAR_RATE;
-    send_tilt_sensor_data();
-    //memsic_j1939_send_user_behavior(&target, test_pkt);
-  }
+  send_tilt_sensor_data();
+
    
   tx_desc = gEcu->curr_tx_desc;
   while (tx_desc->tx_pkt_ready != DESC_IDLE) 

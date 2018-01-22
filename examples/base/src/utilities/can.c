@@ -29,6 +29,9 @@ void (*gCANTxCompleteCallback)(void) = NULL;
 void (*gCANRxCompleteCallback)(void) = NULL;
 
 int     gCANSleep = FALSE;
+uint32_t canRxIntCounter = 0;
+uint32_t canStartDetectRxIntCounter = 0;
+
 
 uint8_t get_can_sleep(CAN_TypeDef* CANx) 
 { 
@@ -45,12 +48,43 @@ uint8_t wake_up_can(CAN_TypeDef* CANx)
   return CAN_WakeUp(CANx);
 }
 
-uint8_t _CAN_Init(CAN_TypeDef* CANx)
+void CAN_Set_BTR(_ECU_BAUD_RATE br, CAN_InitTypeDef* CAN_InitStructure)
+{
+  switch (br) {
+      case _ECU_500K:
+        CAN_InitStructure->CAN_Prescaler = 10;
+        CAN_InitStructure->CAN_BS1 = CAN_BS1_4tq;
+        CAN_InitStructure->CAN_BS2 = CAN_BS2_1tq;
+        break;
+      case _ECU_250K:
+        CAN_InitStructure->CAN_Prescaler = 24;
+        CAN_InitStructure->CAN_BS1 = CAN_BS1_3tq;
+        CAN_InitStructure->CAN_BS2 = CAN_BS2_1tq;
+        break;
+      case _ECU_125K:
+        CAN_InitStructure->CAN_Prescaler = 24;
+        CAN_InitStructure->CAN_BS1 = CAN_BS1_7tq;
+        CAN_InitStructure->CAN_BS2 = CAN_BS2_2tq;
+        break;
+      case _ECU_1000K:
+        CAN_InitStructure->CAN_Prescaler = 2;
+        CAN_InitStructure->CAN_BS1 = CAN_BS1_7tq;
+        CAN_InitStructure->CAN_BS2 = CAN_BS2_2tq;
+        break;
+      default:
+        break;
+  }
+  
+  return;
+}
+
+
+uint8_t _CAN_Init(CAN_TypeDef* CANx, uint8_t mode)
 {
     CAN_InitTypeDef  CAN_InitStructure;
     GPIO_InitTypeDef GPIO_InitStructure;
     NVIC_InitTypeDef NVIC_InitStructure;
-    
+        
     CAN_DeInit(CANx);
     
     CAN_StructInit(&CAN_InitStructure);
@@ -58,28 +92,34 @@ uint8_t _CAN_Init(CAN_TypeDef* CANx)
     CAN_InitStructure.CAN_ABOM = ENABLE;
     CAN_InitStructure.CAN_AWUM = ENABLE;
     CAN_InitStructure.CAN_TXFP = ENABLE;
+    CAN_InitStructure.CAN_Mode = mode;
+   
     
-    gEcuConfig.baudRate = (_ECU_BAUD_RATE)gConfiguration.ecuBaudRate;
-    if (gEcuConfig.baudRate == _ECU_250K) {
-        CAN_InitStructure.CAN_SJW = 0;
-        CAN_InitStructure.CAN_Prescaler = 24;
-        CAN_InitStructure.CAN_BS1 = CAN_BS1_3tq;
-        CAN_InitStructure.CAN_BS2 = CAN_BS2_1tq;
-    } else if (gEcuConfig.baudRate == _ECU_500K) {
-      //10, 6, 1, 400
-      //14, 4, 1, 350
-        CAN_InitStructure.CAN_Prescaler = 10;
-        CAN_InitStructure.CAN_BS1 = CAN_BS1_4tq;
-        CAN_InitStructure.CAN_BS2 = CAN_BS2_1tq;
-//    } else if (gEcuConfig.baudRate == _ECU_1000K) {
-//        CAN_InitStructure.CAN_Prescaler = 2;
+    CAN_InitStructure.CAN_SJW = 0;
+    if ( gConfiguration.ecuBaudRate > 3)
+      CAN_Set_BTR(_ECU_500K, &CAN_InitStructure);
+    else
+      CAN_Set_BTR((_ECU_BAUD_RATE)gConfiguration.ecuBaudRate, &CAN_InitStructure);
+//    if (gEcuConfig.baudRate == _ECU_250K) {
+//        CAN_InitStructure.CAN_SJW = 0;
+//        CAN_InitStructure.CAN_Prescaler = 24;
+//        CAN_InitStructure.CAN_BS1 = CAN_BS1_3tq;
+//        CAN_InitStructure.CAN_BS2 = CAN_BS2_1tq;
+//    } else if (gEcuConfig.baudRate == _ECU_500K) {
+//      //10, 6, 1, 400
+//      //14, 4, 1, 350
+//        CAN_InitStructure.CAN_Prescaler = 10;
+//        CAN_InitStructure.CAN_BS1 = CAN_BS1_4tq;
+//        CAN_InitStructure.CAN_BS2 = CAN_BS2_1tq;
+////    } else if (gEcuConfig.baudRate == _ECU_1000K) {
+////        CAN_InitStructure.CAN_Prescaler = 2;
+////        CAN_InitStructure.CAN_BS1 = CAN_BS1_7tq;
+////        CAN_InitStructure.CAN_BS2 = CAN_BS2_2tq;
+//    } else { // 125K
+//        CAN_InitStructure.CAN_Prescaler = 24;
 //        CAN_InitStructure.CAN_BS1 = CAN_BS1_7tq;
 //        CAN_InitStructure.CAN_BS2 = CAN_BS2_2tq;
-    } else { // 125K
-        CAN_InitStructure.CAN_Prescaler = 24;
-        CAN_InitStructure.CAN_BS1 = CAN_BS1_7tq;
-        CAN_InitStructure.CAN_BS2 = CAN_BS2_2tq;
-    }
+//    }
   
       
     if (CANx == CAN1) {
@@ -100,7 +140,7 @@ uint8_t _CAN_Init(CAN_TypeDef* CANx)
         GPIO_Init(CAN1_RX_GPIO_PORT, &GPIO_InitStructure);
         GPIO_InitStructure.GPIO_Pin = CAN1_TX_PIN;
         GPIO_Init(CAN1_TX_GPIO_PORT, &GPIO_InitStructure);
-        
+                   
         CAN_Init(CAN1, &CAN_InitStructure);
 #ifndef FL        
          /// Enable the CAN1 global interrupt, CAN1_TX_IRQn
@@ -117,12 +157,12 @@ uint8_t _CAN_Init(CAN_TypeDef* CANx)
          NVIC_InitStructure.NVIC_IRQChannelCmd                = ENABLE;
          NVIC_Init( &NVIC_InitStructure );
          
-         /// Enable the CAN2 global interrupt, CAN2_RX1_IRQn
-//         NVIC_InitStructure.NVIC_IRQChannel                   = CAN2_RX1_IRQn;
-//         NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0xa;
-//         NVIC_InitStructure.NVIC_IRQChannelSubPriority        = 0x2;
-//         NVIC_InitStructure.NVIC_IRQChannelCmd                = ENABLE;
-//         NVIC_Init( &NVIC_InitStructure );
+         // Enable the CAN2 global interrupt, CAN2_RX1_IRQn
+         NVIC_InitStructure.NVIC_IRQChannel                   = CAN1_RX1_IRQn;
+         NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0xa;
+         NVIC_InitStructure.NVIC_IRQChannelSubPriority        = 0x2;
+         NVIC_InitStructure.NVIC_IRQChannelCmd                = ENABLE;
+         NVIC_Init( &NVIC_InitStructure );
 #endif        
         
     } else {
@@ -210,7 +250,7 @@ void _CAN_Init_Filter(void)
   FILTER_InitStructure.CAN_FilterIdLow = (data[0] << 8) | data[1];
   FILTER_InitStructure.CAN_FilterNumber = 4;
   CAN_FilterInit(&FILTER_InitStructure);
-
+  
   // Configuration
   data[0] = (uint8_t)(SAE_J1939_CONTROL_PRIORITY << 5) | (SAE_J1939_PDU_FORMAT_GLOBAL >> 5);
   data[1] = (uint8_t)(SAE_J1939_PDU_FORMAT_GLOBAL << 3) | (0x5f >> 5);
@@ -328,11 +368,13 @@ void CAN1_TX_IRQHandler(void)
 
 void CAN1_RX0_IRQHandler(void)
 {
+#ifdef SAEJ1939
   ITStatus ItRslt;
   uint8_t fifoPending;
     
   OSDisableHook();
   
+  canRxIntCounter++;
   ItRslt =  CAN_GetITStatus(CAN1, CAN_IT_FMP0);
   if (ItRslt == SET) {
     fifoPending = CAN_MessagePending(CAN1, 0);
@@ -349,12 +391,13 @@ void CAN1_RX0_IRQHandler(void)
   }
   
   OSEnableHook(); 
-  
+#endif
   return;
 }
   
 void CAN1_RX1_IRQHandler(void)
 {
+#ifdef SAEJ1939
   ITStatus ItRslt;
   uint8_t fifoPending;
   
@@ -375,7 +418,8 @@ void CAN1_RX1_IRQHandler(void)
     CAN_ClearITPendingBit(CAN1, CAN_IT_FF1);
   }
   
-  OSEnableHook(); 
+  OSEnableHook();
+#endif
   
   return;
 }
@@ -383,6 +427,7 @@ void CAN1_RX1_IRQHandler(void)
 //FL first version to CAN2
 void CAN2_TX_IRQHandler(void)
 {
+#ifdef FL
   ITStatus ItRslt;
   
   OSDisableHook();
@@ -395,12 +440,13 @@ void CAN2_TX_IRQHandler(void)
   }
   
   OSEnableHook(); 
-  
+#endif
   return;
 }
 
 void CAN2_RX0_IRQHandler(void)
 {
+#ifdef FL
   ITStatus ItRslt;
   uint8_t fifoPending;
     
@@ -422,12 +468,14 @@ void CAN2_RX0_IRQHandler(void)
   }
   
   OSEnableHook(); 
+#endif
   
   return;
 }
   
 void CAN2_RX1_IRQHandler(void)
 {
+#ifdef FL
   ITStatus ItRslt;
   uint8_t fifoPending;
   
@@ -449,18 +497,53 @@ void CAN2_RX1_IRQHandler(void)
   }
   
   OSEnableHook(); 
-  
+#endif  
   return;
 }
 
 void InitCommunication_UserCAN()
 {
-  _CAN_Init(CAN1); 
+  
+  _CAN_Init(CAN1, CAN_Mode_Normal); 
   
   _CAN_Init_Filter();
   
   _CAN_Init_IT(CAN1);
+ 
   
   return;
 }
+
+_ECU_BAUD_RATE CAN_Detect_Baudrate(CAN_TypeDef* CANx, _ECU_BAUD_RATE rate)
+{
+   CAN_InitTypeDef  CAN_InitStructure;
+   _ECU_BAUD_RATE found_rate;
+     
+  if (CANx != CAN1) 
+    return _ECU_1000K;
+  
+  
+  if (rate == _ECU_1000K)
+      return rate;
+  
+  CAN_StructInit(&CAN_InitStructure);
+        
+  CAN_InitStructure.CAN_ABOM = ENABLE;
+  CAN_InitStructure.CAN_AWUM = ENABLE;
+  CAN_InitStructure.CAN_TXFP = ENABLE;
+  CAN_InitStructure.CAN_SJW = 0;
+  CAN_Set_BTR(rate, &CAN_InitStructure);
+   
+  CAN_Init(CAN1, &CAN_InitStructure);
+    
+  DelayMs(MEMSIC_CAN_DETECT_TIME);
+    
+  if (canRxIntCounter > canStartDetectRxIntCounter + 2) {
+      found_rate = rate;
+      return found_rate;
+  }
+   
+  return _ECU_1000K;
+}
+
 #endif

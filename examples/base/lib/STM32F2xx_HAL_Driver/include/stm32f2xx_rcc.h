@@ -30,7 +30,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f2xx.h"
 
-#define assert_param(x...)
 
 /** @addtogroup STM32F2xx_StdPeriph_Driver
   * @{

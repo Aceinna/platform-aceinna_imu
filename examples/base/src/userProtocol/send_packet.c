@@ -537,7 +537,6 @@ void _UcbScaled0 (ExternPortTypeEnum port,
                                   packetIndex,
                                   gAlgorithm.bitStatus.BITStatus.all );
 
-	++gAlgorithm.counter; ///< packet counter
 
     if( getUserCommunicationType() == UART_COMM ) {
         HandleUcbTx(port, ptrUcbPacket); /// send Scaled 0 packet

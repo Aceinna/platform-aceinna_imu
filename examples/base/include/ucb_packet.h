@@ -74,10 +74,10 @@ typedef enum {
     UCB_NAV_1,              // 32 N1 0x4E31
     UCB_NAV_2,              // 33 N2 0x4E32
 
-    UCB_JUMP2_IAP,			
-	UCB_READ_APP,
-	UCB_WRITE_APP,
-	
+    UCB_JUMP2_IAP,
+    UCB_READ_APP,
+    UCB_WRITE_APP,
+
     UCB_NAK,                // 32
     UCB_ERROR_INVALID_TYPE,	// 33 invalid packet type ID
     UCB_ERROR_TIMEOUT,      // 34 timeout reached before entire packet was received
@@ -155,4 +155,8 @@ extern void LoadUcbSPIBuffer( UcbPacketStruct *ptrUcbPacket);
 // handle packet.c
 extern void HandleUcbPacket (uint16_t port, UcbPacketStruct *ptrUcbPacket);
 extern void SystemReset(void);
+
+// Function used to write the Mag-Align parameters to the EEPROM by field
+extern void WriteMagAlignParamsToMemory( uint16_t        port,
+                                         UcbPacketStruct *ptrUcbPacket );
 #endif
