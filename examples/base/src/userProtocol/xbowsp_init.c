@@ -226,8 +226,15 @@ void initConfigureUnit(void)
     /// reads EEPROM -> gConfiguration and gCalibration
     _readConfigAndCalIntoMem(); // xbowsp_init.c
 
-    // Why is this hardcoded to 115200?  Needed for CAN?
-    //gConfiguration.baudRateUser = BAUD_115200;
+    if (gConfiguration.CanBaudRateDetectEnable != true)
+      gConfiguration.CanBaudRateDetectEnable = false;
+    
+    if (gConfiguration.CanTermResistorEnable != true)
+      gConfiguration.CanTermResistorEnable = false;
+    
+    if ((gConfiguration.ecuAddress < 128) || (gConfiguration.ecuAddress > 247))
+      gConfiguration.ecuAddress = 128;
+
 
     // Read the versionString.  If it is an INS then do nothing, else
     //   set hasGPS to FALSE.  This is to prevent the unit from being configured

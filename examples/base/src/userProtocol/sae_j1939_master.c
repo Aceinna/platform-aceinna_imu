@@ -10,7 +10,7 @@
  * PARTICULAR PURPOSE.
  *
  *****************************************************************************/
-#ifdef MEMSIC_CAN_HOST
+#ifdef SAEJ1939
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -242,7 +242,7 @@ uint8_t digital_filter_request(ECU_ADDRESS_ENTRY *target, uint8_t rate_freq, uin
   return 1;
 }
   
-uint8_t orientation_request(ECU_ADDRESS_ENTRY *target, uint8_t *orien)
+uint8_t orientation_request(ECU_ADDRESS_ENTRY *target, uint16_t orien)
 {
   struct sae_j1939_tx_desc *req_orien;
   ORIENTATION_SETTING * orien_cfg;
@@ -258,9 +258,8 @@ uint8_t orientation_request(ECU_ADDRESS_ENTRY *target, uint8_t *orien)
   build_set_pkt(req_orien, MEMSIC_SAE_J1939_ORIENTATION, gMasterEcu->category);
   
   orien_cfg->dest_address = target->address;
-  orien_cfg->rate_orien = orien[0];
-  orien_cfg->accel_orien = orien[1];
-  
+  *(uint16_t *)orien_cfg->orien_bits = orien;
+   
   return 1;
 }
 
@@ -736,7 +735,7 @@ void ecu_master_process(void)
 void ecu_host_test(uint8_t test_type)
 {
   ECU_ADDRESS_ENTRY ecu_entry;
-  uint8_t orien[2] = {1, 2};
+  uint16_t orien = 0x008c;
   uint8_t alarm[8] = {1, 2, 3, 4, 5, 6, 7, 8};
   ANGLE_ALARM_PAYLOAD *angle_alarm = (ANGLE_ALARM_PAYLOAD *)alarm;
   CONE_ALARM_PAYLOAD  *cone_alarm = (CONE_ALARM_PAYLOAD  *)alarm;
@@ -768,13 +767,13 @@ void ecu_host_test(uint8_t test_type)
     save_config_request(&ecu_entry);
     break;
   case 5:
-    request_builtin_test(MEMSIC_SAE_J1939_BUILTIN_HARDWARE);
+    //request_builtin_test(MEMSIC_SAE_J1939_BUILTIN_HARDWARE);
     break;
   case 6: 
-    request_builtin_test(MEMSIC_SAE_J1939_BUILTIN_SOFTWARE);
+    //request_builtin_test(MEMSIC_SAE_J1939_BUILTIN_SOFTWARE);
     break;
   case 7:
-    request_builtin_test(MEMSIC_SAE_J1939_BUILTIN_STATUS);
+    //request_builtin_test(MEMSIC_SAE_J1939_BUILTIN_STATUS);
     break;
   case 8:
     packet_rate_request(&ecu_entry, 2);
@@ -789,16 +788,16 @@ void ecu_host_test(uint8_t test_type)
     orientation_request(&ecu_entry, orien);
     break;
   case 12:
-    user_behav_request(&ecu_entry, orien);
+    //user_behav_request(&ecu_entry, orien);
     break;
   case 13:
-    angle_alarm_request(&ecu_entry, angle_alarm);
+    //angle_alarm_request(&ecu_entry, angle_alarm);
     break;
   case 14:
-    cone_alarm_request(&ecu_entry, cone_alarm);
+    //cone_alarm_request(&ecu_entry, cone_alarm);
     break;
   case 15:
-    acceleration_param_request(&ecu_entry, accel_param); 
+    //acceleration_param_request(&ecu_entry, accel_param); 
     break;
   case 16:
     request_bank0();
@@ -812,12 +811,12 @@ void ecu_host_test(uint8_t test_type)
     break;
   case 19:
   case 20:
-    if (host_test_counter % 2)
-      *gMasterEcu->addr  = 0;
-    else
-      *gMasterEcu->addr = 0x85;
-    
-    send_address_claim(gMasterEcu);
+//    if (host_test_counter % 2)
+//      *gMasterEcu->addr  = 0;
+//    else
+//      *gMasterEcu->addr = 0x85;
+//    
+//    send_address_claim(gMasterEcu);
     break;
   default:
     break;

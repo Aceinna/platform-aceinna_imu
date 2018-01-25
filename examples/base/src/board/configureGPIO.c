@@ -63,6 +63,34 @@ void _InitUnitConfigurationPins( void )
 }
 
 
+void InitMtltBoardConfiguration_GPIO()
+{
+  InitPin_GPIO( DATA_READY_CLK,
+                  DATA_READY_PORT,
+                  DATA_READY_PIN,
+                  GPIO_INPUT );
+  
+    DATA_READY_PORT->BSRRH = DATA_READY_PIN;
+    
+    InitPin_GPIO( USER_B_UART_RX_GPIO_CLK,
+                  USER_B_UART_RX_GPIO_PORT,
+                  USER_B_UART_RX_PIN,
+                  GPIO_OUTPUT );
+    if (gConfiguration.CanTermResistorEnable == true)
+      USER_B_UART_RX_GPIO_PORT->BSRRL = USER_B_UART_RX_PIN;
+    else
+      USER_B_UART_RX_GPIO_PORT->BSRRH = USER_B_UART_RX_PIN;
+    
+    InitPin_GPIO( SPI3_SLAVE_SELECT_CLK,
+                  SPI3_SLAVE_SELECT_PORT,
+                  SPI3_SLAVE_SELECT_PIN,
+                  GPIO_OUTPUT );
+    if (gConfiguration.CanBaudRateDetectEnable == true)
+      SPI3_SLAVE_SELECT_PORT->BSRRL = SPI3_SLAVE_SELECT_PIN;
+    else
+      SPI3_SLAVE_SELECT_PORT->BSRRH = SPI3_SLAVE_SELECT_PIN;
+}
+
 /** ****************************************************************************
  * @name InitBoardConfiguration_GPIO
  *

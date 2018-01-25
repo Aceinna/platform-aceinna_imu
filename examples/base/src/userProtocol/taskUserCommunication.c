@@ -38,8 +38,8 @@
 #include "UserCommunication_SPI.h"
    
 // for can interface
-#include "can.h"
 #include "sae_j1939.h"
+#include "can.h"
 
 #include "configureGPIO.h"
 #include "bsp.h" // for definition of LED4
@@ -98,18 +98,10 @@ void TaskUserCommunication(void)
 
         InitCommunication_UserSPI();
     }
-//#else  
-//    //setUserCommunicationType(UART_COMM);
-//    //ExternPortInit();
-//    setUserCommunicationType(CAN_BUS);
-//    InitCommunication_UserCAN();
-//    if (!(gEcuConfigPtr->ecu_name.words)) {
-//      gEcuConfigPtr->ecu_name.bits.function = MEMSIC_SAE_J1939_FUNCTION;
-//      gEcuConfigPtr->ecu_name.bits.manufacture_code = MEMSIC_SAE_J1939_MANUFACTURE_CODE;
-//      gEcuConfigPtr->ecu_name.bits.identity_number = gCalibration.serialNumber & 0x1fffff;
-//    }
-//    sae_j1939_initialize();
-//#endif
+
+#ifdef MEMSIC_CAN
+    InitMtltBoardConfiguration_GPIO();
+#endif
 
     
     // Main loop for the task
@@ -123,17 +115,6 @@ void TaskUserCommunication(void)
             OS_Delay( OS_TICKS_PER_SECOND );
 
        }
-//#ifdef MEMSIC_CAN
-//        else if( userCommunicationType == CAN_BUS ) {
-//          OS_WaitBinSem(BINSEM_CAN_DATA, OS_TICKS_PER_SECOND);
-//#ifdef MEMSIC_CAN_HOST
-//          ecu_host_test(19);
-//#else
-//          // ecu process
-//          ecu_process();
-//        }
-//#endif // _CAN_HOST
-//#endif
         else {   /// SERIAL
             /// Wait here for data-ready semaphore.  Set by TIM5 interrupt at a 200 Hz rate to
             ///   ensure that the OS_Wait does not exhibit a large delay.  A context switch will
@@ -151,7 +132,7 @@ void TaskUserCommunication(void)
                           EF_USER_ALL,
                           OSALL_BITS,
                           MAIN_LOOP_PERIOD / SALVO_TIMER_PRESCALE );
-//        GPIOB->BSRRH = GPIO_Pin_12;
+
             _ProcessUcbCommands();
             _ProcessContUcbPkt();
             uart_BIT( USER_COMM_UART ); // kUserA_UART
@@ -165,7 +146,6 @@ void TaskUserCommunication(void)
                 _ProcessUcbCommands();
                 _ProcessContUcbPkt();
                 uart_BIT( USER_COMM_UART ); // kUserA_UART
-//        GPIOB->BSRRH = GPIO_Pin_12;
             }
 #else
 // FIXME: JSM -- Replace the 'notimeout' with the same timeaout as above.  This
@@ -174,7 +154,6 @@ void TaskUserCommunication(void)
             OS_WaitBinSem( BINSEM_NAVVIEW_DATA_READY,
                            MAIN_LOOP_PERIOD / SALVO_TIMER_PRESCALE );
             if( timer.oneHundredHertzFlag ) {
-//        GPIOB->BSRRH = GPIO_Pin_12;
                 _ProcessUcbCommands();
                 _ProcessContUcbPkt();
                 uart_BIT( USER_COMM_UART ); // kUserA_UART

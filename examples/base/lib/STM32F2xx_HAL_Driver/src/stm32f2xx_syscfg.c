@@ -108,8 +108,6 @@ void SYSCFG_DeInit(void)
   */
 void SYSCFG_MemoryRemapConfig(uint8_t SYSCFG_MemoryRemap)
 {
-  /* Check the parameters */
-  assert_param(IS_SYSCFG_MEMORY_REMAP_CONFING(SYSCFG_MemoryRemap));
 
   SYSCFG->MEMRMP = SYSCFG_MemoryRemap;
 }
@@ -127,9 +125,6 @@ void SYSCFG_EXTILineConfig(uint8_t EXTI_PortSourceGPIOx, uint8_t EXTI_PinSourcex
 {
   uint32_t tmp = 0x00;
 
-  /* Check the parameters */
-  assert_param(IS_EXTI_PORT_SOURCE(EXTI_PortSourceGPIOx));
-  assert_param(IS_EXTI_PIN_SOURCE(EXTI_PinSourcex));
 
   tmp = ((uint32_t)0x0F) << (0x04 * (EXTI_PinSourcex & (uint8_t)0x03));
   SYSCFG->EXTICR[EXTI_PinSourcex >> 0x02] &= ~tmp;
@@ -146,7 +141,6 @@ void SYSCFG_EXTILineConfig(uint8_t EXTI_PortSourceGPIOx, uint8_t EXTI_PinSourcex
   */
 void SYSCFG_ETH_MediaInterfaceConfig(uint32_t SYSCFG_ETH_MediaInterface) 
 { 
-  assert_param(IS_SYSCFG_ETH_MEDIA_INTERFACE(SYSCFG_ETH_MediaInterface)); 
   /* Configure MII_RMII selection bit */ 
   *(__IO uint32_t *) PMC_MII_RMII_SEL_BB = SYSCFG_ETH_MediaInterface; 
 }
@@ -163,8 +157,6 @@ void SYSCFG_ETH_MediaInterfaceConfig(uint32_t SYSCFG_ETH_MediaInterface)
   */
 void SYSCFG_CompensationCellCmd(FunctionalState NewState)
 {
-  /* Check the parameters */
-  assert_param(IS_FUNCTIONAL_STATE(NewState));
 
   *(__IO uint32_t *) CMPCR_CMP_PD_BB = (uint32_t)NewState;
 }

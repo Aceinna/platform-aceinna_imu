@@ -55,6 +55,10 @@ static float Cmat[5][6] = {0};
 static uint16_t magNum = 0;
 
 UcbPacketStruct magUcbPacket;    /// all other data
+UcbPacketStruct magAlignUcbPacket;    /// Structure used to enable the mag-align
+                                      ///    data to be writtent to the EEPROM at
+                                      ///    the completion of a mag-align
+                                      ///    maneuver during SPI operation 
 
 // Declare local functions
 static uint8_t _PerformMagAlign( int32_t state, int32_t *hardIron_q27, int32_t *softIron_q27 );
@@ -249,7 +253,7 @@ uint8_t MagAlign( void )
 
             if (getUserCommunicationType() == SPI_COMM) {
                 /// write gConfiguration with the new mag fields
-                writeEEPROMWords(CONFIGURATION_START, sizeof(gConfiguration), &gConfiguration);
+                WriteMagAlignParamsToMemory(PRIMARY_UCB_PORT, &magAlignUcbPacket);
                 // set SPI status to UCB_MAG_CAL_3_COMPLETE - Tell spi master we are complete
                 gUserSpi.DataRegister[SPI_REG_MAG_ALIGN_READ] = MAG_ALIGN_STATUS_TERMINATION; // 0xb
                 // put copy of hard soft iron in the Mag align results registers

@@ -10,7 +10,7 @@
  * PARTICULAR PURPOSE.
  *
  *****************************************************************************/
-#ifdef MEMSIC_CAN
+#ifdef SAEJ1939
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -19,6 +19,7 @@
 #include "timer.h"
 #include "debug.h"
 #include "xbowsp_init.h"
+#include "xbowsp_fields.h"
 #include "can.h"
 
 #include "sae_j1939.h"
@@ -78,23 +79,27 @@ uint8_t send_j1939_packet(struct sae_j1939_tx_desc *desc)
   
 }
 
-void initialize_j1939_config(void)
+uint8_t isValidBaudRate(void)
 {
-   if (!(gEcuConfigPtr->ecu_name.words) || ( gEcuConfigPtr->ecu_name.bits.function != MEMSIC_SAE_J1939_FUNCTION)
-      || (gEcuConfigPtr->ecu_name.bits.manufacture_code != MEMSIC_SAE_J1939_MANUFACTURE_CODE) 
-      || !(gEcuConfigPtr->ecu_name.bits.identity_number)) 
-  {
-          gEcuInst.state = _ECU_INVALID_NAME;
-          DEBUG_STRING("Invalid ECU device");
-          ERROR_ENDLINE();
-          return;
-  }
- 
-  // set rate to 2Hz now, remove later
-  gEcuConfigPtr->packet_rate = MEMSIC_SAE_J1939_PACKET_RATE_100;
-    
+  if ((gConfiguration.ecuBaudRate == 0) ||
+      (gConfiguration.ecuBaudRate == 1) ||
+      (gConfiguration.ecuBaudRate == 2) ||
+      (gConfiguration.ecuBaudRate == 3))
+    return 1;
+  else
+    return 0;
+}
+
+void initialize_j1939_config(void)
+{  
   gEcuConfigPtr->config_changed = 0;
-  gEcuConfigPtr->baudRate = _ECU_250K;
+  if (isValidBaudRate())
+      gEcuConfigPtr->baudRate = gConfiguration.ecuBaudRate;
+  else
+      gEcuConfigPtr->baudRate = _ECU_250K;
+  
+  gEcuConfigPtr->address = gConfiguration.ecuAddress;
+  gEcuConfigPtr->packet_type = gConfiguration.canPacketType;
   
   if (!gEcuConfigPtr->alg_reset_ps)
       gEcuConfigPtr->alg_reset_ps = SAE_J1939_GROUP_EXTENSION_ALGORITHM_RESET;
@@ -135,6 +140,8 @@ void initialize_j1939_config(void)
   if (!gEcuConfigPtr->acceleration_param_ps)
     gEcuConfigPtr->acceleration_param_ps = SAE_J1939_GROUP_EXTENSION_ACCELERATION_PARAM;
   
+  //writeEEPROMByte(ECU_ADDRESS_FIELD_ID, 24, (void *)&gConfiguration.ecuAddress);
+  
   return;
 }
 
@@ -153,8 +160,7 @@ void sae_j1939_initialize()
   int i;
   struct sae_j1939_tx_desc *tx_desc_ptr = &(ecu_tx_desc[0]);
   struct sae_j1939_rx_desc *rx_desc_ptr = &(ecu_rx_desc[0]);
-  
-   
+    
   initialize_j1939_config();
   
   for ( i = 0; i < SAE_J1939_MAX_TX_DESC; i++) {
@@ -185,19 +191,29 @@ void sae_j1939_initialize()
   
   initialize_mapping_table();
   
+  gEcuConfig.address = gConfiguration.ecuAddress;
+  gEcuConfig.baud_rate_detect_enable = gConfiguration.CanBaudRateDetectEnable; 
+  
   gEcuInst.name = (SAE_J1939_NAME_FIELD *)&gEcuConfigPtr->ecu_name;
   gEcuInst.addr = &(gEcuConfig.address);
-  gEcuInst.category = _ECU_MASTER;
-  if (gEcuInst.addr)
-    gEcuInst.state = _ECU_CHECK_ADDRESS;
-  else
-    gEcuInst.state = _ECU_WAIT_ADDRESS;
+  gEcuInst.category = _ECU_SLAVE;
+  if (gEcuConfig.baud_rate_detect_enable) {
+    gEcuInst.state = _ECU_BAUDRATE_DETECT;
+  } else {
+    if (*gEcuInst.addr)
+      gEcuInst.state = _ECU_CHECK_ADDRESS;
+    else
+      gEcuInst.state = _ECU_WAIT_ADDRESS;
+  }
+  
+  
+  
   gEcuInst.addrTbl = gAddrMapTblPtr;
   
   // FL hardcode address here
-  
-  gEcuConfig.address = gConfiguration.ecuAddress;
+#ifdef DEMO_PROTO
   gEcuInst.state = _ECU_READY;
+#endif
   
   gEcuInst.curr_tx_desc = &(ecu_tx_desc[0]);
   gEcuInst.curr_rx_desc = &(ecu_rx_desc[0]);
@@ -209,9 +225,9 @@ void sae_j1939_initialize()
   gEcuInst.del_entry = del_ecu_mapping_table;
   gEcuInst.xmit = send_j1939_packet;
   
-#ifndef MEMSIC_CAN_HOST
+
   _CAN_Configure(memsic_j1939_transmit_isr, memsic_j1939_receive_isr);
-#endif
+
   return ;
 }
 
@@ -252,10 +268,7 @@ void send_address_claim(ECU_INSTANCE *ecu)
   struct sae_j1939_tx_desc *addr_claim_desc;
   ADDR_CLAIM_PG_PACKET     addr_claim_pg;
   uint8_t address = *ecu->addr;
-  
-  if (gEcuInst.state < _ECU_READY) 
-    return;
-  
+    
   if (find_tx_desc(&addr_claim_desc) == 0)
     return;
   
@@ -557,9 +570,14 @@ void process_address_claim(struct sae_j1939_rx_desc *desc)
   } else if (source_addr == *gEcuInst.addr) {
     if (remote_ecu->ecu_name.words > gEcuInst.name->words)
       send_address_claim(&gEcuInst);
-    else 
-      *gEcuInst.addr = allocate_ecu_addr();  
+    else {
+      *gEcuInst.addr = allocate_ecu_addr();
+      gConfiguration.ecuAddress = (uint16_t)gEcuConfigPtr->address;
+      writeEEPROMByte(ECU_ADDRESS_FIELD_ID, 2, (void *)&gConfiguration.ecuAddress);
+    }
   }
+  
+  gEcuInst.state = _ECU_READY;
   
   return;  
   
@@ -632,4 +650,4 @@ MEMSIC_J1939_PACKET_TYPE is_valid_config_command(SAE_J1939_IDENTIFIER_FIELD *ide
    
    return MEMSIC_J1939_IGNORE;
 }
-#endif //MEMSIC_CAN
+#endif //SAEJ1939

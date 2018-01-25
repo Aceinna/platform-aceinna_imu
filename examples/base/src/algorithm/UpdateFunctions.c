@@ -313,13 +313,15 @@ void ComputeSystemInnovation_AHRS_EA(void)
     gKalmanFilter.nu[STATE_ROLL]  = gKalmanFilter.measuredEulerAngles[ROLL] -
                                     gKalmanFilter.eulerAngles[ROLL];
     gKalmanFilter.nu[STATE_ROLL]  = _UnwrapAttitudeError(gKalmanFilter.nu[STATE_ROLL]);
+//    gKalmanFilter.nu[STATE_ROLL] = _LimitValue(gKalmanFilter.nu[STATE_ROLL], (real)TWO_DEGREES_IN_RAD); // TEN_DEGREES_IN_RAD);
     gKalmanFilter.nu[STATE_ROLL]  = _LimitValue(gKalmanFilter.nu[STATE_ROLL],  (real)TEN_DEGREES_IN_RAD);
 
     // ----- Pitch -----
     gKalmanFilter.nu[STATE_PITCH] = gKalmanFilter.measuredEulerAngles[PITCH] -
                                     gKalmanFilter.eulerAngles[PITCH];
     gKalmanFilter.nu[STATE_PITCH] = _UnwrapAttitudeError(gKalmanFilter.nu[STATE_PITCH]);
-    gKalmanFilter.nu[STATE_PITCH] = _LimitValue(gKalmanFilter.nu[STATE_PITCH], (real)TEN_DEGREES_IN_RAD);
+//    gKalmanFilter.nu[STATE_PITCH] = _LimitValue(gKalmanFilter.nu[STATE_PITCH], (real)TWO_DEGREES_IN_RAD); //TEN_DEGREES_IN_RAD);
+    gKalmanFilter.nu[STATE_PITCH] = _LimitValue(gKalmanFilter.nu[STATE_PITCH], (real)TEN_DEGREES_IN_RAD); //TEN_DEGREES_IN_RAD);
 
     // ----- Yaw -----
     // Separating the two was meant to save time but it doesn't seem to.  However, keep for now.
@@ -327,6 +329,7 @@ void ComputeSystemInnovation_AHRS_EA(void)
         gKalmanFilter.nu[STATE_YAW]   = gKalmanFilter.measuredEulerAngles[YAW] -
                                         gKalmanFilter.eulerAngles[YAW];
         gKalmanFilter.nu[STATE_YAW]   = _UnwrapAttitudeError(gKalmanFilter.nu[STATE_YAW]);
+//        gKalmanFilter.nu[STATE_YAW]   = _LimitValue(gKalmanFilter.nu[STATE_YAW],   (real)TWO_DEGREES_IN_RAD);
         gKalmanFilter.nu[STATE_YAW]   = _LimitValue(gKalmanFilter.nu[STATE_YAW],   (real)TEN_DEGREES_IN_RAD);
     } else {
         gKalmanFilter.nu[STATE_YAW] = 0.0;
@@ -335,6 +338,10 @@ void ComputeSystemInnovation_AHRS_EA(void)
     // When the filtered yaw-rate is above certain thresholds then reduce the
     //   attitude-errors used to update roll and pitch.
     _TurnSwitch_EA();
+
+    //
+    gKalmanFilter.nu[STATE_ROLL]  = gKalmanFilter.turnSwitchMultiplier * gKalmanFilter.nu[STATE_ROLL];
+    gKalmanFilter.nu[STATE_PITCH] = gKalmanFilter.turnSwitchMultiplier * gKalmanFilter.nu[STATE_PITCH];
 }
 
 
@@ -479,17 +486,28 @@ void _GenerateObservationCovariance_AHRS_EA(void)
             case _200_DPS_RANGE:
                 // -200 VRW value (average x/y/z): 7.2e-4 [(m/sec)/rt-sec]
                 Rnom = (real)(1.0e-06);  // (1.0e-3 [rad])^2
+Rnom = 9.82e-07;  // (9.91e-4)^2
                 break;
             case _400_DPS_RANGE:
-                // -400 VRW value (average x/y/z): 8.8e-4 [(m/sec)/rt-sec]
-                Rnom = (real)(1.6e-06);  // (1.3e-3 [rad])^2
+//                char* pString;
+//                pString = strstr(gCalibration.versionString, "MTLT3");
+//                if ( strstr(gCalibration.versionString, "MTLT3") ) { //pString ) {
+//                    // -200 VRW value (average x/y/z): 7.2e-4 [(m/sec)/rt-sec]
+//                    Rnom = (real)(1.0e-06);  // (1.0e-3 [rad])^2
+//Rnom = 9.82e-07;  // (9.91e-4)^2
+//                } else {
+                    // -400 VRW value (average x/y/z): 8.8e-4 [(m/sec)/rt-sec]
+                    Rnom = (real)(1.6e-06);  // (1.3e-3 [rad])^2
+Rnom = 1.54e-06;  // (1.24e-3)^2
+//                }
                 break;
         }
     }
 
     // High/low-gain switching to increase the EKF gain when the system is
     //   static
-    if( (gAlgorithm.state == HIGH_GAIN_AHRS) || gAlgorithm.linAccelSwitch )
+    if( (gAlgorithm.state == HIGH_GAIN_AHRS) ||
+        (gAlgorithm.linAccelSwitch == TRUE) )
     {
         // High-Gain
         gKalmanFilter.R_INS[STATE_ROLL][STATE_ROLL] = Rnom;
@@ -499,6 +517,8 @@ void _GenerateObservationCovariance_AHRS_EA(void)
     } else {
         // Low-gain -- Set to 1000x the HG value (this value determined via
         //             simulation).
+// Change for code to match 18.1.10
+        //gKalmanFilter.R_INS[STATE_ROLL][STATE_ROLL] = (real)800.0 * Rnom;
         gKalmanFilter.R_INS[STATE_ROLL][STATE_ROLL] = (real)1000.0 * Rnom;
 
         //gKalmanFilter.R_INS[STATE_YAW][STATE_YAW]   = (real)1.0e-1; // v14.6 values
@@ -920,18 +940,21 @@ static void updateInsPos(void)
     gKalmanFilter.Velocity_N[Y_AXIS] = gKalmanFilter.Velocity_N[Y_AXIS] + stateUpdate_pos[STATE_VY];
     gKalmanFilter.Velocity_N[Z_AXIS] = gKalmanFilter.Velocity_N[Z_AXIS] + stateUpdate_pos[STATE_VZ];
 
-//    gKalmanFilter.quaternion[Q0] = gKalmanFilter.quaternion[Q0] + stateUpdate_pos[STATE_Q0];
-//    gKalmanFilter.quaternion[Q1] = gKalmanFilter.quaternion[Q1] + stateUpdate_pos[STATE_Q1];
-//    gKalmanFilter.quaternion[Q2] = gKalmanFilter.quaternion[Q2] + stateUpdate_pos[STATE_Q2];
-//    gKalmanFilter.quaternion[Q3] = gKalmanFilter.quaternion[Q3] + stateUpdate_pos[STATE_Q3];
-
-//    gKalmanFilter.rateBias_B[X_AXIS] = gKalmanFilter.rateBias_B[X_AXIS] + stateUpdate_pos[STATE_WBX];
-//    gKalmanFilter.rateBias_B[Y_AXIS] = gKalmanFilter.rateBias_B[Y_AXIS] + stateUpdate_pos[STATE_WBY];
-//    gKalmanFilter.rateBias_B[Z_AXIS] = gKalmanFilter.rateBias_B[Z_AXIS] + stateUpdate_pos[STATE_WBZ];
-
-//    gKalmanFilter.accelBias_B[X_AXIS] = gKalmanFilter.accelBias_B[X_AXIS] + stateUpdate_pos[STATE_ABX];
-//    gKalmanFilter.accelBias_B[Y_AXIS] = gKalmanFilter.accelBias_B[Y_AXIS] + stateUpdate_pos[STATE_ABY];
-//    gKalmanFilter.accelBias_B[Z_AXIS] = gKalmanFilter.accelBias_B[Z_AXIS] + stateUpdate_pos[STATE_ABZ];
+    //gKalmanFilter.quaternion[Q0] = gKalmanFilter.quaternion[Q0] + stateUpdate_pos[STATE_Q0];
+    //gKalmanFilter.quaternion[Q1] = gKalmanFilter.quaternion[Q1] + stateUpdate_pos[STATE_Q1];
+    //gKalmanFilter.quaternion[Q2] = gKalmanFilter.quaternion[Q2] + stateUpdate_pos[STATE_Q2];
+    //gKalmanFilter.quaternion[Q3] = gKalmanFilter.quaternion[Q3] + stateUpdate_pos[STATE_Q3];
+    //
+    //// Normalize quaternion and force q0 to be positive
+    //QuatNormalize(gKalmanFilter.quaternion);
+    //
+    //gKalmanFilter.rateBias_B[X_AXIS] = gKalmanFilter.rateBias_B[X_AXIS] + stateUpdate_pos[STATE_WBX];
+    //gKalmanFilter.rateBias_B[Y_AXIS] = gKalmanFilter.rateBias_B[Y_AXIS] + stateUpdate_pos[STATE_WBY];
+    //gKalmanFilter.rateBias_B[Z_AXIS] = gKalmanFilter.rateBias_B[Z_AXIS] + stateUpdate_pos[STATE_WBZ];
+    //
+    //gKalmanFilter.accelBias_B[X_AXIS] = gKalmanFilter.accelBias_B[X_AXIS] + stateUpdate_pos[STATE_ABX];
+    //gKalmanFilter.accelBias_B[Y_AXIS] = gKalmanFilter.accelBias_B[Y_AXIS] + stateUpdate_pos[STATE_ABY];
+    //gKalmanFilter.accelBias_B[Z_AXIS] = gKalmanFilter.accelBias_B[Z_AXIS] + stateUpdate_pos[STATE_ABZ];
 }
 
 
@@ -1019,9 +1042,9 @@ static void updateInsVel(void)
     // ++++++++++++++++++++++ END OF VELOCITY ++++++++++++++++++++++
 
     // Update states
-//    gKalmanFilter.Position_N[X_AXIS] = gKalmanFilter.Position_N[X_AXIS] + stateUpdate_vel[STATE_RX];
-//    gKalmanFilter.Position_N[Y_AXIS] = gKalmanFilter.Position_N[Y_AXIS] + stateUpdate_vel[STATE_RY];
-//    gKalmanFilter.Position_N[Z_AXIS] = gKalmanFilter.Position_N[Z_AXIS] + stateUpdate_vel[STATE_RZ];
+    //gKalmanFilter.Position_N[X_AXIS] = gKalmanFilter.Position_N[X_AXIS] + stateUpdate_vel[STATE_RX];
+    //gKalmanFilter.Position_N[Y_AXIS] = gKalmanFilter.Position_N[Y_AXIS] + stateUpdate_vel[STATE_RY];
+    //gKalmanFilter.Position_N[Z_AXIS] = gKalmanFilter.Position_N[Z_AXIS] + stateUpdate_vel[STATE_RZ];
 
     gKalmanFilter.Velocity_N[X_AXIS] = gKalmanFilter.Velocity_N[X_AXIS] + stateUpdate_vel[STATE_VX];
     gKalmanFilter.Velocity_N[Y_AXIS] = gKalmanFilter.Velocity_N[Y_AXIS] + stateUpdate_vel[STATE_VY];
@@ -1032,9 +1055,12 @@ static void updateInsVel(void)
     gKalmanFilter.quaternion[Q2] = gKalmanFilter.quaternion[Q2] + stateUpdate_vel[STATE_Q2];
     gKalmanFilter.quaternion[Q3] = gKalmanFilter.quaternion[Q3] + stateUpdate_vel[STATE_Q3];
 
-//    gKalmanFilter.rateBias_B[X_AXIS] = gKalmanFilter.rateBias_B[X_AXIS] + stateUpdate_vel[STATE_WBX];
-//    gKalmanFilter.rateBias_B[Y_AXIS] = gKalmanFilter.rateBias_B[Y_AXIS] + stateUpdate_vel[STATE_WBY];
-//    gKalmanFilter.rateBias_B[Z_AXIS] = gKalmanFilter.rateBias_B[Z_AXIS] + stateUpdate_vel[STATE_WBZ];
+    // Normalize quaternion and force q0 to be positive
+    QuatNormalize(gKalmanFilter.quaternion);
+
+    //gKalmanFilter.rateBias_B[X_AXIS] = gKalmanFilter.rateBias_B[X_AXIS] + stateUpdate_vel[STATE_WBX];
+    //gKalmanFilter.rateBias_B[Y_AXIS] = gKalmanFilter.rateBias_B[Y_AXIS] + stateUpdate_vel[STATE_WBY];
+    //gKalmanFilter.rateBias_B[Z_AXIS] = gKalmanFilter.rateBias_B[Z_AXIS] + stateUpdate_vel[STATE_WBZ];
 
     gKalmanFilter.accelBias_B[X_AXIS] = gKalmanFilter.accelBias_B[X_AXIS] + stateUpdate_vel[STATE_ABX];
     gKalmanFilter.accelBias_B[Y_AXIS] = gKalmanFilter.accelBias_B[Y_AXIS] + stateUpdate_vel[STATE_ABY];
@@ -1063,10 +1089,13 @@ static void updateInsAtt(void)
         if ((gAlgorithm.state == HIGH_GAIN_AHRS) ||
             (gAlgorithm.linAccelSwitch))
         {
-// When the linear acceleration switch has been activated, and the system is operating in GPS-Aided mode, the
-//   results look good when R-values of [ 0.0000002, 0.01*0.00005, 0.01*0.00005, 0.05*0.00050 ] are used alongside
-//   values of 0.09 for the AHRS update.  When used in both the solution is not as good.  Reasons?  Possibly due
-//   to how the states are updated in the aided updates.
+            // When the linear acceleration switch has been activated, and the
+            //   system is operating in GPS-Aided mode, the results look good
+            //   when R-values of [ 0.0000002, 0.01*0.00005, 0.01*0.00005,
+            //   0.05*0.00050 ] are used alongside values of 0.09 for the AHRS
+            //   update.  When used in both the solution is not as good.
+            //   Reasons?  Possibly due to how the states are updated in the
+            //   aided updates.
 #if 0
             gKalmanFilter.R_INS[STATE_Q0][STATE_Q0] = (real)0.003; //(real)0.0005;//9;//0.01;//0.003;
             gKalmanFilter.R_INS[STATE_Q1][STATE_Q1] = (real)0.003; //(real)0.0005;//9;//0.01;//0.0050;
@@ -1092,6 +1121,12 @@ static void updateInsAtt(void)
             gKalmanFilter.R_INS[STATE_Q3][STATE_Q3] = (real)0.09;//0.0100;
         }
     }
+
+    // Attempt to match 17.1.0 code (doesn't work)
+    //gKalmanFilter.R_INS[STATE_Q0][STATE_Q0] = (real)0.09;//0.003;
+    //gKalmanFilter.R_INS[STATE_Q1][STATE_Q1] = (real)0.09;//0.0050;
+    //gKalmanFilter.R_INS[STATE_Q2][STATE_Q2] = (real)0.09;//0.0050;
+    //gKalmanFilter.R_INS[STATE_Q3][STATE_Q3] = (real)0.09;//0.0100;
 
     // previously all the R values below were set to 0.09 (for the nov 18 testing)
     // S3 = H3*P2*H3' + R3;
@@ -1172,13 +1207,13 @@ static void updateInsAtt(void)
     // ++++++++++++++++++++++ END OF QUATERNION ++++++++++++++++++++++
 
     // Update states
-//    gKalmanFilter.Position_N[X_AXIS] = gKalmanFilter.Position_N[X_AXIS] + stateUpdate_att[STATE_RX];
-//    gKalmanFilter.Position_N[Y_AXIS] = gKalmanFilter.Position_N[Y_AXIS] + stateUpdate_att[STATE_RY];
-//    gKalmanFilter.Position_N[Z_AXIS] = gKalmanFilter.Position_N[Z_AXIS] + stateUpdate_att[STATE_RZ];
+    //gKalmanFilter.Position_N[X_AXIS] = gKalmanFilter.Position_N[X_AXIS] + stateUpdate_att[STATE_RX];
+    //gKalmanFilter.Position_N[Y_AXIS] = gKalmanFilter.Position_N[Y_AXIS] + stateUpdate_att[STATE_RY];
+    //gKalmanFilter.Position_N[Z_AXIS] = gKalmanFilter.Position_N[Z_AXIS] + stateUpdate_att[STATE_RZ];
 
-//    gKalmanFilter.Velocity_N[X_AXIS] = gKalmanFilter.Velocity_N[X_AXIS] + stateUpdate_att[STATE_VX];
-//    gKalmanFilter.Velocity_N[Y_AXIS] = gKalmanFilter.Velocity_N[Y_AXIS] + stateUpdate_att[STATE_VY];
-//    gKalmanFilter.Velocity_N[Z_AXIS] = gKalmanFilter.Velocity_N[Z_AXIS] + stateUpdate_att[STATE_VZ];
+    //gKalmanFilter.Velocity_N[X_AXIS] = gKalmanFilter.Velocity_N[X_AXIS] + stateUpdate_att[STATE_VX];
+    //gKalmanFilter.Velocity_N[Y_AXIS] = gKalmanFilter.Velocity_N[Y_AXIS] + stateUpdate_att[STATE_VY];
+    //gKalmanFilter.Velocity_N[Z_AXIS] = gKalmanFilter.Velocity_N[Z_AXIS] + stateUpdate_att[STATE_VZ];
 
     gKalmanFilter.quaternion[Q0] = gKalmanFilter.quaternion[Q0] + stateUpdate_att[STATE_Q0];
     gKalmanFilter.quaternion[Q1] = gKalmanFilter.quaternion[Q1] + stateUpdate_att[STATE_Q1];
@@ -1192,9 +1227,9 @@ static void updateInsAtt(void)
     gKalmanFilter.rateBias_B[Y_AXIS] = gKalmanFilter.rateBias_B[Y_AXIS] + stateUpdate_att[STATE_WBY];
     gKalmanFilter.rateBias_B[Z_AXIS] = gKalmanFilter.rateBias_B[Z_AXIS] + stateUpdate_att[STATE_WBZ];
 
-//    gKalmanFilter.accelBias_B[X_AXIS] = gKalmanFilter.accelBias_B[X_AXIS] + stateUpdate_att[STATE_ABX];
-//    gKalmanFilter.accelBias_B[Y_AXIS] = gKalmanFilter.accelBias_B[Y_AXIS] + stateUpdate_att[STATE_ABY];
-//    gKalmanFilter.accelBias_B[Z_AXIS] = gKalmanFilter.accelBias_B[Z_AXIS] + stateUpdate_att[STATE_ABZ];
+    //gKalmanFilter.accelBias_B[X_AXIS] = gKalmanFilter.accelBias_B[X_AXIS] + stateUpdate_att[STATE_ABX];
+    //gKalmanFilter.accelBias_B[Y_AXIS] = gKalmanFilter.accelBias_B[Y_AXIS] + stateUpdate_att[STATE_ABY];
+    //gKalmanFilter.accelBias_B[Z_AXIS] = gKalmanFilter.accelBias_B[Z_AXIS] + stateUpdate_att[STATE_ABZ];
 }
 
 
@@ -1308,15 +1343,10 @@ static void _TurnSwitch_EA(void)
         }
 
         // Specify the multiplier so it is between G an 1.0
-        real turnSwitchMultiplier = TILT_YAW_SWITCH_GAIN + turnSwitchScaleFactor;
-
-        //
-#ifdef YAW_SWITCH_ORIG_METHOD
-        gKalmanFilter.nu[STATE_ROLL]  = turnSwitchMultiplier * gKalmanFilter.nu[STATE_ROLL];
-        gKalmanFilter.nu[STATE_PITCH] = turnSwitchMultiplier * gKalmanFilter.nu[STATE_PITCH];
-#endif
+        gKalmanFilter.turnSwitchMultiplier = TILT_YAW_SWITCH_GAIN + turnSwitchScaleFactor;
     } else {
         gAlgorithm.bitStatus.swStatus.bit.turnSwitch = FALSE;
+        gKalmanFilter.turnSwitchMultiplier = 1.0;
     }
 }
 
@@ -1733,8 +1763,8 @@ static void _TurnSwitch_Q(void)
         real turnSwitchMultiplier = TILT_YAW_SWITCH_GAIN + turnSwitchScaleFactor;
 
         // Don't know what the reason for the 0.99 limit
-        if( turnSwitchMultiplier < 0.99 ) {
-
+        if( turnSwitchMultiplier < 0.99 )
+        {
             real err[3];
 
             // gKalmanFilter.measuredEulerAngles is computed in ComputeSystemInnovation_AHRS

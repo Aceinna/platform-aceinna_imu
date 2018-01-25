@@ -42,6 +42,7 @@
 
 #define ONE_DEGREE_IN_RAD     (0.017453292519943)  //  1 degree -> radians
 #define TWO_DEGREES_IN_RAD    (0.034906585039887)  //  2 degree -> radians
+#define TWO_PT_FIVE_DEGREES_IN_RAD    (0.043633231299858)  //  2 degree -> radians
 #define THREE_DEGREES_IN_RAD  (0.052359877559830)  //  3 degree -> radians
 #define FIVE_DEGREES_IN_RAD   (0.087266462599716)  //  5 degree -> radians
 #define TEN_DEGREES_IN_RAD    (0.17453292519943)

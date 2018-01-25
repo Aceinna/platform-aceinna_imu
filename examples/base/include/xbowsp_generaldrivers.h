@@ -153,10 +153,17 @@ typedef struct {
     uint16_t           PtDfPs;                                                  // 0x0037
     uint16_t           OrienUserBehvPs;                                         // 0x0038
     uint16_t           AngConeAlarmPs;                                          // 0x0039 
+    int16_t            CanBaudRateDetectEnable;                                 // 0x003a
+    int16_t            CanTermResistorEnable;                                   // 0x003b
+    int16_t            CanOdr;                                                  // 0x003c
+    uint16_t           canPacketType;                                           // 0x003d
 //    uint16_t           AccelPs;                                                 // 0x003a
 
-    uint16_t           userPacketFields[2][47]; // 2 * 47 = 94 <-- number of 16-bit slots used by this array 
-    uint16_t           tmp;  // Previously unused 'filter' variable
+
+    uint16_t           userPacketFields[2][46]; // 2 * 47 = 94 <-- number of 16-bit slots used by this array 
+    uint16_t           tmp0; // 2 * 47 = 94 <-- number of 16-bit slots used by this array 
+    uint16_t           linAccelSwitchLimit; // 2 * 47 = 94 <-- number of 16-bit slots used by this array 
+    uint16_t           tmp2;  // Previously unused 'filter' variable
 } ConfigurationStruct;
 #pragma pack()
 

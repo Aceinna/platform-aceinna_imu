@@ -41,6 +41,7 @@
 #include "WorldMagneticModel.h"
 
 #include "watchdog.h"
+#include "bit.h"
 #include "bitSelfTest.h"
 
 #include "ucb_packet.h"
@@ -330,24 +331,34 @@ void InitDataAcquisitionTimer(uint32_t outputDataRate)
 {
     TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
     NVIC_InitTypeDef        NVIC_InitStructure;
-    uint32_t                period;
+    double period;
 
-#ifdef MEMSIC_CAN
-    gEcuConfig.packet_rate = 1;
-    if (gConfiguration.analogFilterClocks[0] & 0x4000)
-        gEcuConfig.packet_rate = 100;
+#ifdef SAEJ1939
+    if ((gConfiguration.CanOdr == MEMSIC_SAE_J1939_PACKET_RATE_2) ||
+        (gConfiguration.CanOdr == MEMSIC_SAE_J1939_PACKET_RATE_5) ||
+        (gConfiguration.CanOdr == MEMSIC_SAE_J1939_PACKET_RATE_10) ||
+        (gConfiguration.CanOdr == MEMSIC_SAE_J1939_PACKET_RATE_20) ||
+        (gConfiguration.CanOdr == MEMSIC_SAE_J1939_PACKET_RATE_25) ||
+        (gConfiguration.CanOdr == MEMSIC_SAE_J1939_PACKET_RATE_50) ||
+        (gConfiguration.CanOdr == MEMSIC_SAE_J1939_PACKET_RATE_100))
+        gEcuConfig.packet_rate = gConfiguration.CanOdr;
+    else
+        gEcuConfig.packet_rate = MEMSIC_SAE_J1939_PACKET_RATE_100;
+    
     can_bus_heart_beat = outputDataRate / gEcuConfig.packet_rate;
+#else
+    can_bus_heart_beat = outputDataRate / 100;
 #endif
     RCC_APB1PeriphClockCmd( RCC_APB1Periph_TIM5, ENABLE );
 
     /// Set the timer interrupt period (counter value at interrupt).  Alter this
     /// to sync with a 1PPS or 1kHz signal. ==> SystemCoreClock = 120MHz
-    period = SystemCoreClock >> 1; ///< period = 120 MHz / 2 = 60 MHz
-    period /= (outputDataRate);    ///< = period / ODR ==> 60 MHz / 500 Hz = 120,000
+    period = (double)( SystemCoreClock ); // >> 1; ///< period = 120 MHz / 2 = 60 MHz
+    period = 0.5 * period / (double)outputDataRate;    ///< = period / ODR ==> 60 MHz / 500 Hz = 120,000
 
     /// Time base configuration
     TIM_TimeBaseStructInit( &TIM_TimeBaseStructure );
-    TIM_TimeBaseStructure.TIM_Period      = period;
+    TIM_TimeBaseStructure.TIM_Period      = (uint32_t)(period+0.5);
     TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
     TIM_TimeBaseInit( TIM5, &TIM_TimeBaseStructure );
     TIM_ARRPreloadConfig( TIM5, ENABLE );
@@ -376,6 +387,8 @@ void InitDataAcquisitionTimer(uint32_t outputDataRate)
  * @param N/A
  * @retval N/A
  ******************************************************************************/
+static uint16_t N_per = 0;
+
 // Leave this in here for now so the change can be easily rolled back if
 //   something going forward doesn't work quite right.
 #define  TIM5_800Hz  1
@@ -406,6 +419,11 @@ void TIM5_IRQHandler(void)
 
     OSDisableHook(); ///< Disable user interrupts
 #if TIM5_800Hz
+    N_per = N_per + 1;
+    if( N_per >= 800 ) {
+        N_per = 0;
+    }
+
     // New sampling method: 800 Hz Accel/800 Hz Rate-Sensor
     TIM5_Cntr++;
     if( TIM5_Cntr > TIM5_CntrLimit ) {
@@ -529,7 +547,6 @@ void TaskDataAcquisition(void)
     while( 1 )
     {
         TimingVars_Increment();  // Increment once TMR5 triggers
-        gAlgorithm.counter++; ///< packet counter increments @ 100/200 Hz
 
         // state machine to configure, restore and analyze the Self Test results
         BITStartStop();
@@ -538,6 +555,9 @@ void TaskDataAcquisition(void)
         // Upon timeout of TIM5 (or user sync), let the process continue
         OS_WaitBinSem(BINSEM_DATA_ACQ_TIMER, OS_TICKS_PER_SECOND);
 
+        // Set the counter to a value that corresponds to seconds after TIM5 is
+        //   called and just after the sensors are read.
+        gAlgorithm.counter = (uint16_t)( 1.25e-3 * ( ( N_per + (uint16_t)(1.334489891239070E-05 * TIM5->CNT) ) << 16 ) );
         // Increment the timer output value (FIXME: is this in the right spot?
         //   Should it be in the algorithm if-statement below?)
         gAlgorithm.timer = gAlgorithm.timer + gAlgorithm.dITOW;
@@ -645,9 +665,6 @@ void TaskDataAcquisition(void)
 
         // If an IMU, do not call the EKF algorithms (delays the write of the
         //   sensor values to the output)
-//if( gConfiguration.analogFilterClocks[0] & 0x2000 ) {
-//    ;
-//} else {
     if( gSpiUcbPacket.systemType > IMU_9DOF_SYS ) {  // or if( gCalibration.productConfiguration.bit.algorithm == TRUE ) {
 #ifdef RUN_PROFILING
             uint32_t ekfStartTime = TimeNow();

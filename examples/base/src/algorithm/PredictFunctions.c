@@ -147,7 +147,7 @@ void EKF_PredictionStage(void)
 
         // Initialize the filter variables (do not need to populate the 0th element
         //   as it is never used)
-        for( int i = 1; i < 4; i++ ) {
+        for( int i = PASTx1; i <= PASTx3; i++ ) {
             accelReading[i][X_AXIS] = (real)gAlgorithm.scaledSensors[XACCEL];
             accelReading[i][Y_AXIS] = (real)gAlgorithm.scaledSensors[YACCEL];
             accelReading[i][Z_AXIS] = (real)gAlgorithm.scaledSensors[ZACCEL];
@@ -164,27 +164,27 @@ void EKF_PredictionStage(void)
     // a[0]*y(k) + a[1]*y(k-1) + a[2]*y(k-2) + a[3]*y(k-3) =
     //    b[0]*x(k) + b[1]*x(k-1) + b[2]*x(k-2) + b[3]*x(k-3) =
     //    b[0]*( x(k) + x(k-3) ) + b[1]*( x(k-1) + x(k-2) )
-    accelFilt[CURRENT][X_AXIS] = b_AccelFilt[0] * (real)gAlgorithm.scaledSensors[XACCEL] +
-                                 b_AccelFilt[1] * ( accelReading[PASTx1][X_AXIS] +
-                                                    accelReading[PASTx2][X_AXIS] ) +
-                                 b_AccelFilt[3] * accelReading[PASTx3][X_AXIS] -
-                                 a_AccelFilt[1] * accelFilt[PASTx1][X_AXIS] -
-                                 a_AccelFilt[2] * accelFilt[PASTx2][X_AXIS] -
-                                 a_AccelFilt[3] * accelFilt[PASTx3][X_AXIS];
-    accelFilt[CURRENT][Y_AXIS] = b_AccelFilt[0] * (real)gAlgorithm.scaledSensors[YACCEL] +
-                                 b_AccelFilt[1] * ( accelReading[PASTx1][Y_AXIS] +
-                                                    accelReading[PASTx2][Y_AXIS] ) +
-                                 b_AccelFilt[3] * accelReading[PASTx3][Y_AXIS] -
-                                 a_AccelFilt[1] * accelFilt[PASTx1][Y_AXIS] -
-                                 a_AccelFilt[2] * accelFilt[PASTx2][Y_AXIS] -
-                                 a_AccelFilt[3] * accelFilt[PASTx3][Y_AXIS];
-    accelFilt[CURRENT][Z_AXIS] = b_AccelFilt[0] * (real)gAlgorithm.scaledSensors[ZACCEL] +
-                                 b_AccelFilt[1] * ( accelReading[PASTx1][Z_AXIS] +
-                                                    accelReading[PASTx2][Z_AXIS] ) +
-                                 b_AccelFilt[3] * accelReading[PASTx3][Z_AXIS] -
-                                 a_AccelFilt[1] * accelFilt[PASTx1][Z_AXIS] -
-                                 a_AccelFilt[2] * accelFilt[PASTx2][Z_AXIS] -
-                                 a_AccelFilt[3] * accelFilt[PASTx3][Z_AXIS];
+    accelFilt[CURRENT][X_AXIS] = b_AccelFilt[CURRENT] * (real)gAlgorithm.scaledSensors[XACCEL] +
+                                 b_AccelFilt[PASTx1] * ( accelReading[PASTx1][X_AXIS] +
+                                                         accelReading[PASTx2][X_AXIS] ) +
+                                 b_AccelFilt[PASTx3] * accelReading[PASTx3][X_AXIS] -
+                                 a_AccelFilt[PASTx1] * accelFilt[PASTx1][X_AXIS] -
+                                 a_AccelFilt[PASTx2] * accelFilt[PASTx2][X_AXIS] -
+                                 a_AccelFilt[PASTx3] * accelFilt[PASTx3][X_AXIS];
+    accelFilt[CURRENT][Y_AXIS] = b_AccelFilt[CURRENT] * (real)gAlgorithm.scaledSensors[YACCEL] +
+                                 b_AccelFilt[PASTx1] * ( accelReading[PASTx1][Y_AXIS] +
+                                                         accelReading[PASTx2][Y_AXIS] ) +
+                                 b_AccelFilt[PASTx3] * accelReading[PASTx3][Y_AXIS] -
+                                 a_AccelFilt[PASTx1] * accelFilt[PASTx1][Y_AXIS] -
+                                 a_AccelFilt[PASTx2] * accelFilt[PASTx2][Y_AXIS] -
+                                 a_AccelFilt[PASTx3] * accelFilt[PASTx3][Y_AXIS];
+    accelFilt[CURRENT][Z_AXIS] = b_AccelFilt[CURRENT] * (real)gAlgorithm.scaledSensors[ZACCEL] +
+                                 b_AccelFilt[PASTx1] * ( accelReading[PASTx1][Z_AXIS] +
+                                                         accelReading[PASTx2][Z_AXIS] ) +
+                                 b_AccelFilt[PASTx3] * accelReading[PASTx3][Z_AXIS] -
+                                 a_AccelFilt[PASTx1] * accelFilt[PASTx1][Z_AXIS] -
+                                 a_AccelFilt[PASTx2] * accelFilt[PASTx2][Z_AXIS] -
+                                 a_AccelFilt[PASTx3] * accelFilt[PASTx3][Z_AXIS];
 
     // Update 'past' readings
     accelReading[PASTx3][X_AXIS] = accelReading[PASTx2][X_AXIS];
@@ -284,10 +284,6 @@ static void _PredictStateEstimate(void)
     //  - accelerometer
     //  - angular-rate sensors
 
-    // Generate the transformation matrix (R_BinN) based on the past value of
-    //   the attitude quaternion (prior to prediction at the new time-step)
-    QuaternionToR321(gKalmanFilter.quaternion, &gKalmanFilter.R_BinN[0][0]);
-
 // (FIXME) JSM: if unaided then do not integrate the position or velocity
 //if( UcbGetSysType() > UNAIDED_AHRS_SYS ) {
     // ================= NED Position (r_N) =================
@@ -300,8 +296,12 @@ static void _PredictStateEstimate(void)
                                        gKalmanFilter.Velocity_N[Z_AXIS] * gAlgorithm.dt;
 
     // ================= NED Velocity (v_N) =================
+    // Generate the transformation matrix (R_BinN) based on the past value of
+    //   the attitude quaternion (prior to prediction at the new time-step)
+    QuaternionToR321(gKalmanFilter.quaternion, &gKalmanFilter.R_BinN[0][0]);
+
     // aCorr_B = aMeas_B - aBias_B
-    // scaledSensors accels in g's, convert to m/s^2
+    // gAlgorithm.scaledSensors accels in g's, convert to m/s^2 for INS solution
     gKalmanFilter.correctedAccel_B[X_AXIS] = (real)(gAlgorithm.scaledSensors[XACCEL] * GRAVITY) -
                                              gKalmanFilter.accelBias_B[X_AXIS];
     gKalmanFilter.correctedAccel_B[Y_AXIS] = (real)(gAlgorithm.scaledSensors[YACCEL] * GRAVITY) -
@@ -345,6 +345,13 @@ static void _PredictStateEstimate(void)
     gKalmanFilter.wTrueTimesDtOverTwo[Y_AXIS] = gKalmanFilter.correctedRate_B[Y_AXIS] * gAlgorithm.dtOverTwo;
     gKalmanFilter.wTrueTimesDtOverTwo[Z_AXIS] = gKalmanFilter.correctedRate_B[Z_AXIS] * gAlgorithm.dtOverTwo;
 
+    // Save the past attitude quaternion before updating (for use in the
+    //   covariance prediction)
+    gKalmanFilter.quaternion_Past[Q0] = gKalmanFilter.quaternion[Q0];
+    gKalmanFilter.quaternion_Past[Q1] = gKalmanFilter.quaternion[Q1];
+    gKalmanFilter.quaternion_Past[Q2] = gKalmanFilter.quaternion[Q2];
+    gKalmanFilter.quaternion_Past[Q3] = gKalmanFilter.quaternion[Q3];
+
     // Find the attitude change based on angular rate data
     deltaQuaternion[Q0] = -gKalmanFilter.wTrueTimesDtOverTwo[X_AXIS] * gKalmanFilter.quaternion[Q1] +
                           -gKalmanFilter.wTrueTimesDtOverTwo[Y_AXIS] * gKalmanFilter.quaternion[Q2] +
@@ -358,13 +365,6 @@ static void _PredictStateEstimate(void)
     deltaQuaternion[Q3] =  gKalmanFilter.wTrueTimesDtOverTwo[Z_AXIS] * gKalmanFilter.quaternion[Q0] +
                            gKalmanFilter.wTrueTimesDtOverTwo[Y_AXIS] * gKalmanFilter.quaternion[Q1] +
                           -gKalmanFilter.wTrueTimesDtOverTwo[X_AXIS] * gKalmanFilter.quaternion[Q2];
-
-    // Save the past attitude quaternion before updating (for use in the
-    //   covariance prediction)
-    gKalmanFilter.quaternion_Past[Q0] = gKalmanFilter.quaternion[Q0];
-    gKalmanFilter.quaternion_Past[Q1] = gKalmanFilter.quaternion[Q1];
-    gKalmanFilter.quaternion_Past[Q2] = gKalmanFilter.quaternion[Q2];
-    gKalmanFilter.quaternion_Past[Q3] = gKalmanFilter.quaternion[Q3];
 
     // Update the attitude
     // q_BinN(k+1) = q_BinN(k) + dq = q_BinN(k) + OMEGA*q_BinN(k)
@@ -594,10 +594,10 @@ static void _UpdateProcessJacobian(void)
     //gKalmanFilter.F[STATE_Q3,STATE.Q3] =     0;
 
     // Columns corresponding to the rate-bias state (-0.5*Xi*DT)
-    q0DtOver2 = gKalmanFilter.quaternion[Q0] * gAlgorithm.dtOverTwo;
-    q1DtOver2 = gKalmanFilter.quaternion[Q1] * gAlgorithm.dtOverTwo;
-    q2DtOver2 = gKalmanFilter.quaternion[Q2] * gAlgorithm.dtOverTwo;
-    q3DtOver2 = gKalmanFilter.quaternion[Q3] * gAlgorithm.dtOverTwo;
+    q0DtOver2 = gKalmanFilter.quaternion_Past[Q0] * gAlgorithm.dtOverTwo;
+    q1DtOver2 = gKalmanFilter.quaternion_Past[Q1] * gAlgorithm.dtOverTwo;
+    q2DtOver2 = gKalmanFilter.quaternion_Past[Q2] * gAlgorithm.dtOverTwo;
+    q3DtOver2 = gKalmanFilter.quaternion_Past[Q3] * gAlgorithm.dtOverTwo;
 
     // ( DT/2 )*QStar
     gKalmanFilter.F[STATE_Q0][STATE_WBX] =  q1DtOver2;
@@ -623,6 +623,8 @@ static void _UpdateProcessJacobian(void)
     // All zeros
 }
 
+static float Q_Rate_WxNom, Q_Rate_WyNom, Q_Rate_WzNom;
+static float multiplier_Q_Nom;
 
 // UpdateProcessCovarMatrix.m
 static void _UpdateProcessCovariance(void)
@@ -632,18 +634,20 @@ static void _UpdateProcessCovariance(void)
     real sigDriftDot;
 
     // Variables used to populate the Q-matrix each time-step
-    static real multiplier;
+    static real multiplier_Q;
     real v[4];
 
+    static int initQ_HG = TRUE;
+    static int initQ_LG = TRUE;
+
     // Only need to generate Q-Bias values once
-    static int initQ = TRUE;
-    if (initQ) {
-        initQ = FALSE;
+    if (initQ_HG == TRUE) {
+        initQ_HG = FALSE;
 
 #ifdef INS_OFFLINE
         // This value is set based on the version string specified in the 
         //   simulation configuration file, ekfSim.cfg
-		uint8_t sysRange = gSimulation.sysRange;
+        uint8_t sysRange = gSimulation.sysRange;
         uint8_t rsType   = gSimulation.rsType;
 #else
         // This value is set based on the version string loaded into the unit
@@ -664,15 +668,19 @@ static void _UpdateProcessCovariance(void)
                 // Bias-stability value for the rate-sensors
                 if (rsType == BMI_RS) {
                     // BMI: 1.508e-3 [deg/sec] = 2.63e-5 [rad/sec]
-                    biSq[0] = (real)(6.93e-10);  // (2.63e-5)^2
-                    biSq[1] = biSq[0];
-                    biSq[2] = biSq[0];
+                    biSq[X_AXIS] = (real)(6.93e-10);  // (2.63e-5)^2
+// Change for v18.1.10 match
+biSq[X_AXIS] = (real)(6.92e-10);  // (2.63e-5)^2
+                    biSq[Y_AXIS] = biSq[X_AXIS];
+                    biSq[Z_AXIS] = biSq[X_AXIS];
                 } else {
                     // Maxim x/y: 1.85e-3 [deg/sec] = 3.24E-05 [rad/sec]
                     // Maxim z:   7.25e-4 [deg/sec] = 1.27E-05 [rad/sec]
-                    biSq[0] = (real)(1.05e-9);  // (3.25e-5)^2
-                    biSq[1] = biSq[0];
-                    biSq[2] = (real)(1.60e-10);  // (1.27e-5)^2
+                    biSq[X_AXIS] = (real)(1.05e-9);  // (3.25e-5)^2
+                    biSq[Y_AXIS] = biSq[X_AXIS];
+                    biSq[Z_AXIS] = (real)(1.60e-10);  // (1.27e-5)^2
+// Change for v18.1.10 match
+biSq[Z_AXIS] = (real)(1.61e-10);  // (1.27e-5)^2
                 }
                 break;
 
@@ -681,15 +689,21 @@ static void _UpdateProcessCovariance(void)
                 // bi in [rad]
                 if (rsType == BMI_RS) {
                     // BMI: 1.27e-3 [deg/sec] = 2.21e-5 [rad/sec]
-                    biSq[0] = (real)(4.91e-10);  // (2.21e-5)^2
-                    biSq[1] = biSq[0];
-                    biSq[2] = biSq[0];
+                    biSq[X_AXIS] = (real)(4.91e-10);  // (2.21e-5)^2
+// Change for v18.1.10 match
+biSq[X_AXIS] = (real)(4.88e-10);  // (2.21e-5)^2
+                    biSq[Y_AXIS] = biSq[X_AXIS];
+                    biSq[Z_AXIS] = biSq[X_AXIS];
                 } else {
                     // Maxim x/y: 2.16e-3 [deg/sec] = 3.24E-05 [rad/sec]
                     // Maxim z:   1.07e-3 [deg/sec] = 1.86E-05 [rad/sec]
-                    biSq[0] = (real)(1.42e-09);  // (3.24e-5)^2
-                    biSq[1] = biSq[0];
-                    biSq[2] = (real)(3.48e-10);  // (1.86e-5)^2
+                    biSq[X_AXIS] = (real)(1.42e-09);  // (3.24e-5)^2
+// Change for v18.1.10 match
+biSq[X_AXIS] = (real)(1.41e-09);  // (3.24e-5)^2
+                    biSq[Y_AXIS] = biSq[X_AXIS];
+                    biSq[Z_AXIS] = (real)(3.48e-10);  // (1.86e-5)^2
+// Change for v18.1.10 match
+biSq[Z_AXIS] = (real)(3.46e-10);  // (1.86e-5)^2
                 }
                 break;
         }
@@ -710,13 +724,17 @@ static void _UpdateProcessCovariance(void)
         sigDriftDot = (real)9.064720283654388 / arw;
 
         // Rate-bias terms (Q is ultimately the squared value, which is done in the second line of the assignment)
-        gKalmanFilter.Q[STATE_WBX][STATE_WBX] = sigDriftDot * biSq[0] * gAlgorithm.dt;
+        gKalmanFilter.Q[STATE_WBX][STATE_WBX] = sigDriftDot * biSq[X_AXIS] * gAlgorithm.dt;
         gKalmanFilter.Q[STATE_WBX][STATE_WBX] = gKalmanFilter.Q[STATE_WBX][STATE_WBX] * gKalmanFilter.Q[STATE_WBX][STATE_WBX];
 
         gKalmanFilter.Q[STATE_WBY][STATE_WBY] = gKalmanFilter.Q[STATE_WBX][STATE_WBX];
 
-        gKalmanFilter.Q[STATE_WBZ][STATE_WBZ] = sigDriftDot * biSq[2] * gAlgorithm.dt;
+        gKalmanFilter.Q[STATE_WBZ][STATE_WBZ] = sigDriftDot * biSq[Z_AXIS] * gAlgorithm.dt;
         gKalmanFilter.Q[STATE_WBZ][STATE_WBZ] = gKalmanFilter.Q[STATE_WBZ][STATE_WBZ] * gKalmanFilter.Q[STATE_WBZ][STATE_WBZ];
+
+        Q_Rate_WxNom = gKalmanFilter.Q[STATE_WBX][STATE_WBX];
+        Q_Rate_WyNom = gKalmanFilter.Q[STATE_WBY][STATE_WBY];
+        Q_Rate_WzNom = gKalmanFilter.Q[STATE_WBZ][STATE_WBZ];
 
         // FIXME -- tighten up Q to prevent bias from changing quickly
         //gKalmanFilter.Q[STATE_WBX][STATE_WBX] = 0.01 * gKalmanFilter.Q[STATE_WBX][STATE_WBX];
@@ -731,8 +749,46 @@ static void _UpdateProcessCovariance(void)
 
         // Precalculate the multiplier applied to the Q terms associated with
         //   attitude.
-        multiplier = (real)(-0.5) * gAlgorithm.sqrtDt * arw;
+        multiplier_Q = (real)(-0.5) * gAlgorithm.sqrtDt * arw;
+        multiplier_Q_Nom = multiplier_Q;
     }
+
+    // Attempt to recreate v17.1.0 code (doesn't seem to work)
+    //if( gAlgorithm.state <= LOW_GAIN_AHRS ) {
+    //    // VG/AHRS mode
+    //    multiplier_Q = multiplier_Q_Nom;
+    //
+    //    gKalmanFilter.Q[STATE_WBX][STATE_WBX] = Q_Rate_WxNom;
+    //    gKalmanFilter.Q[STATE_WBY][STATE_WBY] = Q_Rate_WyNom;
+    //    gKalmanFilter.Q[STATE_WBZ][STATE_WBZ] = Q_Rate_WzNom;
+    //} else {
+    //    // INS mode
+    //    multiplier_Q = 7.0711e-06;
+    //
+    //    gKalmanFilter.Q[STATE_WBX][STATE_WBX] = (real)1.0e-15;
+    //    gKalmanFilter.Q[STATE_WBY][STATE_WBY] = (real)1.0e-15;
+    //    gKalmanFilter.Q[STATE_WBZ][STATE_WBZ] = (real)1.0e-16;
+    //}
+
+// Removed for MTLT implementation.  Want it in the dynamic mode implemetation.  Leaving out
+//   for now until we find better parameters for both.
+//    // Change: remove to match v18.1.10
+//    // Attempt to solve the rate-bias problem: Decrease the process covariance
+//    //   upon transition to low-gain mode to limit the change in the rate-bias
+//    //   estimate.
+//    if( initQ_LG == TRUE ) {
+//        if( gAlgorithm.state == LOW_GAIN_AHRS ) {
+//            initQ_LG = FALSE;
+//
+//            // FIXME -- tighten up Q to prevent bias from changing quickly
+//            //gKalmanFilter.Q[STATE_WBX][STATE_WBX] = (real)1.0e-3 * gKalmanFilter.Q[STATE_WBX][STATE_WBX];
+//            //gKalmanFilter.Q[STATE_WBY][STATE_WBY] = (real)1.0e-3 * gKalmanFilter.Q[STATE_WBY][STATE_WBY];
+//            //gKalmanFilter.Q[STATE_WBZ][STATE_WBZ] = (real)1.0e-3 * gKalmanFilter.Q[STATE_WBZ][STATE_WBZ];
+//            gKalmanFilter.Q[STATE_WBX][STATE_WBX] = (real)1.25e-3 * gKalmanFilter.Q[STATE_WBX][STATE_WBX];
+//            gKalmanFilter.Q[STATE_WBY][STATE_WBY] = (real)1.25e-3 * gKalmanFilter.Q[STATE_WBY][STATE_WBY];
+//            gKalmanFilter.Q[STATE_WBZ][STATE_WBZ] = (real)1.25e-3 * gKalmanFilter.Q[STATE_WBZ][STATE_WBZ];
+//        }
+//    }
 
     // Update the elements of the process covariance matrix, Q, that change
     //   with each time-step (the elements that correspond to the quaternion-
@@ -741,37 +797,37 @@ static void _UpdateProcessCovariance(void)
     //   etc) or above (upon first entry into this function).
 
     // 
-    v[0] = -gKalmanFilter.quaternion[Q1] - gKalmanFilter.quaternion[Q2] - gKalmanFilter.quaternion[Q3];
-    v[1] =  gKalmanFilter.quaternion[Q0] - gKalmanFilter.quaternion[Q3] + gKalmanFilter.quaternion[Q2];
-    v[2] =  gKalmanFilter.quaternion[Q3] - gKalmanFilter.quaternion[Q0] - gKalmanFilter.quaternion[Q1];
-    v[3] = -gKalmanFilter.quaternion[Q2] + gKalmanFilter.quaternion[Q1] + gKalmanFilter.quaternion[Q0];
+    v[Q0] = -gKalmanFilter.quaternion_Past[Q1] - gKalmanFilter.quaternion_Past[Q2] - gKalmanFilter.quaternion_Past[Q3];
+    v[Q1] =  gKalmanFilter.quaternion_Past[Q0] - gKalmanFilter.quaternion_Past[Q3] + gKalmanFilter.quaternion_Past[Q2];
+    v[Q2] =  gKalmanFilter.quaternion_Past[Q3] - gKalmanFilter.quaternion_Past[Q0] - gKalmanFilter.quaternion_Past[Q1];
+    v[Q3] = -gKalmanFilter.quaternion_Past[Q2] + gKalmanFilter.quaternion_Past[Q1] + gKalmanFilter.quaternion_Past[Q0];
 
     // v = -0.5 * ( rateSensorParams.arw * DEG_TO_RAD ) * sqrt(algo.dt_sec) * Xi * ones(3,1);
-    v[0] = multiplier * v[0];
-    v[1] = multiplier * v[1];
-    v[2] = multiplier * v[2];
-    v[3] = multiplier * v[3];
+    v[Q0] = multiplier_Q * v[Q0];
+    v[Q1] = multiplier_Q * v[Q1];
+    v[Q2] = multiplier_Q * v[Q2];
+    v[Q3] = multiplier_Q * v[Q3];
 
     // Note: the block of values is symmetric: Q = v * v'
-    gKalmanFilter.Q[STATE_Q0][STATE_Q0] = v[0] * v[0];
-    gKalmanFilter.Q[STATE_Q0][STATE_Q1] = v[0] * v[1];
-    gKalmanFilter.Q[STATE_Q0][STATE_Q2] = v[0] * v[2];
-    gKalmanFilter.Q[STATE_Q0][STATE_Q3] = v[0] * v[3];
+    gKalmanFilter.Q[STATE_Q0][STATE_Q0] = v[Q0] * v[Q0];
+    gKalmanFilter.Q[STATE_Q0][STATE_Q1] = v[Q0] * v[Q1];
+    gKalmanFilter.Q[STATE_Q0][STATE_Q2] = v[Q0] * v[Q2];
+    gKalmanFilter.Q[STATE_Q0][STATE_Q3] = v[Q0] * v[Q3];
 
     gKalmanFilter.Q[STATE_Q1][STATE_Q0] = gKalmanFilter.Q[STATE_Q0][STATE_Q1];
-    gKalmanFilter.Q[STATE_Q1][STATE_Q1] = v[1] * v[1];
-    gKalmanFilter.Q[STATE_Q1][STATE_Q2] = v[1] * v[2];
-    gKalmanFilter.Q[STATE_Q1][STATE_Q3] = v[1] * v[3];
+    gKalmanFilter.Q[STATE_Q1][STATE_Q1] = v[Q1] * v[Q1];
+    gKalmanFilter.Q[STATE_Q1][STATE_Q2] = v[Q1] * v[Q2];
+    gKalmanFilter.Q[STATE_Q1][STATE_Q3] = v[Q1] * v[Q3];
 
     gKalmanFilter.Q[STATE_Q2][STATE_Q0] = gKalmanFilter.Q[STATE_Q0][STATE_Q2];
     gKalmanFilter.Q[STATE_Q2][STATE_Q1] = gKalmanFilter.Q[STATE_Q1][STATE_Q2];
-    gKalmanFilter.Q[STATE_Q2][STATE_Q2] = v[2] * v[2];
-    gKalmanFilter.Q[STATE_Q2][STATE_Q3] = v[2] * v[3];
+    gKalmanFilter.Q[STATE_Q2][STATE_Q2] = v[Q2] * v[Q2];
+    gKalmanFilter.Q[STATE_Q2][STATE_Q3] = v[Q2] * v[Q3];
 
     gKalmanFilter.Q[STATE_Q3][STATE_Q0] = gKalmanFilter.Q[STATE_Q0][STATE_Q3];
     gKalmanFilter.Q[STATE_Q3][STATE_Q1] = gKalmanFilter.Q[STATE_Q1][STATE_Q3];
     gKalmanFilter.Q[STATE_Q3][STATE_Q2] = gKalmanFilter.Q[STATE_Q2][STATE_Q3];
-    gKalmanFilter.Q[STATE_Q3][STATE_Q3] = v[3] * v[3];
+    gKalmanFilter.Q[STATE_Q3][STATE_Q3] = v[Q3] * v[Q3];
 }
 
 
@@ -793,9 +849,9 @@ void GenerateProcessCovariance(void)
     dtSigRateSq = dtSigRateSq * dtSigRateSq;
     //oneHalfDtSigRateSq = (real)0.25 * dtSigRateSq;
 
-    gKalmanFilter.Q[STATE_WBX][STATE_WBX] = (real)(gAlgorithm.dt * sigWalk * sigWalk );   // 7e-13
-    gKalmanFilter.Q[STATE_WBY][STATE_WBY] = gKalmanFilter.Q[STATE_WBX][STATE_WBX];
-    gKalmanFilter.Q[STATE_WBZ][STATE_WBZ] = gKalmanFilter.Q[STATE_WBX][STATE_WBX];
+    //gKalmanFilter.Q[STATE_WBX][STATE_WBX] = (real)(gAlgorithm.dt * sigWalk * sigWalk );   // 7e-13
+    //gKalmanFilter.Q[STATE_WBY][STATE_WBY] = gKalmanFilter.Q[STATE_WBX][STATE_WBX];
+    //gKalmanFilter.Q[STATE_WBZ][STATE_WBZ] = gKalmanFilter.Q[STATE_WBX][STATE_WBX];
 
     //% THE FOLLOWING COVARIANCE VALUES AREN'T CORRECT, JUST SELECTED SO THE
     //% PROGRAM COULD RUN

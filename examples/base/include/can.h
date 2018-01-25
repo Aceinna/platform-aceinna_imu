@@ -23,10 +23,14 @@
 #define MEMSIC_CAN_IDE                      1
 #define MEMSIC_CAN_RTR                      0
 
-#define MEMSIC_CAN_BAUD_RATE_RETRY          12
+#define MEMSIC_CAN_BAUD_RATE_RETRY          4
+#define MEMSIC_CAN_DETECT_TIME              2000
+
+extern uint32_t canRxIntCounter, canStartDetectRxIntCounter;
 
 extern void InitCommunication_UserCAN(void);
 extern void _CAN_Configure(void (*callback1)(void), void(*callback2)(void));
 extern void TaskCANCommunication(void);
+extern _ECU_BAUD_RATE CAN_Detect_Baudrate(CAN_TypeDef*, _ECU_BAUD_RATE);
 
 #endif

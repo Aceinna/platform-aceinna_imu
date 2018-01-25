@@ -33,6 +33,7 @@
 #include "dmu.h"  // BOOL
 #include "configureGPIO.h"
 #include "gps.h"
+#include "sae_j1939.h"
 #include "can.h"
 
 #include "xbowsp_init.h"
@@ -72,7 +73,7 @@ int main(void)
     SystemInit();            // system_stm32f2xx.c
     SetIntVectorOffset(APP_NVIC_OFFSET);
 
-    SystemCoreClockUpdate(); // system_stm32f2xx.c
+    int tmp = SystemCoreClockUpdate(); // system_stm32f2xx.c
 
     // In the case of the HSI clock configuration, change "system_stm32fxx.c"
     //   based on the Excel-generated file and comment out RCC_config() in
