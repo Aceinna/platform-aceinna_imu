@@ -1,0 +1,28 @@
+{
+  "build": {
+    "core": "stm32",
+    "cpu": "cortex-m3",
+    "extra_flags": "-DSTM32F2 -DSTM32F205RE -DSTM32F205xx -DGYRO_MAXIM21000",
+    "f_cpu": "120000000L",
+    "ldscript": "stm32f20x.ld",
+    "mcu": "stm32f205re"
+  },
+  "debug": {
+    "default_tools": ["stlink"],
+    "openocd_target": "stm32f2x"
+  },
+  "frameworks": [],
+  "name": "Aceinna IMU380",
+  "upload": {
+    "maximum_ram_size": 131072,
+    "maximum_size": 524288,
+    "protocols": [
+      "blackmagic",
+      "stlink",
+      "jlink"
+    ],
+    "protocol": "stlink"
+  },
+  "url": "https://www.aceinna.com/inertial-systems/",
+  "vendor": "Aceinna"
+}
