@@ -184,8 +184,7 @@ elif upload_protocol in debug_tools:
                 "upload").get("flash_start", "")],
         UPLOADCMD="$UPLOADER $UPLOADERFLAGS")
 
-    if not env.BoardConfig().get("upload").get("flash_start"):
-        upload_source = target_elf
+    upload_source = target_elf
     upload_actions = [env.VerboseAction("$UPLOADCMD", "Uploading $SOURCE")]
 
 # custom upload tool
