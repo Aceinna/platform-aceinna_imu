@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from platform import system
+
 from platformio.managers.platform import PlatformBase
 
 
@@ -43,6 +45,25 @@ class Aceinna_imuPlatform(PlatformBase):
                 debug['tools']['blackmagic'] = {
                     "hwids": [["0x1d50", "0x6018"]],
                     "require_debug_port": True
+                }
+                continue
+            elif link == "jlink":
+                assert debug.get("jlink_device"), (
+                    "Missed J-Link Device ID for %s" % board.id)
+                debug['tools'][link] = {
+                    "server": {
+                        "arguments": [
+                            "-singlerun",
+                            "-if", "SWD",
+                            "-select", "USB",
+                            "-device", debug.get("jlink_device"),
+                            "-port", "2331"
+                        ],
+                        "executable": ("JLinkGDBServerCL.exe"
+                                       if system() == "Windows" else
+                                       "JLinkGDBServer")
+                    },
+                    "onboard": link in debug.get("onboard_tools", [])
                 }
                 continue
 

@@ -8,11 +8,13 @@
   },
   "debug": {
     "default_tools": ["stlink"],
-    "openocd_target": "stm32f2x"
+    "openocd_target": "stm32f2x",
+    "jlink_device": "STM32F205RE"
   },
   "frameworks": [],
   "name": "Aceinna IMU380",
   "upload": {
+    "flash_start": "0x08010000",
     "maximum_ram_size": 131072,
     "maximum_size": 524288,
     "protocols": [
