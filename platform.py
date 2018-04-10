@@ -73,7 +73,9 @@ class Aceinna_imuPlatform(PlatformBase):
                     "arguments": server_args
                 },
                 "onboard": link in debug.get("onboard_tools", []),
-                "default": link in debug.get("default_tools", [])
+                "default": link in debug.get("default_tools", []),
+                "extra_cmds": (["set $pc=Reset_Handler"]
+                               if link == "stlink" else None)
             }
 
         board.manifest['debug'] = debug
