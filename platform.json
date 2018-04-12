@@ -22,11 +22,6 @@
       "type": "toolchain",
       "version": ">=1.60301.0"
     },
-    "tool-stlink": {
-      "type": "uploader",
-      "optional": true,
-      "version": "~1.10400.0"
-    },
     "tool-openocd": {
       "type": "uploader",
       "optional": true,
