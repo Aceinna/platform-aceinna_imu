@@ -1,6 +1,6 @@
 # Open Aceinna Navigation Platform
 
-![Aceinna Logo](/Volumes/SOFT/Projects/GitHub/platformio-platforms/platform-aceinna/misc/aceinna_logo.png)
+![Aceinna Logo](https://raw.githubusercontent.com/Aceinna/platform-aceinna_imu/develop/misc/aceinna_logo.png)
 
 ## Description
 Open-ANS is a highly-efficient software stack for the development of navigation systems:
