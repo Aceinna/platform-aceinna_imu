@@ -9,7 +9,8 @@
   "debug": {
     "default_tools": ["stlink"],
     "openocd_target": "stm32f2x",
-    "jlink_device": "STM32F205RE"
+    "jlink_device": "STM32F205RE",
+    "svd_path": "STM32F20x.svd"
   },
   "frameworks": [],
   "name": "Aceinna IMU380",
