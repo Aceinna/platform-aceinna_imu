@@ -1,23 +1,22 @@
 {
   "build": {
     "core": "stm32",
-    "cpu": "cortex-m3",
-    "extra_flags": "-DSTM32F2 -DSTM32F205RE -DSTM32F205xx -DGYRO_MAXIM21000",
+    "cpu": "cortex-m4",
+    "extra_flags": "-DSTM32F4 -DSTM32F405RG -DSTM32F405xx",
     "f_cpu": "120000000L",
-    "mcu": "stm32f205re"
+    "mcu": "stm32f405rg"
   },
   "debug": {
     "default_tools": ["stlink"],
-    "openocd_target": "stm32f2x",
-    "jlink_device": "STM32F205RE",
-    "svd_path": "STM32F20x.svd"
+    "openocd_target": "stm32f4x",
+    "jlink_device": "STM32F405RG"
   },
   "frameworks": [],
-  "name": "Aceinna IMU380",
+  "name": "Aceinna OPENIMU",
   "upload": {
     "flash_start": "0x08010000",
     "maximum_ram_size": 131072,
-    "maximum_size": 524288,
+    "maximum_size": 1048576,
     "protocols": [
       "blackmagic",
       "stlink",
