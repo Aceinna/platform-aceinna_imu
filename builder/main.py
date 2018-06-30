@@ -39,12 +39,12 @@ env.Replace(
     ASFLAGS=[],
 
     CCFLAGS=[
-        # "-Os",  # optimize for size
+        "-O0",
         "-ffunction-sections",  # place each function in its own section
         "-fdata-sections",
         "-Wall",
-        #"-mthumb",
-        #"-Dthumb2",
+        "-Wno-comment",
+        "-mthumb"
     ],
 
     CXXFLAGS=[
@@ -57,9 +57,8 @@ env.Replace(
     ],
 
     LINKFLAGS=[
-        "-Os",
+        "-O0",
         "-Wl,--gc-sections,--relax",
-        #"-mthumb",
         "-nostartfiles",
         "-nostdlib"
     ],
