@@ -1,0 +1,15 @@
+language: python
+python:
+  - "2.7"
+
+env:
+  - PLATFORMIO_PROJECT_DIR=examples/IMU
+  - PLATFORMIO_PROJECT_DIR=examples/LEVELER
+  - PLATFORMIO_PROJECT_DIR=examples/VG_AHRS
+
+install:
+  - pip install -U https://github.com/platformio/platformio/archive/develop.zip
+  - platformio platform install file://.
+
+script:
+  - platformio run -d $PLATFORMIO_PROJECT_DIR
