@@ -17,7 +17,8 @@
   "debug": {
     "default_tools": ["stlink"],
     "openocd_target": "stm32f4x",
-    "jlink_device": "STM32F405RG"
+    "jlink_device": "STM32F405RG",
+    "svd_path": "STM32F40x.svd"
   },
   "frameworks": [],
   "name": "Aceinna OpenIMU 300ZA",
