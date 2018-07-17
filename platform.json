@@ -13,7 +13,7 @@
     "type": "git",
     "url": "https://github.com/aceinna/platform-aceinna_imu.git"
   },
-  "version": "1.0.0",
+  "version": "1.0.1",
   "packageRepositories": [
     "https://dl.bintray.com/platformio/dl-packages/manifest.json",
     "http://dl.platformio.org/packages/manifest.json"
@@ -27,6 +27,11 @@
       "type": "uploader",
       "optional": true,
       "version": "~1.1000.0"
+    },
+    "tool-jlink": {
+      "type": "uploader",
+      "optional": true,
+      "version": "^1.63208.0"
     }
   }
 }

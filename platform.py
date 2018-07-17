@@ -19,6 +19,24 @@ from platformio.managers.platform import PlatformBase
 
 class Aceinna_imuPlatform(PlatformBase):
 
+    def configure_default_packages(self, variables, targets):
+        jlink_conds = [
+            "jlink" in variables.get(option, "")
+            for option in ("upload_protocol", "debug_tool")
+        ]
+        if variables.get("board"):
+            board_config = self.board_config(variables.get("board"))
+            jlink_conds.extend([
+                "jlink" in board_config.get(key, "")
+                for key in ("debug.default_tools", "upload.protocol")
+            ])
+        jlink_pkgname = "tool-jlink"
+        if not any(jlink_conds) and jlink_pkgname in self.packages:
+            del self.packages[jlink_pkgname]
+
+        return PlatformBase.configure_default_packages(self, variables,
+                                                       targets)
+
     def get_boards(self, id_=None):
         result = PlatformBase.get_boards(self, id_)
         if not result:
@@ -52,6 +70,7 @@ class Aceinna_imuPlatform(PlatformBase):
                     "Missed J-Link Device ID for %s" % board.id)
                 debug['tools'][link] = {
                     "server": {
+                        "package": "tool-jlink",
                         "arguments": [
                             "-singlerun",
                             "-if", "SWD",
