@@ -33,8 +33,6 @@ limitations under the License.
 #include "stdint.h"
 #include "GlobalConstants.h"
 extern void TaskDataAcquisition(void const *argument);
-// Limiter for int16_t (limits at +/- 32765)
-//int16_t LimitInt16Value( int16_t value, int16_t limit );
 extern void PrepareToNewDacqTick();
 extern void TaskDataAcquisition_Init(void);
 extern void GetSensorsData(void);

@@ -85,7 +85,7 @@ void *RunUserNavAlgorithm(double *accels_B, double *rates_B, double *mags_B, gps
 
         uint16_t debugOutputFreq = 2;  // [Hz]
         debugOutputCntrLimit = gLeveler.callingFreq / debugOutputFreq;
-}
+    }
 
     // ------------ Static-leveler algorithm ------------
 
@@ -101,9 +101,9 @@ void *RunUserNavAlgorithm(double *accels_B, double *rates_B, double *mags_B, gps
         gLeveler.timerCntr = gLeveler.timerCntr + gLeveler.dTimerCntr;
 
         // Compute the acceleration unit-vector
-        accelsFloat_B[0] = (float)accels_B[0];
-        accelsFloat_B[1] = (float)accels_B[1];
-        accelsFloat_B[2] = (float)accels_B[2];
+        accelsFloat_B[X_AXIS] = (float)accels_B[X_AXIS];
+        accelsFloat_B[Y_AXIS] = (float)accels_B[Y_AXIS];
+        accelsFloat_B[Z_AXIS] = (float)accels_B[Z_AXIS];
 
         VectorNormalize( accelsFloat_B, aHat_B );
 
@@ -148,7 +148,7 @@ void Leveler_GetAttitude_EA(real *EulerAngles)
 void Leveler_SetExeFreq(uint16_t freq)
 {
     gLeveler.callingFreq = freq;
-        }
+}
 
 
 // Initialization routine used to set up the timing output variables

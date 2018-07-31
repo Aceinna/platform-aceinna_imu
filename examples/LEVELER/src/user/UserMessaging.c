@@ -31,10 +31,11 @@ limitations under the License.
 #include "algorithmAPI.h"
 #include "userAPI.h"
 #include "platformAPI.h"
+#include "sensorsAPI.h"
 #include "Indices.h"
 
 // provided as example
-char userVersionString[] = "MyOpenIMU 2.2.1";
+char userVersionString[] = "StaticLeveler 1.0.0";
 
 #include "UserAlgorithm.h"  // for EKFOutputDataStruct
 LevelerDataStruct *algo_res;
@@ -53,6 +54,7 @@ usr_packet_t userInputPackets[] = {		//
     {USR_IN_GET_PARAM,          "gP"}, 
     {USR_IN_GET_ALL,            "gA"}, 
     {USR_IN_GET_VERSION,        "gV"}, 
+    {USR_IN_RESET,              "rS"}, 
 // place new input packet code here, before USR_IN_MAX
     {USR_IN_MAX,                {0xff, 0xff}},   //  "" 
 };
@@ -62,13 +64,13 @@ usr_packet_t userInputPackets[] = {		//
 // packet codes here should be unique - 
 // should not overlap codes for input packets and system packets
 // First byte of Packet code should have value  >= 0x61  
-usr_packet_t userOutputPackets[] = {	
+usr_packet_t userOutputPackets[] = {
 //   Packet Type                Packet Code
-    {USR_OUT_NONE,              {0x00, 0x00}}, 
-    {USR_OUT_TEST,              "zT"},   
-    {USR_OUT_DATA1,             "z1"},   
-    {USR_OUT_LEV1,              "l1"},   
+    {USR_OUT_NONE,              {0x00, 0x00}},
+    {USR_OUT_TEST,              "zT"},
+    {USR_OUT_DATA1,             "z1"},
 // place new type and code here
+    {USR_OUT_LEV1,              "l1"},
     {USR_OUT_MAX,               {0xff, 0xff}},   //  "" 
 };
 
@@ -214,13 +216,16 @@ int HandleUserInputPacket(UcbPacketStruct *ptrUcbPacket)
 
 
 	switch (_inputPacketType) {
+		case USR_IN_RESET:
+            Reset();
+            break;
 		case USR_IN_PING:
             {
                 int len; 
                 uint8_t *model = (uint8_t*)unitVersionString();
                 uint8_t *rev   = (uint8_t*)platformBuildInfo();
                 unsigned int serialNum          = unitSerialNumber();
-                len = snprintf((char*)ptrUcbPacket->payload, 250, "%s%s SN:%u", model, rev, serialNum );
+                len = snprintf((char*)ptrUcbPacket->payload, 250, "%s %s SN:%u", model, rev, serialNum );
                 ptrUcbPacket->payloadLength = len;
             }
             // leave all the same - it will be bounced back unchanged
@@ -280,9 +285,6 @@ int HandleUserInputPacket(UcbPacketStruct *ptrUcbPacket)
         return ret;
 }
 
-
-#include "algorithm.h"
-
 /******************************************************************************
  * @name HandleUserOutputPacket - API call ro prepare continuous user output packet
  * @brief general handler
@@ -310,15 +312,15 @@ BOOL HandleUserOutputPacket(uint8_t *payload, uint8_t *payloadLen)
                 data1_payload_t *pld = (data1_payload_t *)payload;  
 
                 pld->timer  = getDacqTime();
-                GetAccelsData_mPerSecSq(accels);
+                GetAccelData_mPerSecSq(accels);
                 for (int i = 0; i < 3; i++, n++){
                     pld->sensorsData[n] = (float)accels[i];
                 }
-                GetRatesData_degPerSec(rates);
+                GetRateData_degPerSec(rates);
                 for (int i = 0; i < 3; i++, n++){
                     pld->sensorsData[n] = (float)rates[i];
                 }
-                GetMagsData_G(mags);
+                GetMagData_G(mags);
                 for (int i = 0; i < 3; i++, n++){
                     pld->sensorsData[n] = (float)mags[i];
                 }
@@ -340,13 +342,13 @@ BOOL HandleUserOutputPacket(uint8_t *payload, uint8_t *payloadLen)
                 //             NumOfBytes = 32 bytes
                 *payloadLen = USR_OUT_LEV1_PAYLOAD_LEN;
 
-                // Output time as reprented by gLeveler.timerCntr (uint32_t 
+                // Output time as represented by gLeveler.timerCntr (uint32_t 
                 //   incremented at each call of the algorithm)
                 uint32_t *algoData_1 = (uint32_t*)(payload);
                 *algoData_1++ = gLeveler.timerCntr;
 
                 // Output a double representation of time generated from
-                //   gLeveler.itow
+                //   gLeveler.timerCntr
                 double *algoData_2 = (double*)(algoData_1);
                 *algoData_2++ = 1.0e-3 * (double)(gLeveler.timerCntr);
 
@@ -357,7 +359,7 @@ BOOL HandleUserOutputPacket(uint8_t *payload, uint8_t *payloadLen)
                 *algoData_3++ = (float)EulerAngles[ROLL];
                 *algoData_3++ = (float)EulerAngles[PITCH];
 
-                GetAccelsData_mPerSecSq(accels);
+                GetAccelData_mPerSecSq(accels);
                 *algoData_3++ = (float)accels[X_AXIS];
                 *algoData_3++ = (float)accels[Y_AXIS];
                 *algoData_3++ = (float)accels[Z_AXIS];

@@ -7,7 +7,7 @@
  * PARTICULAR PURPOSE.
  *
  *  main is the center of the system universe, it all starts here. And never ends.
- * entry point for system (pins, clocks, interrupts), data and task initalization.
+ * entry point for system (pins, clocks, interrupts), data and task initialization.
  * contains the main processing loop. - this is a standard implementation
  * which has mainly os functionality in the main loop
  ******************************************************************************/
@@ -29,19 +29,15 @@ limitations under the License.
 #define __MAIN
 
 #include <stddef.h>
-#include "initAPI.h"
+#include "boardAPI.h"
+#include "platformAPI.h"
+#include "userAPI.h"
 #include "debug.h"
 #include "taskDataAcquisition.h"
 #include "taskUserCommunication.h"
 #include "magAPI.h"
-#include "timerAPI.h"
-#include "platform.h"
-#include "xmath.h"
-#include "hal.h"
-#include "misc.h"
 #include "osapi.h"
 #include "osresources.h"
-#include "algorithm.h"
 
 
 
@@ -87,15 +83,14 @@ void DebugInterfaceInit(void)
 {
     char status[100];
 
-    // Initialize the DEBUG USART (serial) port
-    // normal debug baud rate - Disable the debug derial communication for release builds
-    InitDebugSerialCommunication( 38400); // debug_usart.c
-    DEBUG_STRING("\r\nDMU380 System\r\n");
-
     // Add a delay to allow the system to stabilize after the reset line (nRst)
     // is released
     for(int i = 0; i < 4000000; i++) ;   // TODO - calculate more precisely
-//    DelayMs(300); todo - calculate
+    //DelayMs(300); //todo - calculate
+
+    // Initialize the DEBUG USART (serial) port
+    InitDebugSerialCommunication(115200); // debug_usart.c
+    //DEBUG_STRING("\r\nDMU380 System\r\n");
 
     BoardGetResetStatus(status, sizeof(status));
 
@@ -137,9 +132,6 @@ void CreateTasks(void)
     cliSem            = osSemaphoreCreate(osSemaphore(CLI_SEM), 1);
 #endif
 
-   
-    NVIC_PriorityGroupConfig( NVIC_PriorityGroup_4 );
-
 }
 
 /** ***************************************************************************
@@ -153,8 +145,6 @@ void CreateTasks(void)
  ******************************************************************************/
 int main(void)
 {
-
-
     // Initialize processor and board-related signals  
     BoardInit();
 

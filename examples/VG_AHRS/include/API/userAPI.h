@@ -30,15 +30,6 @@ limitations under the License.
 #include "gpsAPI.h"
 
 void  inertialAndPositionDataProcessing(int dacqRate);
-void  GetAccelsData_g(double *data);
-void  GetAccelsData_mPerSecSq(double *data);
-void  GetRatesData_radPerSec(double *data);
-void  GetRatesData_degPerSec(double *data);
-void  GetMagsData_G(double *data);
-void  GetGPSData(gpsDataStruct_t *data);
-void  GetAccelsTempData(double *temps); 
-void  GetRatesTempData(double *temps); 
-void  GetBoardTempData(double *temp); 
 
 void *RunUserNavAlgorithm(double *accels, double *rates, double* mags, gpsDataStruct_t *gps, int dacqRate);
 void  WriteResultsIntoOutputStream(void *results) ;
@@ -46,6 +37,7 @@ void  InitUserDataStructures();
 void  InitUserFilters();       
 void  InitUserAlgorithm();     
 void  initUserDataProcessingEngine();
+void  userInitConfigureUnit();
 
 
 #endif

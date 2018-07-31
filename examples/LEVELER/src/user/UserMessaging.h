@@ -22,7 +22,6 @@ limitations under the License.
 #define USER_MESSAGING_H
 #include <stdint.h>
 #include "GlobalConstants.h"
-#include "extern_port_config.h"
 #include "ucb_packet_struct.h"
 
 
@@ -68,19 +67,20 @@ typedef enum {
     USR_IN_GET_PARAM        ,
     USR_IN_GET_ALL          ,
     USR_IN_GET_VERSION      ,
+    USR_IN_RESET            ,
     // add new packet type here, before USR_IN_MAX
     USR_IN_MAX              ,
 }UserInPacketType;
 
 // User output packet codes, change at will
 typedef enum {
-    USR_OUT_NONE  = 0,  // 0
-    USR_OUT_TEST,       // 1
-    USR_OUT_DATA1,     // 2            
-    USR_OUT_LEV1,
+    USR_OUT_NONE  = 0, // 0
+    USR_OUT_TEST,      // 1
+    USR_OUT_DATA1,     // 2
 // add new output packet type here, before USR_OUT_MAX    
+    USR_OUT_LEV1,      // 3
     USR_OUT_MAX
-}UserOutPacketType;
+} UserOutPacketType;
 
 
 // total size of user packet structure should not exceed 255 bytes

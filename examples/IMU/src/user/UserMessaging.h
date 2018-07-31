@@ -72,15 +72,16 @@ typedef enum {
     USR_IN_MAX              ,
 }UserInPacketType;
 
-// User input packet codes, change at will
+// User output packet codes, change at will
 typedef enum {
     USR_OUT_NONE  = 0,  // 0
     USR_OUT_TEST,       // 1
-    USR_OUT_DATA1 ,     // 2            
-    USR_OUT_DATA2 ,     // 2            
-// add new output packet type here, before USR_OUT_MAX    
+    USR_OUT_DATA1,      // 2
+    USR_OUT_DATA2,      // 3
+// add new output packet type here, before USR_OUT_MAX  
+    USR_OUT_SCALED1,    // 4
     USR_OUT_MAX
-}UserOutPacketType;
+} UserOutPacketType;
 
 
 // total size of user packet structure should not exceed 255 bytes
@@ -89,7 +90,7 @@ typedef struct {
     uint8_t  packetPayload[252];    // maximum 252 bytes     
 }userPacket;
 #define MAX_NUMBER_OF_USER_PARAMS_IN_THE_PACKET 30
-#define FIRST_30_PAPAMS 0xFFFFFFFF
+#define FIRST_30_PARAMS 0xFFFFFFFF
 
 // example of user payload structure
 typedef struct {
@@ -129,8 +130,9 @@ typedef struct {
 #pragma pack()
 
 
-#define USR_OUT_TEST_PAYLOAD_LEN   (4)    // test parameter (uint32_t)    
+#define USR_OUT_TEST_PAYLOAD_LEN   (4)     // test parameter (uint32_t)    
 #define USR_OUT_DATA1_PAYLOAD_LEN  (4*10)  // 1 integer +3accels (float LE) + 3gyros (float LE) + 3 mags (floatLE)    
+#define USR_OUT_SCALED1_PAYLOAD_LEN (52)   // See UserMessaging.c for make-up of Scaled1 message
 
 extern int userPacketOut;
 
@@ -149,6 +151,19 @@ extern void      userPacketTypeToBytes(uint8_t bytes[]);
 extern void      WriteResultsIntoOutputStream(void *results);
 BOOL             setUserPacketType(uint8_t* type, BOOL fApply);
 
+// IMU data structure
+typedef struct {
+    // Timer output counter
+    uint32_t timerCntr, dTimerCntr;
+
+    // Algorithm states
+    double accel_g[3];
+    double rate_degPerSec[3];
+    double mag_G[3];
+    double temp_C;
+} IMUDataStruct;
+
+extern IMUDataStruct gIMU;
 #endif /* USER_CONFIGURATION_H */
 
 

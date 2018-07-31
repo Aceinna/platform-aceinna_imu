@@ -29,19 +29,15 @@ limitations under the License.
 #define __MAIN
 
 #include <stddef.h>
-#include "initAPI.h"
+#include "boardAPI.h"
+#include "platformAPI.h"
+#include "userAPI.h"
 #include "debug.h"
 #include "taskDataAcquisition.h"
 #include "taskUserCommunication.h"
 #include "magAPI.h"
-#include "timerAPI.h"
-#include "platform.h"
-#include "xmath.h"
-#include "hal.h"
-#include "misc.h"
 #include "osapi.h"
 #include "osresources.h"
-#include "algorithm.h"
 
 
 
@@ -88,9 +84,8 @@ void DebugInterfaceInit(void)
     char status[100];
 
     // Initialize the DEBUG USART (serial) port
-    // normal debug baud rate - Disable the debug derial communication for release builds
-    InitDebugSerialCommunication(57600); // debug_usart.c
-    DEBUG_STRING("\r\nDMU380 System\r\n");
+    InitDebugSerialCommunication(115200); // debug_usart.c
+    DEBUG_STRING("\r\nOpenIMU System\r\n");
 
     // Add a delay to allow the system to stabilize after the reset line (nRst)
     // is released
@@ -136,9 +131,6 @@ void CreateTasks(void)
     }
     cliSem            = osSemaphoreCreate(osSemaphore(CLI_SEM), 1);
 #endif
-
-   
-    NVIC_PriorityGroupConfig( NVIC_PriorityGroup_4 );
 
 }
 
