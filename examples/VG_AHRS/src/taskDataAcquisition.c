@@ -30,7 +30,8 @@ limitations under the License.
 #include "UserConfiguration.h"
 #include "magAPI.h"
 #include "bitAPI.h"
-#include "boardAPI.h"
+//#include "boardAPI.h"
+#include "bsp.h"
 #include "algorithmAPI.h"
 #include "Indices.h"
 #include "qmath.h"
@@ -90,7 +91,6 @@ void TaskDataAcquisition(void const *argument)
 
     while( 1 )
     {
-        
         // *****************************************************************
         // NOTE: This task loop runs at 100 or 200 Hz (default 200 Hz)
         //       user can choose period of this task by 
@@ -104,25 +104,28 @@ void TaskDataAcquisition(void const *argument)
         if(res != osOK){
             // Wait timeout expired. Something wrong wit the dacq system
             // Process timeout here
-
         }
         
         // inform user, that new data set is being prepared (if required)
         // in case of UART communication interface sets pin IO2 high
         setIO2Pin (1);
 
-        // Get calibrated sensors data 
-        // Inside this function done initial low pass data filtering (second order batterworth
-        // filter). User can choose cutoff frequency of the filter or turn filtering off.
-        // Use Select_LP_filter(rawSensor_e sensorType, eFilterType filterType) function to choose 
-        // filter type. Refer to UserConfiguration.c for implementation and to the enumerator structure 
-        // eFilterType in file filter.h for available selections. 
-        // Low pass filtering followed by applying of unit calibration parameters - scaling, temperature 
-        // compensation, bias removal.
-        // Results are placed in the structure of type double. Pointer to this structure
-        // is pScaledSensors. Ordering of sensors data in this structure defined by rawSensor_e
-        // enumerator in the file indices.h
-
+        // Get calibrated sensor data:
+        //   Inside this function the sensor data is filtered by a second-order low-pass
+        //   Butterworth filter, with a cutoff frequency selected by the user (or zero to
+        //   disable).  The cutoff is selected using the following:
+        //
+        //       Select_LP_filter(rawSensor_e sensorType, eFilterType filterType)
+        //
+        //   Refer to UserConfiguration.c for implementation and to the enumerator structure 
+        //   'eFilterType' in file filter.h for available selections.
+        //
+        //   Low pass filtering is followed by application of the unit calibration parameters
+        //   - scaling, temperature compensation, bias removal, and misalignment.
+        //
+        //   Results are placed in the structure of type double. The pointer to this
+        //   structure is 'pScaledSensors'.  Ordering of sensors data in this structure
+        //   defined by 'rawSensor_e' enumerator in the file indices.h
         GetSensorsData();
 
         // Check if sensors data over range
@@ -160,9 +163,9 @@ void TaskDataAcquisition(void const *argument)
         // Inform user, that new data set is ready (if required)
         // in case of UART communication interface clears pin IO2
         // Pin IO2 can be used for timing of data processing 
-        setIO2Pin (0);
-        
-        if(platformHasMag() ) {
+        setIO2Pin(0);
+
+        if (platformHasMag() ) {
             // Mag Alignment (follows Kalman filter or user algorithm as the innovation routine
             // calculates the euler angles and the magnetic vector in the
             // NED-frame)
@@ -171,14 +174,12 @@ void TaskDataAcquisition(void const *argument)
 
         if(getUnitCommunicationType() != UART_COMM){
             // Perform interface - specific processing here
-        }else {
-            // Process commands and  output continuous packets to UART
+        } else {
+            // Process commands and output continuous packets to UART
             // Processing of user commands always goes first
             ProcessUserCommands ();
             SendContinuousPacket(dacqRate);
         }
     }
 }
-
-
 

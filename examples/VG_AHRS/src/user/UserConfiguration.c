@@ -38,14 +38,14 @@ limitations under the License.
 const UserConfigurationStruct gDefaultUserConfig = {
     .dataCRC             =  0,
     .dataSize            =  sizeof(UserConfigurationStruct),
-    .userUartBaudRate    =  115200,  
-    .userPacketType      =  "a1",  
-    .userPacketRate      =  10,  
-    .lpfAccelFilterFreq  =  50,
-    .lpfRateFilterFreq   =  50,
+    .userUartBaudRate    =  115200,
+    .userPacketType      =  "e1",
+    .userPacketRate      =  100,
+    .lpfAccelFilterFreq  =  25,
+    .lpfRateFilterFreq   =  25,
     .orientation         =  "+X+Y+Z"
     // add default parameter values here, if desired
-} ;
+};
 
 
 UserConfigurationStruct gUserConfiguration;
@@ -61,13 +61,13 @@ void userInitConfigureUnit()
 {
     uint64_t *ptr       = (uint64_t*)&gUserConfiguration;
     int       size      = sizeof(gUserConfiguration);        // total size in bytes
-    
+
     // sanity check for maximum size of user config structure;
     if(size >= 0x4000){
         while(1);           
     }
 
-    if(appStartedFirstTime()){
+    if(appStartedFirstTime()) {
         // comment next line if want to keep previously stored in EEPROM parameters
         // after rebuilding and/or reloading new application 
         RestoreDefaultUserConfig();
@@ -159,6 +159,8 @@ BOOL  UpdateSystemParameter(uint32_t number, uint64_t data, BOOL fApply)
 
     return result;
 }
+
+
 /** ***************************************************************************
  * @name UpdateUserParameter - updating user configuration parameter based of preferences 
  * @brief
@@ -261,8 +263,8 @@ BOOL UpdateUserConfig(userConfigPayload*  pld, uint8_t *payloadLen)
     *payloadLen      = 4;     
 
     return TRUE;
-
 }
+
 
 /** ****************************************************************************
  * @name UpdateUserParam
@@ -305,8 +307,8 @@ BOOL UpdateUserParam(userParamPayload*  pld, uint8_t *payloadLen)
     *payloadLen   = 4;                  
 
     return TRUE;
-
 }
+
 
 /** ****************************************************************************
  * @name UpdateAllUserParams
@@ -380,8 +382,6 @@ BOOL UpdateAllUserParams(allUserParamsPayload*  pld, uint8_t *payloadLen)
 }
 
 
-
-
 /** ****************************************************************************
  * @name  GetUserConfig
  * @brief Retrieves specified number of user configuration parameters data for 
@@ -421,6 +421,7 @@ BOOL GetUserConfig(userConfigPayload*  pld, uint8_t *payloadLen)
 
 }
 
+
 /** ****************************************************************************
  * @name  GetUserParam
  * @brief Retrieves specified number of user configuration parameters data for 
@@ -452,6 +453,7 @@ BOOL GetUserParam(userParamPayload*  pld, uint8_t *payloadLen)
 
 }
 
+
 /** ****************************************************************************
  * @name  GetAllUserParams
  * @brief Retrieves specified number of user configuration parameters data for 
@@ -479,7 +481,6 @@ BOOL GetAllUserParams(allUserParamsPayload*  pld, uint8_t *payloadLen)
 }
 
 
-
 /** ***************************************************************************
  * @name SaveUserConfig - saving of user configuration structure un the 
  *       predefined flash sector
@@ -503,6 +504,7 @@ BOOL  SaveUserConfig(void)
     return FALSE;
 
 }
+
 
 BOOL RestoreDefaultUserConfig(void)
 {

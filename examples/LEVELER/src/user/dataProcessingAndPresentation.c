@@ -25,11 +25,10 @@ limitations under the License.
 *******************************************************************************/
 
 #include "userAPI.h"
+#include "sensorsAPI.h"
 #include "gpsAPI.h"
 #include "gps.h"
 #include "UserMessaging.h"
-
-
 
 /*                                    *
                         ****************** 
@@ -63,42 +62,33 @@ void initUserDataProcessingEngine()
 // applying corresponding calibration 
 // dacqRate is rate with which new set of sensors data arrives 
 void inertialAndPositionDataProcessing(int dacqRate)
-{  
-
+{
     double         accels[3];       // in g
     double         rates[3];        // in rad/s
     double         mags[3];         // Gauss
-    double         accelTemps[3];   // deg C
-    double         rateTemps[3];    // deg C
     double         boardTemp;       // deg C
     gpsDataStruct_t gps;        
     void          *results;    
 
-// get accels data or comment out
-    GetAccelsData_g(accels);
+    // Obtain accelerometer data
+    GetAccelData_g(accels);
                                               
-// get rates data or comment out
-    GetRatesData_radPerSec(rates); 
+    // Obtain rates data or comment out
+    GetRateData_radPerSec(rates); 
 
-// get mags data or comment out
-    GetMagsData_G(mags);  
+    // Obtain mags data or comment out
+    GetMagData_G(mags);
 
-// get accels temperature data or comment out
-    GetAccelsTempData(accelTemps);
-
-// get rates temperature data or comment out
-    GetRatesTempData(rateTemps);
-
-// get board temperature data or comment out
+    // Obtain board temperature data or comment out
     GetBoardTempData(&boardTemp);
 
-// get GPS data or comment out
+    // Obtain GPS data or comment out
     GetGPSData(&gps);  
 
-// execute user algorithm or remove
+    // execute user algorithm or remove
     results = RunUserNavAlgorithm(accels, rates, mags, &gps, dacqRate); // default implementation located in file user_algorithm.c
 
-// add current result to output queue for subsequent sending out as continuous packet                                                                                                                                                     // returns pointer to user-defined results structure
+    // add current result to output queue for subsequent sending out as continuous packet                                                                                                                                                     // returns pointer to user-defined results structure
     WriteResultsIntoOutputStream(results) ;   // default implementation located in file file UserMessaging.c
 }
 

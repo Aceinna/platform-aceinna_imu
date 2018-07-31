@@ -68,6 +68,7 @@ typedef enum {
     USR_IN_GET_PARAM        ,
     USR_IN_GET_ALL          ,
     USR_IN_GET_VERSION      ,
+    USR_IN_RESET            ,
     // add new packet type here, before USR_IN_MAX
     USR_IN_MAX              ,
 }UserInPacketType;
@@ -76,12 +77,14 @@ typedef enum {
 typedef enum {
     USR_OUT_NONE  = 0,  // 0
     USR_OUT_TEST,       // 1
-    USR_OUT_DATA1,     // 2            
-    USR_OUT_ANG1,
-    USR_OUT_ANG2,
-// add new output packet type here, before USR_OUT_MAX    
+    USR_OUT_DATA1,      // 2
+    USR_OUT_ANG1,       // 3
+    USR_OUT_ANG2,       // 4
+// add new output packet type here, before USR_OUT_MAX
+    USR_OUT_SCALED1,    // 5
+    USR_OUT_EKF1,       // 6
     USR_OUT_MAX
-}UserOutPacketType;
+} UserOutPacketType;
 
 
 // total size of user packet structure should not exceed 255 bytes
@@ -121,10 +124,12 @@ typedef struct {
 #pragma pack()
 
 
-#define USR_OUT_TEST_PAYLOAD_LEN   (4)    // test parameter (uint32_t)    
-#define USR_OUT_DATA1_PAYLOAD_LEN  (4*9)  // 3accels (float LE) + 3gyros (float LE) + 3 mags (floatLE)    
-#define USR_OUT_ANG1_PAYLOAD_LEN   (47)   // See message loading code,HandleUserOutputPacket(), for information
-#define USR_OUT_ANG2_PAYLOAD_LEN   (4*10)
+#define USR_OUT_TEST_PAYLOAD_LEN    (4)    // test parameter (uint32_t)    
+#define USR_OUT_DATA1_PAYLOAD_LEN   (4*9)  // 3accels (float LE) + 3gyros (float LE) + 3 mags (floatLE)    
+#define USR_OUT_ANG1_PAYLOAD_LEN    (47)   // See message loading code,HandleUserOutputPacket(), for information
+#define USR_OUT_ANG2_PAYLOAD_LEN    (4*10)
+#define USR_OUT_SCALED1_PAYLOAD_LEN (52)
+#define USR_OUT_EKF1_PAYLOAD_LEN    (75)
 
 extern int userPacketOut;
 
@@ -142,6 +147,20 @@ extern int       checkUserPacketType(uint16_t receivedCode);
 extern void      userPacketTypeToBytes(uint8_t bytes[]);
 extern void      WriteResultsIntoOutputStream(void *results);
 BOOL             setUserPacketType(uint8_t* type, BOOL fApply);
+
+// IMU data structure
+typedef struct {
+    // Timer output counter
+    uint32_t timerCntr, dTimerCntr;
+
+    // Algorithm states
+    double accel_g[3];
+    double rate_radPerSec[3];
+    double mag_G[3];
+    double temp_C;
+} IMUDataStruct;
+
+extern IMUDataStruct gIMU;
 
 #endif /* USER_CONFIGURATION_H */
 

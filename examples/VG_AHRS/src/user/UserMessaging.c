@@ -31,12 +31,13 @@ limitations under the License.
 #include "algorithmAPI.h"
 #include "userAPI.h"
 #include "platformAPI.h"
+#include "sensorsAPI.h"
 
 // provided as example
-char userVersionString[] = "MyOpenIMU 2.2.1";
+char userVersionString[] = "VG_AHRS 1.0.0";
 
 #include "EKF_Algorithm.h"  // for EKFOutputDataStruct
-EKFOutputDataStruct *algo_res;
+EKF_OutputDataStruct *algo_res;
 
 /// List of allowed packet codes 
 usr_packet_t userInputPackets[] = {		//       
@@ -51,6 +52,7 @@ usr_packet_t userInputPackets[] = {		//
     {USR_IN_GET_PARAM,          "gP"}, 
     {USR_IN_GET_ALL,            "gA"}, 
     {USR_IN_GET_VERSION,        "gV"}, 
+    {USR_IN_RESET,              "rS"}, 
 // place new input packet code here, before USR_IN_MAX
     {USR_IN_MAX,                {0xff, 0xff}},   //  "" 
 };
@@ -68,6 +70,8 @@ usr_packet_t userOutputPackets[] = {
     {USR_OUT_ANG1,              "a1"},   
     {USR_OUT_ANG2,              "a2"},   
 // place new type and code here
+    {USR_OUT_SCALED1,           "s1"},
+    {USR_OUT_EKF1,              "e1"},
     {USR_OUT_MAX,               {0xff, 0xff}},   //  "" 
 };
 
@@ -172,6 +176,14 @@ BOOL setUserPacketType(uint8_t *data, BOOL fApply)
             _outputPacketType = type;
             _userPayloadLen   = USR_OUT_ANG2_PAYLOAD_LEN;
             break;
+        case USR_OUT_SCALED1:          // packet with arbitrary data
+            _outputPacketType = type;
+            _userPayloadLen   = USR_OUT_SCALED1_PAYLOAD_LEN;
+            break;
+        case USR_OUT_EKF1: // packet with EKF algorithm data
+            _outputPacketType = type;
+            _userPayloadLen = USR_OUT_EKF1_PAYLOAD_LEN;
+            break;
         default:
             result = FALSE;
             break; 
@@ -217,13 +229,16 @@ int HandleUserInputPacket(UcbPacketStruct *ptrUcbPacket)
 
 
 	switch (_inputPacketType) {
+		case USR_IN_RESET:
+            Reset();
+            break;
 		case USR_IN_PING:
             {
                 int len; 
                 uint8_t *model = (uint8_t*)unitVersionString();
                 uint8_t *rev   = (uint8_t*)platformBuildInfo();
                 unsigned int serialNum          = unitSerialNumber();
-                len = snprintf((char*)ptrUcbPacket->payload, 250, "%s%s SN:%u", model, rev, serialNum );
+                len = snprintf((char*)ptrUcbPacket->payload, 250, "%s %s SN:%u", model, rev, serialNum );
                 ptrUcbPacket->payloadLength = len;
             }
             // leave all the same - it will be bounced back unchanged
@@ -286,6 +301,9 @@ int HandleUserInputPacket(UcbPacketStruct *ptrUcbPacket)
 
 # include "algorithm.h"
 
+// Declare the IMU data structure
+IMUDataStruct gIMU;
+
 /******************************************************************************
  * @name HandleUserOutputPacket - API call ro prepare continuous user output packet
  * @brief general handler
@@ -313,15 +331,15 @@ BOOL HandleUserOutputPacket(uint8_t *payload, uint8_t *payloadLen)
                 data1_payload_t *pld = (data1_payload_t *)payload;  
 
                 pld->timer  = getDacqTime();
-                GetAccelsData_mPerSecSq(accels);
+                GetAccelData_mPerSecSq(accels);
                 for (int i = 0; i < 3; i++, n++){
                     pld->sensorsData[n] = (float)accels[i];
                 }
-                GetRatesData_degPerSec(rates);
+                GetRateData_degPerSec(rates);
                 for (int i = 0; i < 3; i++, n++){
                     pld->sensorsData[n] = (float)rates[i];
                 }
-                GetMagsData_G(mags);
+                GetMagData_G(mags);
                 for (int i = 0; i < 3; i++, n++){
                     pld->sensorsData[n] = (float)mags[i];
                 }
@@ -349,7 +367,6 @@ BOOL HandleUserOutputPacket(uint8_t *payload, uint8_t *payloadLen)
                 //             NumOfBytes = 47 bytes
                 *payloadLen = USR_OUT_ANG1_PAYLOAD_LEN;
 
-
                 // Output time as reprented by gAlgorithm.itow (uint32_t 
                 //   incremented at each call of the algorithm)
                 uint32_t *algoData_1 = (uint32_t*)(payload);
@@ -363,16 +380,16 @@ BOOL HandleUserOutputPacket(uint8_t *payload, uint8_t *payloadLen)
                 // Set the pointer of the algoData array to the payload
                 float *algoData_3 = (float*)(algoData_2);
 
-                GetEKF_Attitude_EA(EulerAngles);
+                EKF_GetAttitude_EA(EulerAngles);
                 *algoData_3++ = (float)EulerAngles[ROLL];
                 *algoData_3++ = (float)EulerAngles[PITCH];
 
-                GetEKF_CorrectedAngRates(CorrRates_B);
+                EKF_GetCorrectedAngRates(CorrRates_B);
                 *algoData_3++ = (float)CorrRates_B[X_AXIS];
                 *algoData_3++ = (float)CorrRates_B[Y_AXIS];
                 *algoData_3++ = (float)CorrRates_B[Z_AXIS];
 
-                GetAccelsData_mPerSecSq(accels);
+                GetAccelData_mPerSecSq(accels);
                 *algoData_3++ = (float)accels[X_AXIS];
                 *algoData_3++ = (float)accels[Y_AXIS];
                 *algoData_3++ = (float)accels[Z_AXIS];
@@ -386,10 +403,10 @@ BOOL HandleUserOutputPacket(uint8_t *payload, uint8_t *payloadLen)
                 // Output algorithm diagnostic information reprented by uint8_t variables
                 uint8_t *algoData_4 = (uint8_t*)(algoData_3);
 
-                GetEKF_OperationalMode(&OperMode);
+                EKF_GetOperationalMode(&OperMode);
                 *algoData_4++ = OperMode;
 
-                GetEKF_OperationalSwitches(&LinAccelSwitch, &TurnSwitch);
+                EKF_GetOperationalSwitches(&LinAccelSwitch, &TurnSwitch);
                 *algoData_4++ = LinAccelSwitch;
                 *algoData_4++ = TurnSwitch;
             }
@@ -417,20 +434,60 @@ BOOL HandleUserOutputPacket(uint8_t *payload, uint8_t *payloadLen)
                 n = 0;
                 algoData[n++] = 0.0;   // *ptr;
 
-                GetEKF_Attitude_EA(EulerAngles);
+                EKF_GetAttitude_EA(EulerAngles);
                 algoData[n++] = (float)EulerAngles[ROLL];
                 algoData[n++] = (float)EulerAngles[PITCH];
                 algoData[n++] = (float)EulerAngles[YAW];
 
-                GetEKF_CorrectedAngRates(CorrRates_B);
+                EKF_GetCorrectedAngRates(CorrRates_B);
                 algoData[n++] = (float)CorrRates_B[X_AXIS];
                 algoData[n++] = (float)CorrRates_B[Y_AXIS];
                 algoData[n++] = (float)CorrRates_B[Z_AXIS];
 
-                GetAccelsData_mPerSecSq(accels);
+                GetAccelData_mPerSecSq(accels);
                 algoData[n++] = (float)accels[X_AXIS];
                 algoData[n++] = (float)accels[Y_AXIS];
                 algoData[n++] = (float)accels[Z_AXIS];
+            }
+            break;
+        case USR_OUT_SCALED1:
+            {
+                // The payload length (NumOfBytes) is based on the following:
+                // 1 uint32_t (4 bytes) =  4 bytes
+                // 1 double (8 bytes)   =  8 bytes
+                // 3 floats (4 bytes)   = 12 bytes
+                // 3 floats (4 bytes)   = 12 bytes
+                // 3 floats (4 bytes)   = 12 bytes
+                // 1 floats (4 bytes)   =  4 bytes
+                // =================================
+                //           NumOfBytes = 52 bytes
+                *payloadLen = USR_OUT_SCALED1_PAYLOAD_LEN;
+
+                // Output time as reprented by gIMU.timerCntr (uint32_t
+                // incremented at each call of the algorithm)
+                uint32_t *algoData_1 = (uint32_t*)(payload);
+                *algoData_1++ = gIMU.timerCntr;
+
+                // Output a double representation of time generated from
+                // gLeveler.itow
+                double *algoData_2 = (double*)(algoData_1);
+                *algoData_2++ = 1.0e-3 * (double)(gIMU.timerCntr);
+
+                // Set the pointer of the sensor array to the payload
+                float *algoData_3 = (float*)(algoData_2);
+                *algoData_3++ = (float)gIMU.accel_g[X_AXIS];
+                *algoData_3++ = (float)gIMU.accel_g[Y_AXIS];
+                *algoData_3++ = (float)gIMU.accel_g[Z_AXIS];
+
+                *algoData_3++ = (float)gIMU.rate_radPerSec[X_AXIS];
+                *algoData_3++ = (float)gIMU.rate_radPerSec[Y_AXIS];
+                *algoData_3++ = (float)gIMU.rate_radPerSec[Z_AXIS];
+
+                *algoData_3++ = (float)gIMU.mag_G[X_AXIS];
+                *algoData_3++ = (float)gIMU.mag_G[Y_AXIS];
+                *algoData_3++ = (float)gIMU.mag_G[Z_AXIS];
+
+                *algoData_3++ = (float)gIMU.temp_C;
             }
             break;
         // place additional user packet preparing calls here
@@ -439,6 +496,76 @@ BOOL HandleUserOutputPacket(uint8_t *payload, uint8_t *payloadLen)
         //      payload[0]  = ZZZZ; // user packet type 
         //      prepare dada here
         //      break;
+            case USR_OUT_EKF1:
+            {
+                // Variables used to hold the EKF values
+                real EulerAngles[3];
+                double accels[3];
+                double mags[3];
+
+                // The payload length (NumOfBytes) is based on the following:
+                // 1 uint32_t (4 bytes) =  4 bytes
+                // 1 double (8 bytes)   =  8 bytes
+                // 3 floats (4 bytes)   = 12 bytes
+                // 3 floats (4 bytes)   = 12 bytes
+                // 3 floats (4 bytes)   = 12 bytes
+                // 3 floats (4 bytes)   = 12 bytes
+                // 3 floats (4 bytes)   = 12 bytes
+                // 1 uint8_t (1 byte)   =  1 bytes
+                // 1 uint8_t (1 byte)   =  1 bytes
+                // 1 uint8_t (1 byte)   =  1 bytes
+                // =================================
+                //           NumOfBytes = 75 bytes
+                *payloadLen = USR_OUT_EKF1_PAYLOAD_LEN;
+
+                // Output time as represented by gLeveler.timerCntr (uint32_t
+                // incremented at each call of the algorithm)
+                uint32_t *algoData_1 = (uint32_t*)(payload);
+                *algoData_1++ = gIMU.timerCntr;
+
+                // Set the pointer of the algoData array to the payload
+                double *algoData_2 = (double*)(algoData_1);
+                *algoData_2++ = (double)( 0.001 * gIMU.timerCntr );
+
+                // Set the pointer of the algoData array to the payload
+                float *algoData_3 = (float*)(algoData_2);
+                EKF_GetAttitude_EA(EulerAngles);
+                *algoData_3++ = (float)EulerAngles[ROLL];
+                *algoData_3++ = (float)EulerAngles[PITCH];
+                *algoData_3++ = (float)EulerAngles[YAW];
+
+                GetAccelData_g(accels);
+                *algoData_3++ = (float)accels[X_AXIS];
+                *algoData_3++ = (float)accels[Y_AXIS];
+                *algoData_3++ = (float)accels[Z_AXIS];
+
+                double rates[3];
+                GetRateData_degPerSec(rates);
+                *algoData_3++ = (float)rates[X_AXIS];
+                *algoData_3++ = (float)rates[Y_AXIS];
+                *algoData_3++ = (float)rates[Z_AXIS];
+
+                float rateBias[3];
+                EKF_GetEstimatedAngRateBias(rateBias);
+                *algoData_3++ = (float)rateBias[X_AXIS];
+                *algoData_3++ = (float)rateBias[Y_AXIS];
+                *algoData_3++ = (float)rateBias[Z_AXIS];
+
+                GetMagData_G(mags);
+                *algoData_3++ = (float)mags[X_AXIS];
+                *algoData_3++ = (float)mags[Y_AXIS];
+                *algoData_3++ = (float)mags[Z_AXIS];
+
+                // Set the pointer of the algoData array to the payload
+                uint8_t *algoData_4 = (uint8_t*)(algoData_3);
+                uint8_t opMode, linAccelSw, turnSw;
+                EKF_GetOperationalMode(&opMode);
+                EKF_GetOperationalSwitches(&linAccelSw, &turnSw);
+                *algoData_4++ = opMode;
+                *algoData_4++ = linAccelSw;
+                *algoData_4++ = turnSw;
+            }
+            break;
         default:
              *payloadLen = 0;  
              ret         = FALSE;
@@ -454,7 +581,4 @@ void WriteResultsIntoOutputStream(void *results)
 //  implement specific data processing/saving here 
     algo_res = results;
 }
-
-
-
 

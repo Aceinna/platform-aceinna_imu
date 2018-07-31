@@ -23,7 +23,6 @@ limitations under the License.
 #include <stdint.h>
 #include "GlobalConstants.h"
 #include "UserMessaging.h"
-#include "extern_port_config.h"
 #include "filter.h"
 
 

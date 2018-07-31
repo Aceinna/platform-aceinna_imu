@@ -39,14 +39,14 @@ limitations under the License.
 const UserConfigurationStruct gDefaultUserConfig = {
     .dataCRC             =  0,
     .dataSize            =  sizeof(UserConfigurationStruct),
-    .userUartBaudRate    =  57600,  
-    .userPacketType      =  "z1",  
-    .userPacketRate      =  10,  
-    .lpfAccelFilterFreq  =  50,
-    .lpfRateFilterFreq   =  50,
+    .userUartBaudRate    =  115200,  
+    .userPacketType      =  "s1",  
+    .userPacketRate      =  100,  
+    .lpfAccelFilterFreq  =  25,
+    .lpfRateFilterFreq   =  25,
     .orientation         =  "+X+Y+Z"
     // add default parameter values here, if desired
-} ;
+};
 
 
 UserConfigurationStruct gUserConfiguration;
