@@ -36,8 +36,19 @@ env.Replace(
 
     ARFLAGS=["rc"],
 
-    ASFLAGS=[],
+    SIZEPROGREGEXP=r"^(?:\.text|\.data|\.rodata|\.text.align|\.ARM.exidx)\s+(\d+).*",
+    SIZEDATAREGEXP=r"^(?:\.data|\.bss|\.noinit)\s+(\d+).*",
+    SIZECHECKCMD="$SIZETOOL -A -d $SOURCES",
+    SIZEPRINTCMD='$SIZETOOL -B -d $SOURCES',
 
+    PROGSUFFIX=".elf"
+)
+
+# Allow user to override via pre:script
+if env.get("PROGNAME", "program") == "program":
+    env.Replace(PROGNAME="firmware")
+
+env.Append(
     CCFLAGS=[
         "-O0",
         "-ffunction-sections",  # place each function in its own section
@@ -65,32 +76,6 @@ env.Replace(
 
     LIBS=["c", "gcc", "m", "stdc++", "nosys"],
 
-    SIZEPROGREGEXP=r"^(?:\.text|\.data|\.rodata|\.text.align|\.ARM.exidx)\s+(\d+).*",
-    SIZEDATAREGEXP=r"^(?:\.data|\.bss|\.noinit)\s+(\d+).*",
-    SIZECHECKCMD="$SIZETOOL -A -d $SOURCES",
-    SIZEPRINTCMD='$SIZETOOL -B -d $SOURCES',
-
-    PROGSUFFIX=".elf"
-)
-
-# Allow user to override via pre:script
-if env.get("PROGNAME", "program") == "program":
-    env.Replace(PROGNAME="firmware")
-
-
-if "BOARD" in env:
-    env.Append(
-        CCFLAGS=[
-            "-mcpu=%s" % env.BoardConfig().get("build.cpu")
-        ],
-        LINKFLAGS=[
-            "-mcpu=%s" % env.BoardConfig().get("build.cpu")
-        ]
-    )
-
-env.Append(
-    # ASFLAGS=env.get("CCFLAGS", [])[:],
-
     BUILDERS=dict(
         ElfToBin=Builder(
             action=env.VerboseAction(" ".join([
@@ -116,6 +101,16 @@ env.Append(
         )
     )
 )
+
+if "BOARD" in env:
+    env.Append(
+        CCFLAGS=[
+            "-mcpu=%s" % env.BoardConfig().get("build.cpu")
+        ],
+        LINKFLAGS=[
+            "-mcpu=%s" % env.BoardConfig().get("build.cpu")
+        ]
+    )
 
 #
 # Target: Build executable and linkable firmware
