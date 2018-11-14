@@ -26,18 +26,30 @@ limitations under the License.
 #ifndef _USER_API_H
 #define _USER_API_H
 
+// Some common constants used in the user algorithm logic
+#define  ZERO_HZ         0
+#define  ONE_HZ          1
+#define  TWO_HZ          2
+#define  FOUR_HZ         4
+#define  FIVE_HZ         5
+#define  TEN_HZ          10
+#define  TWENTY_HZ       20
+#define  TWENTY_FIVE_HZ  25
+#define  FIFTY_HZ        50
+
+#define  NUM_AXIS  3
+
 #include <stdint.h>
 #include "gpsAPI.h"
 
-void  inertialAndPositionDataProcessing(int dacqRate);
+void  inertialAndPositionDataProcessing(uint16_t dacqRate);
 
-void *RunUserNavAlgorithm(double *accels, double *rates, double* mags, gpsDataStruct_t *gps, int dacqRate);
+void *RunUserNavAlgorithm(double *accels, double *rates, double* mags, gpsDataStruct_t *gps, uint16_t dacqRate);
 void  WriteResultsIntoOutputStream(void *results) ;
 void  InitUserDataStructures();
 void  InitUserFilters();       
 void  InitUserAlgorithm();     
 void  initUserDataProcessingEngine();
 void  userInitConfigureUnit();
-
 
 #endif

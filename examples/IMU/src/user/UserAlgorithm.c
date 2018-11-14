@@ -23,19 +23,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 *******************************************************************************/
 
+
+#include "platformAPI.h"
 #include "userAPI.h"
-#include "gpsAPI.h"
+
 #include "stddef.h"
 
-extern void InitializeAlgorithmStruct(void);
 
 
+
+// Initialize GPS algorithm variables
 void InitUserAlgorithm()
 {
     // place additional required initialization here
 }
 
-void *RunUserNavAlgorithm(double *accels, double *rates, double *mags, gpsDataStruct_t *gps, int dacqRate)
+
+void *RunUserNavAlgorithm(double *accels, double *rates, double *mags, gpsDataStruct_t *gps, uint16_t dacqRate)
 {
 
     // so far no results

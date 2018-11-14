@@ -24,12 +24,15 @@ limitations under the License.
 *******************************************************************************/
 
 #include "string.h"
+
+#include "algorithmAPI.h"
+#include "gpsAPI.h"
+#include "magAPI.h"
+#include "platformAPI.h"
+
 #include "UserConfiguration.h"
 #include "UserMessaging.h"
 #include "Indices.h"
-#include "algorithmAPI.h"
-#include "platformAPI.h"
-
 
 // Default user configuration structure
 // Applied to unit upon reception of "zR" command
@@ -39,14 +42,17 @@ const UserConfigurationStruct gDefaultUserConfig = {
     .dataCRC             =  0,
     .dataSize            =  sizeof(UserConfigurationStruct),
     .userUartBaudRate    =  115200,
-    .userPacketType      =  "e1",
-    .userPacketRate      =  100,
+    .userPacketType      =  "a2",
+    .userPacketRate      =  10,
     .lpfAccelFilterFreq  =  25,
     .lpfRateFilterFreq   =  25,
-    .orientation         =  "+X+Y+Z"
+    .orientation         =  "+X+Y+Z",
     // add default parameter values here, if desired
+    .hardIron_X          = 0.0,
+    .hardIron_Y          = 0.0,
+    .softIron_Ratio      = 1.0,
+    .softIron_Angle      = 0.0
 };
-
 
 UserConfigurationStruct gUserConfiguration;
 UserConfigurationStruct gTmpUserConfiguration;
@@ -54,7 +60,22 @@ UserConfigurationStruct gTmpUserConfiguration;
 uint8_t UserDataBuffer[4096];
 volatile char   *info;
 BOOL configValid = FALSE;
-//extern BOOL  setUserPacketType(int type, B);
+
+void setUserMagAlignParams(magAlignUserParams_t *params)
+{
+    gUserConfiguration.hardIron_X      = params->hardIron_X;
+    gUserConfiguration.hardIron_Y      = params->hardIron_Y;
+    gUserConfiguration.softIron_Ratio  = params->softIron_Ratio;
+    gUserConfiguration.softIron_Angle  = params->softIron_Angle;
+}
+
+void getUserMagAlignParams(magAlignUserParams_t *params)
+{
+    params->hardIron_X     = gUserConfiguration.hardIron_X;
+    params->hardIron_Y     = gUserConfiguration.hardIron_Y;
+    params->softIron_Ratio = gUserConfiguration.softIron_Ratio;
+    params->softIron_Angle = gUserConfiguration.softIron_Angle;
+}
 
 
 void userInitConfigureUnit()
@@ -98,7 +119,6 @@ void userInitConfigureUnit()
     }
 
     info = getBuildInfo();
-
 } 
 
 
@@ -464,6 +484,33 @@ BOOL GetUserParam(userParamPayload*  pld, uint8_t *payloadLen)
  * @retval N/A
  ******************************************************************************/
 BOOL GetAllUserParams(allUserParamsPayload*  pld, uint8_t *payloadLen)
+{
+    uint32_t offset, i, numParams;
+    uint64_t *ptr = (uint64_t *)&gUserConfiguration;
+
+    numParams   = sizeof(UserConfigurationStruct)/8;
+    
+    offset = 0;
+    for (i = 0; i < numParams; i++, offset++){
+            pld->parameters[i] = ptr[offset];
+    }
+
+    *payloadLen     = numParams* 8;  
+
+    return TRUE;
+}
+
+
+/** ****************************************************************************
+ * @name  SetMagAlignCmds
+ * @brief Retrieves specified number of user configuration parameters data for 
+ *        sending to the external host starting from specified offset in user 
+ *        configuration structure (refer to UserConfigParamOffset structure for
+ *        specific value of offsets)
+ * @param [in] pointer to userData payload in the packet
+ * @retval N/A
+ ******************************************************************************/
+BOOL SetMagAlignCmds(allUserParamsPayload*  pld, uint8_t *payloadLen)
 {
     uint32_t offset, i, numParams;
     uint64_t *ptr = (uint64_t *)&gUserConfiguration;

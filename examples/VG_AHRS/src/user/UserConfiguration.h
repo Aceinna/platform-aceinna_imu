@@ -20,14 +20,12 @@ limitations under the License.
 
 #ifndef USER_CONFIGURATION_H
 #define USER_CONFIGURATION_H
+
 #include <stdint.h>
+
 #include "GlobalConstants.h"
 #include "UserMessaging.h"
-#include "extern_port_config.h"
 #include "filter.h"
-
-
-#include <stdint.h>
 
 /// User defined configuration strucrture
 ///Please notice, that parameters are 64 bit to accomodate double types as well as longer string types
@@ -65,7 +63,6 @@ typedef struct {
                                             /// 25 -  Butterworth LPF 25HZ
                                             /// 40 -  Butterworth LPF 40HZ
     
-//    int64_t           orientation;         /// unit orientation in format 0x0000000000ddrrff
     uint8_t           orientation[8];         /// unit orientation in format 0x0000000000ddrrff
                                             /// where   dd - down axis, rr - right axis, ff - forward axis
                                             /// next axis values a valid :  
@@ -81,9 +78,15 @@ typedef struct {
     // Add parameter offset in UserConfigParamOffset structure if validation or
     // special processing required 
 
+    float hardIron_X;
+    float hardIron_Y;
+    float softIron_Ratio;
+    float softIron_Angle;
 } UserConfigurationStruct;
 
 typedef enum{
+//*****************************************************************************************
+// add system parameters here and reassign USER_LAST_SYSTEM_PARAM (DO NOT CHANGE THIS!!!)
     USER_CRC                       = 0,
     USER_DATA_SIZE                    ,   // 1
     USER_USER_BAUD_RATE               ,   // 2  order of next 4 parameters
@@ -92,14 +95,18 @@ typedef enum{
     USER_LPF_ACCEL_TYPE               ,   // 5  prefered LPF filter type for accelerometer
     USER_LPF_RATE_TYPE                ,   // 6  prefered LPF filter type for rate sensor
     USER_ORIENTATION                  ,   // 7  unit orientation
-// add system parameters here and reassign  USER_LAST_SYSTEM_PARAM
     USER_LAST_SYSTEM_PARAM = USER_ORIENTATION, 
+//*****************************************************************************************
 // add parameter enumerator here while adding new parameter in user UserConfigurationStruct
+
+    USER_HARD_IRON_X                  ,
+    USER_HARD_IRON_Y                  ,
+    USER_SOFT_IRON_RATIO              ,
+    USER_SOFT_IRON_ANGLE              ,
     USER_MAX_PARAM
 } UserConfigParamNumber;
 
 #define MAX_SYSTEM_PARAM USER_ORIENTATION
-
 
 extern int userPacketOut;
 

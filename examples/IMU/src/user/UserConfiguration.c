@@ -24,12 +24,14 @@ limitations under the License.
 *******************************************************************************/
 
 #include "string.h"
+
+#include "algorithmAPI.h"
+#include "magAPI.h"
+#include "platformAPI.h"
+
 #include "UserConfiguration.h"
 #include "UserMessaging.h"
 #include "Indices.h"
-#include "algorithmAPI.h"
-#include "platformAPI.h"
-
 
 // Default user configuration structure
 // Saved into EEPROM of first startup after reloading the code
@@ -41,13 +43,16 @@ const UserConfigurationStruct gDefaultUserConfig = {
     .dataSize            =  sizeof(UserConfigurationStruct),
     .userUartBaudRate    =  115200,  
     .userPacketType      =  "s1",  
-    .userPacketRate      =  100,  
+    .userPacketRate      =  10,  
     .lpfAccelFilterFreq  =  25,
     .lpfRateFilterFreq   =  25,
-    .orientation         =  "+X+Y+Z"
+    .orientation         =  "+X+Y+Z",
     // add default parameter values here, if desired
+    .hardIron_X          = 0.0,
+    .hardIron_Y          = 0.0,
+    .softIron_Ratio      = 1.0,
+    .softIron_Angle      = 0.0
 };
-
 
 UserConfigurationStruct gUserConfiguration;
 UserConfigurationStruct gTmpUserConfiguration;
@@ -55,7 +60,22 @@ UserConfigurationStruct gTmpUserConfiguration;
 uint8_t UserDataBuffer[4096];
 volatile char   *info;
 BOOL configValid = FALSE;
-//extern BOOL  setUserPacketType(int type, B);
+
+void setUserMagAlignParams(magAlignUserParams_t *params)
+{
+    gUserConfiguration.hardIron_X      = params->hardIron_X;
+    gUserConfiguration.hardIron_Y      = params->hardIron_Y;
+    gUserConfiguration.softIron_Ratio  = params->softIron_Ratio;
+    gUserConfiguration.softIron_Angle  = params->softIron_Angle;
+}
+
+void getUserMagAlignParams(magAlignUserParams_t *params)
+{
+    params->hardIron_X     = gUserConfiguration.hardIron_X;
+    params->hardIron_Y     = gUserConfiguration.hardIron_Y;
+    params->softIron_Ratio = gUserConfiguration.softIron_Ratio;
+    params->softIron_Angle = gUserConfiguration.softIron_Angle;
+}
 
 
 void userInitConfigureUnit()
@@ -68,7 +88,7 @@ void userInitConfigureUnit()
         while(1);           
     }
 
-    if(appStartedFirstTime()){
+    if(appStartedFirstTime()) {
         // comment next line if want to keep previously stored in EEPROM parameters
         // after rebuilding and/or reloading new application 
         RestoreDefaultUserConfig();
@@ -77,11 +97,11 @@ void userInitConfigureUnit()
     // Validate checksum of user configuration structure
     configValid = validateUserConfigInEeprom(&size);
     
-    if(configValid == TRUE){
+    if(configValid == TRUE) {
         // Here we have validated User configuration image.
         // Load it from eeprom into ram on top of the default configuration
         loadUserConfigFromEeprom((void*)&gUserConfiguration, &size);
-    }else{
+    } else {
         memset((void*)&gUserConfiguration, 0xff, sizeof(gUserConfiguration));
     }
 
@@ -99,7 +119,6 @@ void userInitConfigureUnit()
     }
 
     info = getBuildInfo();
-
 } 
 
 
@@ -160,6 +179,8 @@ BOOL  UpdateSystemParameter(uint32_t number, uint64_t data, BOOL fApply)
 
     return result;
 }
+
+
 /** ***************************************************************************
  * @name UpdateUserParameter - updating user configuration parameter based of preferences 
  * @brief
@@ -262,8 +283,8 @@ BOOL UpdateUserConfig(userConfigPayload*  pld, uint8_t *payloadLen)
     *payloadLen     = 4;     
 
     return TRUE;
-
 }
+
 
 /** ****************************************************************************
  * @name UpdateUserParam
@@ -306,8 +327,8 @@ BOOL UpdateUserParam(userParamPayload*  pld, uint8_t *payloadLen)
     *payloadLen   = 4;                  
 
     return TRUE;
-
 }
+
 
 /** ****************************************************************************
  * @name UpdateAllUserParams
@@ -381,8 +402,6 @@ BOOL UpdateAllUserParams(allUserParamsPayload*  pld, uint8_t *payloadLen)
 }
 
 
-
-
 /** ****************************************************************************
  * @name  GetUserConfig
  * @brief Retrieves specified number of user configuration parameters data for 
@@ -422,6 +441,7 @@ BOOL GetUserConfig(userConfigPayload*  pld, uint8_t *payloadLen)
 
 }
 
+
 /** ****************************************************************************
  * @name  GetUserParam
  * @brief Retrieves specified number of user configuration parameters data for 
@@ -452,6 +472,7 @@ BOOL GetUserParam(userParamPayload*  pld, uint8_t *payloadLen)
     return TRUE;
 
 }
+
 
 /** ****************************************************************************
  * @name  GetAllUserParams
@@ -504,6 +525,7 @@ BOOL  SaveUserConfig(void)
     return FALSE;
 
 }
+
 
 BOOL RestoreDefaultUserConfig(void)
 {

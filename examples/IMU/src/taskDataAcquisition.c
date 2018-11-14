@@ -25,27 +25,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 *******************************************************************************/
 
-#include "taskDataAcquisition.h"
-#include "taskUserCommunication.h"
-#include "UserConfiguration.h"
-#include "magAPI.h"
+#include "algorithmAPI.h"
 #include "bitAPI.h"
 #include "boardAPI.h"
-#include "algorithmAPI.h"
-#include "Indices.h"
-#include "qmath.h"
+#include "magAPI.h"
+#include "platformAPI.h"
+#include "userAPI.h"
+
+#include "taskDataAcquisition.h"
+#include "taskUserCommunication.h"
+
 #include "osapi.h"
 #include "osresources.h"
-#include "userAPI.h"
-#include "platformAPI.h"
-
-uint32_t dacqTimer = 0;
-
-uint32_t getDacqTime()
-{
-    return dacqTimer;
-}
-
 
 /** ***************************************************************************
  * @name TaskDataAcquisition() CALLBACK main loop
@@ -57,12 +48,13 @@ uint32_t getDacqTime()
  ******************************************************************************/
 void TaskDataAcquisition(void const *argument)
 {
- //   uint8_t functionStatus;
-    int  res, dacqRate;
+    //
+    int  res;
+    uint16_t dacqRate;
+
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
     BOOL overRange  = FALSE;        //uncomment this line if overrange processing required
 #pragma GCC diagnostic warning "-Wunused-but-set-variable"
-
 
     // This routine sets up the timer. Can use the structure below this point.
     TaskDataAcquisition_Init();
@@ -72,25 +64,22 @@ void TaskDataAcquisition(void const *argument)
     InitMagAlignParams();   
     // Start sensors data acquisition 
     DataAquisitionStart();
-    // determine the period of data acquisition task
+
+    // Set the sampling frequency of data acquisition task
     dacqRate = DACQ_200_HZ;
-
-
 
     //**************  Add user initialization here, if needed ****************
 
-
-    /// Data is provided by the primary sensors (accelerometer and rate-sensor)
-    ///   as fast as possible.  Data is obtained from secondary sensors at a
-    ///   lower rate.  The rate-sensor data read is synced to TIM5 or an
-    ///   external signal.  When the read is commanded and in the data buffer,
-    ///   The data-event flag is set and the wait is bypassed.  Data is obtained
-    ///   from the buffer, calibrated, filtered and provided to the user for 
-    ///   subsequent processing.
+    // Data is provided by the primary sensors (accelerometer and rate-sensor)
+    //   as fast as possible.  Data is obtained from secondary sensors at a
+    //   lower rate.  The rate-sensor data read is synced to TIM5 or an
+    //   external signal.  When the read is commanded and in the data buffer,
+    //   The data-event flag is set and the wait is bypassed.  Data is obtained
+    //   from the buffer, calibrated, filtered and provided to the user for
+    //   subsequent processing.
 
     while( 1 )
     {
-        
         // *****************************************************************
         // NOTE: This task loop runs at 100 or 200 Hz (default 200 Hz)
         //       user can choose period of this task by 
@@ -104,25 +93,28 @@ void TaskDataAcquisition(void const *argument)
         if(res != osOK){
             // Wait timeout expired. Something wrong wit the dacq system
             // Process timeout here
-
         }
         
         // inform user, that new data set is being prepared (if required)
         // in case of UART communication interface sets pin IO2 high
         setIO2Pin (1);
 
-        // Get calibrated sensors data 
-        // Inside this function done initial low pass data filtering (second order batterworth
-        // filter). User can choose cutoff frequency of the filter or turn filtering off.
-        // Use Select_LP_filter(rawSensor_e sensorType, eFilterType filterType) function to choose 
-        // filter type. Refer to UserConfiguration.c for implementation and to the enumerator structure 
-        // eFilterType in file filter.h for available selections. 
-        // Low pass filtering followed by applying of unit calibration parameters - scaling, temperature 
-        // compensation, bias removal.
-        // Results are placed in the structure of type double. Pointer to this structure
-        // is pScaledSensors. Ordering of sensors data in this structure defined by rawSensor_e
-        // enumerator in the file indices.h
-
+        // Get calibrated sensor data:
+        //   Inside this function the sensor data is filtered by a second-order low-pass
+        //   Butterworth filter, with a cutoff frequency selected by the user (or zero to
+        //   disable).  The cutoff is selected using the following:
+        //
+        //       Select_LP_filter(rawSensor_e sensorType, eFilterType filterType)
+        //
+        //   Refer to UserConfiguration.c for implementation and to the enumerator structure 
+        //   'eFilterType' in file filter.h for available selections.
+        //
+        //   Low pass filtering is followed by application of the unit calibration parameters
+        //   - scaling, temperature compensation, bias removal, and misalignment.
+        //
+        //   Results are placed in the structure of type double. The pointer to this
+        //   structure is 'pScaledSensors'.  Ordering of sensors data in this structure
+        //   defined by 'rawSensor_e' enumerator in the file indices.h
         GetSensorsData();
 
         // Check if sensors data over range
@@ -138,21 +130,22 @@ void TaskDataAcquisition(void const *argument)
         // Temperature  - degrees C
         //******************************************************************
         
-        
         // BIT status. May have inadvertently changed this during an update.
         updateBITandStatus();
 
         // **********************  Algorithm ************************
-        // In AHRS or INS mode due to CPU performance concerns algorithm better be
-        // performed at 100 or less Hz based on complexity and number calculations
-        // involved.  Incorporate timing logic inside algorithm function, if desired   
-        // For the initial simplicity use pScaledSensors array as input 
-        // and output of algorithm.
-        // Use is100Hz variable to determine the rate of this task loop 
+        // Due to CPU performance related to algorithm math operations, GPS related
+        //   algorithms are run  at 100 Hz or less (large number of calculations
+        //   involved).  Incorporate timing logic inside algorithm function, if
+        //   desired.
+        //
+        // For the initial simplicity use pScaledSensors array as algorithm input
+        //   and output.  Use 'is100Hz' variable to determine the rate of this task
+        //   loop.
         inertialAndPositionDataProcessing(dacqRate);
         
-        //Uncomment next line if there is intention of using S0 or S1 xbow packets
-        //for continuous data output
+        // Uncomment next line if there is intention of using S0 or S1 xbow
+        //   packets for continuous data output
         //*****************************************************************
         // applyNewScaledSensorsData();
         //*****************************************************************
@@ -163,13 +156,13 @@ void TaskDataAcquisition(void const *argument)
         setIO2Pin (0);
         
         if(platformHasMag() ) {
-            // Mag Alignment (follows Kalman filter or user algorithm as the innovation routine
-            // calculates the euler angles and the magnetic vector in the
-            // NED-frame)
+            // Mag Alignment (follows Kalman filter or user algorithm as the
+            //   innovation routine calculates the euler angles and the magnetic
+            //   vector in the NED-frame)
             MagAlign();   // only does this on align
         }
 
-        if(getUnitCommunicationType() != UART_COMM){
+        if(platformGetUnitCommunicationType() != UART_COMM){
             // Perform interface - specific processing here
         }else {
             // Process commands and  output continuous packets to UART
@@ -179,6 +172,3 @@ void TaskDataAcquisition(void const *argument)
         }
     }
 }
-
-
-

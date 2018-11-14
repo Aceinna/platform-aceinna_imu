@@ -139,7 +139,6 @@ extern int userPacketOut;
 #define USER_INVALID 0x81
 
 
-
 extern int userPacketOut;
 
 

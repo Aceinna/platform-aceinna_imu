@@ -56,7 +56,6 @@ usr_packet_t userInputPackets[] = {		//
 };
 
 
-
 // packet codes here should be unique - 
 // should not overlap codes for input packets and system packets
 // First byte of Packet code should have value  >= 0x61  
@@ -69,7 +68,6 @@ usr_packet_t userOutputPackets[] = {
 // place new type and code here
     {USR_OUT_MAX,               {0xff, 0xff}},   //  "" 
 };
-
 
 
 volatile char   *info;
@@ -112,7 +110,6 @@ int checkUserPacketType(uint16_t receivedCode)
 
 void   userPacketTypeToBytes(uint8_t bytes[])
 {
-
     if(_inputPacketType && _inputPacketType <  USR_IN_MAX){
         // response to request. Return same packet code
         bytes[0] = userInputPackets[_inputPacketType].packetCode[0];
@@ -122,7 +119,7 @@ void   userPacketTypeToBytes(uint8_t bytes[])
     }
     
     if(_outputPacketType && _outputPacketType < USR_OUT_MAX){
-        // continious packet
+        // continuous packet
         bytes[0] = userOutputPackets[_outputPacketType].packetCode[0];
         bytes[1] = userOutputPackets[_outputPacketType].packetCode[1];
     }else {
@@ -209,8 +206,6 @@ int HandleUserInputPacket(UcbPacketStruct *ptrUcbPacket)
 //    userPacket *pkt =  (userPacket *)ptrUcbPacket->payload;
 
     /// call appropriate function based on packet type
-
-
 	switch (_inputPacketType) {
 		case USR_IN_RESET:
             Reset();
@@ -281,6 +276,7 @@ int HandleUserInputPacket(UcbPacketStruct *ptrUcbPacket)
         return ret;
 }
 
+
 /******************************************************************************
  * @name HandleUserOutputPacket - API call ro prepare continuous user output packet
  * @brief general handler
@@ -295,13 +291,15 @@ BOOL HandleUserOutputPacket(uint8_t *payload, uint8_t *payloadLen)
 
 	switch (_outputPacketType) {
         case USR_OUT_TEST:
-            {  uint32_t *testParam = (uint32_t*)(payload);
-             *payloadLen = USR_OUT_TEST_PAYLOAD_LEN;
-             *testParam  = _testVal++;
+            {
+                uint32_t *testParam = (uint32_t*)(payload);
+                *payloadLen = USR_OUT_TEST_PAYLOAD_LEN;
+                *testParam  = _testVal++;
             }
             break;
         case USR_OUT_DATA1:
-            {   int n = 0;
+            {
+                int n = 0;
                 double accels[3];
                 double mags[3];
                 double rates[3];
@@ -354,5 +352,5 @@ BOOL HandleUserOutputPacket(uint8_t *payload, uint8_t *payloadLen)
 void WriteResultsIntoOutputStream(void *results)
 {
 //  implement specific data processing/saving here 
-
 }
+

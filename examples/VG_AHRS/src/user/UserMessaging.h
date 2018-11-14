@@ -1,6 +1,6 @@
 /*******************************************************************************
  * File:   UserConfiguration.h
- * Created on JAn 25, 2017
+ * Created on Jan 25, 2017
  ******************************************************************************/
 /*******************************************************************************
 Copyright 2018 ACEINNA, INC
@@ -20,17 +20,15 @@ limitations under the License.
 
 #ifndef USER_MESSAGING_H
 #define USER_MESSAGING_H
+
 #include <stdint.h>
+
 #include "GlobalConstants.h"
-#include "extern_port_config.h"
 #include "ucb_packet_struct.h"
 
-
-#include <stdint.h>
 #define USER_PACKET_OK      0
 #define UNKNOWN_USER_PACKET 1
 #define USER_PACKET_ERROR   2
-
 
 // here is definition for packet rate divider
 // considering that data acquisition task runs at 200 Hz 
@@ -70,19 +68,20 @@ typedef enum {
     USR_IN_GET_VERSION      ,
     USR_IN_RESET            ,
     // add new packet type here, before USR_IN_MAX
-    USR_IN_MAX              ,
+    USR_IN_MAG_ALIGN        ,
+    USR_IN_MAX
 }UserInPacketType;
 
-// User input packet codes, change at will
+// User output packet codes, change at will
 typedef enum {
-    USR_OUT_NONE  = 0,  // 0
-    USR_OUT_TEST,       // 1
-    USR_OUT_DATA1,      // 2
-    USR_OUT_ANG1,       // 3
-    USR_OUT_ANG2,       // 4
+    USR_OUT_NONE  = 0,
+    USR_OUT_TEST,
+    USR_OUT_DATA1,
+    USR_OUT_ANG1,
+    USR_OUT_ANG2,
 // add new output packet type here, before USR_OUT_MAX
-    USR_OUT_SCALED1,    // 5
-    USR_OUT_EKF1,       // 6
+    USR_OUT_SCALED1,
+    USR_OUT_EKF1,
     USR_OUT_MAX
 } UserOutPacketType;
 
@@ -127,20 +126,15 @@ typedef struct {
 #define USR_OUT_TEST_PAYLOAD_LEN    (4)    // test parameter (uint32_t)    
 #define USR_OUT_DATA1_PAYLOAD_LEN   (4*9)  // 3accels (float LE) + 3gyros (float LE) + 3 mags (floatLE)    
 #define USR_OUT_ANG1_PAYLOAD_LEN    (47)   // See message loading code,HandleUserOutputPacket(), for information
-#define USR_OUT_ANG2_PAYLOAD_LEN    (4*10)
+#define USR_OUT_ANG2_PAYLOAD_LEN    (48)
 #define USR_OUT_SCALED1_PAYLOAD_LEN (52)
 #define USR_OUT_EKF1_PAYLOAD_LEN    (75)
-
-extern int userPacketOut;
 
 #define USER_OK      0x00
 #define USER_NAK     0x80
 #define USER_INVALID 0x81
 
-
-
 extern int userPacketOut;
-
 
 extern int       getUserPayloadLength(void);
 extern int       checkUserPacketType(uint16_t receivedCode);
@@ -156,6 +150,7 @@ typedef struct {
     // Algorithm states
     double accel_g[3];
     double rate_radPerSec[3];
+    double rate_degPerSec[3];
     double mag_G[3];
     double temp_C;
 } IMUDataStruct;
@@ -163,4 +158,3 @@ typedef struct {
 extern IMUDataStruct gIMU;
 
 #endif /* USER_CONFIGURATION_H */
-

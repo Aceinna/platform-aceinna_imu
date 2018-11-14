@@ -27,9 +27,7 @@ limitations under the License.
 
 #ifndef _TASK_DATA_ACQUISITION_H_
 #define _TASK_DATA_ACQUISITION_H_
-// Specify the limit used in the int16-limiter
-#define INT16_LIMIT 32765
-#define INT12_LIMIT 2045
+
 #include "stdint.h"
 #include "GlobalConstants.h"
 extern void TaskDataAcquisition(void const *argument);
@@ -39,9 +37,5 @@ extern void GetSensorsData(void);
 extern void EnterMainAlgLoop(void);
 extern void DataAquisitionStart(void);
 extern BOOL isOneHundredHertzFlag(void);
-
-int16_t LimitInt16Value( int16_t value, int16_t limit );
-extern uint32_t dacqTimer;
-
 
 #endif
