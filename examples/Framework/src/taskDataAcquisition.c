@@ -169,7 +169,7 @@ void TaskDataAcquisition(void const *argument)
             MagAlign();   // only does this on align
         }
 
-        if(getUnitCommunicationType() != UART_COMM){
+        if(platformGetUnitCommunicationType() != UART_COMM){
             // Perform interface - specific processing here
         }else {
             // Process commands and  output continuous packets to UART

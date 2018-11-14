@@ -84,6 +84,8 @@ typedef struct {
 } UserConfigurationStruct;
 
 typedef enum{
+//*****************************************************************************************
+// add system parameters here and reassign USER_LAST_SYSTEM_PARAM (DO NOT CHANGE THIS!!!)
     USER_CRC                       = 0,
     USER_DATA_SIZE                    ,   // 1
     USER_USER_BAUD_RATE               ,   // 2  order of next 4 parameters
@@ -92,14 +94,13 @@ typedef enum{
     USER_LPF_ACCEL_TYPE               ,   // 5  prefered LPF filter type for accelerometer
     USER_LPF_RATE_TYPE                ,   // 6  prefered LPF filter type for rate sensor
     USER_ORIENTATION                  ,   // 7  unit orientation
-// add system parameters here and reassign  USER_LAST_SYSTEM_PARAM
     USER_LAST_SYSTEM_PARAM = USER_ORIENTATION, 
+//*****************************************************************************************
 // add parameter enumerator here while adding new parameter in user UserConfigurationStruct
     USER_MAX_PARAM
 } UserConfigParamNumber;
 
 #define MAX_SYSTEM_PARAM USER_ORIENTATION
-
 
 extern int userPacketOut;
 
@@ -110,8 +111,6 @@ extern int userPacketOut;
 #define INVALID_PARAM           -1
 #define INVALID_VALUE           -2
 #define INVALID_PAYLOAD_SIZE    -3
-
-
 
 extern UserConfigurationStruct gUserConfiguration;
 

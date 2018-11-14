@@ -23,35 +23,39 @@ See the License for the specific language governing permissions and
 limitations under the License.
 *******************************************************************************/
 
-#include "userAPI.h"
-#include "gpsAPI.h"
-#include "stddef.h"
-#include "GlobalConstants.h"
-#include "gpsAPI.h"
-#include "algorithmAPI.h"
+#include <stddef.h>
 
-extern void InitializeAlgorithmStruct(void);
+#include "algorithmAPI.h"
+#include "gpsAPI.h"
+#include "platformAPI.h"
+#include "userAPI.h"
+
+#include "Indices.h"
+#include "GlobalConstants.h"
+
 #include "algorithm.h"
 #include "EKF_Algorithm.h"
-#include "platformAPI.h"
 #include "BitStatus.h"
-
-
-//
-void _Algorithm(int dacqRate, uint8_t algoType);
-
-void InitUserAlgorithm()
-{
-    // Initialize built-in algorithm structure
-    setAlgorithmExeFreq(FREQ_200_HZ);
-    InitializeAlgorithmStruct();
-    // place additional required initialization here
-}
 
 #include "bsp.h"
 #include "debug.h"
 
-void *RunUserNavAlgorithm(double *accels, double *rates, double *mags, gpsDataStruct_t *gps, int dacqRate)
+#include "MagAlign.h"
+
+//
+void _Algorithm(int dacqRate, uint8_t algoType);
+
+// Initialize GPS algorithm variables
+void InitUserAlgorithm()
+{
+    // Initialize built-in algorithm structure
+    InitializeAlgorithmStruct(FREQ_200_HZ);
+
+    // place additional required initialization here
+}
+
+
+void *RunUserNavAlgorithm(double *accels, double *rates, double *mags, gpsDataStruct_t *gps, uint16_t dacqRate)
 {
     // Initialization variable
     static int initAlgo  = 1;

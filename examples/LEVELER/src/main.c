@@ -29,24 +29,23 @@ limitations under the License.
 #define __MAIN
 
 #include <stddef.h>
+
 #include "boardAPI.h"
+#include "magAPI.h"
 #include "platformAPI.h"
 #include "userAPI.h"
+
 #include "debug.h"
+
 #include "taskDataAcquisition.h"
 #include "taskUserCommunication.h"
-#include "magAPI.h"
+
 #include "osapi.h"
 #include "osresources.h"
-
-
-
-
 
 #ifdef CLI
 #include "commandLine.h"
 #endif
-
 
 #ifdef GPS
 #include "gpsAPI.h"
@@ -83,24 +82,29 @@ void DebugInterfaceInit(void)
 {
     char status[100];
 
-    // Initialize the DEBUG USART (serial) port
-    InitDebugSerialCommunication(115200); // debug_usart.c
-    DEBUG_STRING("\r\nOpenIMU System\r\n");
+    int debugChannel = platformGetSerialChannel(DEBUG_SERIAL_PORT);
+
+    if(debugChannel == UART_CHANNEL_NONE){
+        //nothing to do
+        return;
+    }
 
     // Add a delay to allow the system to stabilize after the reset line (nRst)
     // is released
     for(int i = 0; i < 4000000; i++) ;   // TODO - calculate more precisely
-//    DelayMs(300); todo - calculate
+    //DelayMs(300); //todo - calculate
+
+    // Initialize the DEBUG USART (serial) port
+    InitDebugSerialCommunication(230400); // debug_usart.c
+    //DEBUG_STRING("\r\nDMU380 System\r\n");
 
     BoardGetResetStatus(status, sizeof(status));
 
     ERROR_STRING(status);
-
 }
 
 void CreateTasks(void)
 {
-
     osThreadId iD;
     
     /// Create RTOS tasks:
@@ -110,12 +114,14 @@ void CreateTasks(void)
     if(iD == NULL){
         while(1);
     }
+
     //user communication task
     osThreadDef(USER_COMM_TASK, TaskUserCommunication, osPriorityNormal, 0, 2048);
     iD = osThreadCreate(osThread(USER_COMM_TASK), NULL);
     if(iD == NULL){
         while(1);
     }
+
     gyroReadySem      = osSemaphoreCreate(osSemaphore(GYRO_READY_SEM), 1);
     accelReadySem     = osSemaphoreCreate(osSemaphore(ACCEL_READY_SEM), 1);
     magReadySem       = osSemaphoreCreate(osSemaphore(MAG_READY_SEM), 1);
@@ -130,8 +136,8 @@ void CreateTasks(void)
         while(1);
     }
     cliSem            = osSemaphoreCreate(osSemaphore(CLI_SEM), 1);
+    platformRegisterRxSerialSemaphoreID(DEBUG_SERIAL_PORT, cliSem);
 #endif
-
 }
 
 /** ***************************************************************************
@@ -147,15 +153,16 @@ int main(void)
 {
 
 
-    // Initialize processor and board-related signals  
+    // Initialize processor and board-related signals
     BoardInit();
+
+    platformSetUnitCommunicationType(UART_COMM);
 
     // Apply factory configuration
     platformInitConfigureUnit(); 
 
     // Apply user-chosen configuration
     userInitConfigureUnit(); 
-
 
     // Initialize OS and create required tasks
     CreateTasks();

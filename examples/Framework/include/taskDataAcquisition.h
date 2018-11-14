@@ -28,8 +28,6 @@ limitations under the License.
 #ifndef _TASK_DATA_ACQUISITION_H_
 #define _TASK_DATA_ACQUISITION_H_
 // Specify the limit used in the int16-limiter
-#define INT16_LIMIT 32765
-#define INT12_LIMIT 2045
 #include "stdint.h"
 #include "GlobalConstants.h"
 extern void TaskDataAcquisition(void const *argument);

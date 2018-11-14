@@ -26,24 +26,33 @@ limitations under the License.
 #include <string.h>
 #include <stdint.h>
 #include <stdio.h>
-#include "UserMessaging.h"
-#include "UserConfiguration.h"
+
 #include "algorithmAPI.h"
-#include "userAPI.h"
 #include "platformAPI.h"
 #include "sensorsAPI.h"
-#include "Indices.h"
+#include "userAPI.h"
 
-// provided as example
+#include "UserMessaging.h"
+#include "UserConfiguration.h"
+
+#include "Indices.h"   // For X_AXIS, etc
+
+// Declare the IMU data structure
+IMUDataStruct   gIMU;
+gpsDataStruct_t gGPS;
+
+// Version string
 char userVersionString[] = "StaticLeveler 1.0.0";
 
 #include "UserAlgorithm.h"  // for EKFOutputDataStruct
+
+#include "Leveler.h"
 LevelerDataStruct *algo_res;
 
 
 /// List of allowed packet codes 
-usr_packet_t userInputPackets[] = {		//       
-    {USR_IN_NONE,               {0,0}},   //  "  "
+usr_packet_t userInputPackets[] = {
+    {USR_IN_NONE,               {0,0}},
     {USR_IN_PING,               "pG"}, 
     {USR_IN_UPDATE_CONFIG,      "uC"}, 
     {USR_IN_UPDATE_PARAM,       "uP"}, 
@@ -60,7 +69,6 @@ usr_packet_t userInputPackets[] = {		//
 };
 
 
-
 // packet codes here should be unique - 
 // should not overlap codes for input packets and system packets
 // First byte of Packet code should have value  >= 0x61  
@@ -70,11 +78,10 @@ usr_packet_t userOutputPackets[] = {
     {USR_OUT_TEST,              "zT"},
     {USR_OUT_DATA1,             "z1"},
 // place new type and code here
+    {USR_OUT_SCALED1,           "s1"},
     {USR_OUT_LEV1,              "l1"},
     {USR_OUT_MAX,               {0xff, 0xff}},   //  "" 
 };
-
-
 
 volatile char   *info;
 static   int    _userPayloadLen = 0;
@@ -116,7 +123,6 @@ int checkUserPacketType(uint16_t receivedCode)
 
 void   userPacketTypeToBytes(uint8_t bytes[])
 {
-
     if(_inputPacketType && _inputPacketType <  USR_IN_MAX){
         // response to request. Return same packet code
         bytes[0] = userInputPackets[_inputPacketType].packetCode[0];
@@ -167,6 +173,10 @@ BOOL setUserPacketType(uint8_t *data, BOOL fApply)
             _outputPacketType = type;
             _userPayloadLen   = USR_OUT_DATA1_PAYLOAD_LEN;
             break;
+        case USR_OUT_SCALED1:          // packet with arbitrary data
+            _outputPacketType = type;
+            _userPayloadLen   = USR_OUT_SCALED1_PAYLOAD_LEN;
+            break;
         case USR_OUT_LEV1:            // packet with sensors data. Change at will
             _outputPacketType = type;
             _userPayloadLen   = USR_OUT_LEV1_PAYLOAD_LEN;
@@ -213,8 +223,6 @@ int HandleUserInputPacket(UcbPacketStruct *ptrUcbPacket)
 //    userPacket *pkt =  (userPacket *)ptrUcbPacket->payload;
 
     /// call appropriate function based on packet type
-
-
 	switch (_inputPacketType) {
 		case USR_IN_RESET:
             Reset();
@@ -285,6 +293,7 @@ int HandleUserInputPacket(UcbPacketStruct *ptrUcbPacket)
         return ret;
 }
 
+
 /******************************************************************************
  * @name HandleUserOutputPacket - API call ro prepare continuous user output packet
  * @brief general handler
@@ -299,39 +308,84 @@ BOOL HandleUserOutputPacket(uint8_t *payload, uint8_t *payloadLen)
 
 	switch (_outputPacketType) {
         case USR_OUT_TEST:
-            {  uint32_t *testParam = (uint32_t*)(payload);
+            {
+                uint32_t *testParam = (uint32_t*)(payload);
              *payloadLen = USR_OUT_TEST_PAYLOAD_LEN;
              *testParam  = _testVal++;
             }
             break;
+
         case USR_OUT_DATA1:
-            {   int n = 0;
-                double accels[3];
-                double mags[3];
-                double rates[3];
+            {
+                int n = 0;
+                double accels[NUM_AXIS];
+                double mags[NUM_AXIS];
+                double rates[NUM_AXIS];
                 data1_payload_t *pld = (data1_payload_t *)payload;  
 
-                pld->timer  = getDacqTime();
+                pld->timer  = platformGetDacqTime();
                 GetAccelData_mPerSecSq(accels);
-                for (int i = 0; i < 3; i++, n++){
+                for (int i = X_AXIS; i < NUM_AXIS; i++, n++){
                     pld->sensorsData[n] = (float)accels[i];
                 }
                 GetRateData_degPerSec(rates);
-                for (int i = 0; i < 3; i++, n++){
+                for (int i = X_AXIS; i < NUM_AXIS; i++, n++){
                     pld->sensorsData[n] = (float)rates[i];
                 }
                 GetMagData_G(mags);
-                for (int i = 0; i < 3; i++, n++){
+                for (int i = X_AXIS; i < NUM_AXIS; i++, n++){
                     pld->sensorsData[n] = (float)mags[i];
                 }
                 *payloadLen = sizeof(data1_payload_t);
-				break;
             }
+			break;
+
+        case USR_OUT_SCALED1:
+            {
+                // The payload length (NumOfBytes) is based on the following:
+                // 1 uint32_t (4 bytes) =  4 bytes
+                // 1 double (8 bytes)   =  8 bytes
+                // 3 floats (4 bytes)   = 12 bytes
+                // 3 floats (4 bytes)   = 12 bytes
+                // 3 floats (4 bytes)   = 12 bytes
+                // 1 floats (4 bytes)   =  4 bytes
+                // =================================
+                //           NumOfBytes = 52 bytes
+                *payloadLen = USR_OUT_SCALED1_PAYLOAD_LEN;
+
+                // Output time as represented by gIMU.timerCntr (uint32_t
+                // incremented at each call of the algorithm)
+                uint32_t *algoData_1 = (uint32_t*)(payload);
+                *algoData_1++ = gIMU.timerCntr;
+
+                // Output a double representation of time generated from
+                // gLeveler.itow
+                double *algoData_2 = (double*)(algoData_1);
+                *algoData_2++ = 1.0e-3 * (double)(gIMU.timerCntr);
+
+                // Set the pointer of the sensor array to the payload
+                float *algoData_3 = (float*)(algoData_2);
+                *algoData_3++ = (float)gIMU.accel_g[X_AXIS];
+                *algoData_3++ = (float)gIMU.accel_g[Y_AXIS];
+                *algoData_3++ = (float)gIMU.accel_g[Z_AXIS];
+
+                *algoData_3++ = (float)gIMU.rate_degPerSec[X_AXIS];
+                *algoData_3++ = (float)gIMU.rate_degPerSec[Y_AXIS];
+                *algoData_3++ = (float)gIMU.rate_degPerSec[Z_AXIS];
+
+                *algoData_3++ = (float)gIMU.mag_G[X_AXIS];
+                *algoData_3++ = (float)gIMU.mag_G[Y_AXIS];
+                *algoData_3++ = (float)gIMU.mag_G[Z_AXIS];
+
+                *algoData_3++ = (float)gIMU.temp_C;
+            }
+            break;
+
         case USR_OUT_LEV1:
             {
                 // Variables used to hold the EKF values
-                real EulerAngles[3];
-                double accels[3];
+                real EulerAngles[NUM_AXIS];
+                double accels[NUM_AXIS];
 
                 // The payload length (NumOfBytes) is based on the following:
                 //   1 uint32_t (4 bytes) = 4 bytes
@@ -354,7 +408,6 @@ BOOL HandleUserOutputPacket(uint8_t *payload, uint8_t *payloadLen)
 
                 // Set the pointer of the algoData array to the payload
                 float *algoData_3 = (float*)(algoData_2);
-
                 Leveler_GetAttitude_EA(EulerAngles);
                 *algoData_3++ = (float)EulerAngles[ROLL];
                 *algoData_3++ = (float)EulerAngles[PITCH];
@@ -365,6 +418,7 @@ BOOL HandleUserOutputPacket(uint8_t *payload, uint8_t *payloadLen)
                 *algoData_3++ = (float)accels[Z_AXIS];
             }
             break;
+
         // place additional user packet preparing calls here
         // case USR_OUT_XXXX:
         //      *payloadLen = YYYY; // total user payload length, including user packet type
@@ -372,9 +426,11 @@ BOOL HandleUserOutputPacket(uint8_t *payload, uint8_t *payloadLen)
         //      prepare dada here
         //      break;
         default:
-             *payloadLen = 0;  
-             ret         = FALSE;
-             break;      /// unknown user packet, will send error in response
+            {
+                *payloadLen = 0;  
+                ret         = FALSE;
+            }
+            break;      /// unknown user packet, will send error in response
         }
 
         return ret;
@@ -386,7 +442,3 @@ void WriteResultsIntoOutputStream(void *results)
 //  implement specific data processing/saving here 
     algo_res = results;
 }
-
-
-
-

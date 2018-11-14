@@ -27,8 +27,10 @@ limitations under the License.
 #include "userAPI.h"
 #include "sensorsAPI.h"
 #include "gpsAPI.h"
-#include "gps.h"
 #include "UserMessaging.h"
+
+#include "Indices.h"   // For X_AXIS and Z_AXIS
+#include "debug.h"     // For debug commands
 
 /*                                    *
                         ****************** 
@@ -47,7 +49,6 @@ Data * Built-in    * Raw Data  *            *   Data     * User Filter s*   * Al
 *///<--------------------- Cyclical processing at 100 or 200 Hz in Data Acquisition Task --------------> 
 
 
-
 // Next function is common for all platforms, but implementation of the methods inside is platform-dependent
 // Call to this function made from DataAcquisitionTask during initialization phase
 // All user algorithm and data structures should be initialized here, if used
@@ -56,16 +57,14 @@ void initUserDataProcessingEngine()
     InitUserAlgorithm();         // default implementation located in file user_algorithm.c
 }
 
-#include "boardAPI.h"  // For setIO3Pin
-#include "Indices.h"   // For X_AXIS and Z_AXIS
-#include "debug.h"     // For debug commands
 
-
-// Next function is common for all platforms, but implementation of the methods inside is platform and user-dependent
-// Call to this function made from DataAcquisitionTask after retrieving samples of current sensors data and
-// applying corresponding calibration 
-// dacqRate is rate with which new set of sensors data arrives 
-void inertialAndPositionDataProcessing(int dacqRate)
+// Notes:
+// 1) 'inertialAndPositionDataProcessing' is common for all platforms, but implementation
+//    of the methods inside is platform and user-dependent.
+// 2) 'DataAcquisitionTask' calls this function after retrieving samples of current
+//    sensors data and applying corresponding calibration 
+// 3) 'dacqRate' is rate with which new set of sensors data arrives 
+void inertialAndPositionDataProcessing(uint16_t dacqRate)
 {  
     // 
     void          *results;
@@ -131,4 +130,3 @@ void inertialAndPositionDataProcessing(int dacqRate)
     // add current result to output queue for subsequent sending out as continuous packet                                                                                                                                                     // returns pointer to user-defined results structure
     WriteResultsIntoOutputStream(results) ;   // default implementation located in file file UserMessaging.c
 }
-

@@ -1,6 +1,6 @@
 /*******************************************************************************
  * File:   UserConfiguration.h
- * Created on JAn 25, 2017
+ * Created on Jan 25, 2017
  ******************************************************************************/
 /*******************************************************************************
 Copyright 2018 ACEINNA, INC
@@ -20,16 +20,15 @@ limitations under the License.
 
 #ifndef USER_MESSAGING_H
 #define USER_MESSAGING_H
+
 #include <stdint.h>
+
 #include "GlobalConstants.h"
 #include "ucb_packet_struct.h"
 
-
-#include <stdint.h>
 #define USER_PACKET_OK      0
 #define UNKNOWN_USER_PACKET 1
 #define USER_PACKET_ERROR   2
-
 
 // here is definition for packet rate divider
 // considering that data acquisition task runs at 200 Hz 
@@ -45,7 +44,7 @@ typedef enum {
     PACKET_RATE_5HZ   = 5,       // packet rate 5  Hz
     PACKET_RATE_2HZ   = 2,       // packet rate 2  Hz
     PACKET_RATE_1HZ   = 1,       // packet rate 1  Hz
-}packet_rate_t;
+} packet_rate_t;
 
 
 // User Input packet payload has next structure:
@@ -88,7 +87,7 @@ typedef enum {
 #pragma pack(1)
 typedef struct {
     uint8_t  packetPayload[252];    // maximum 252 bytes     
-}userPacket;
+} userPacket;
 #define MAX_NUMBER_OF_USER_PARAMS_IN_THE_PACKET 30
 #define FIRST_30_PARAMS 0xFFFFFFFF
 
@@ -134,16 +133,12 @@ typedef struct {
 #define USR_OUT_DATA1_PAYLOAD_LEN  (4*10)  // 1 integer +3accels (float LE) + 3gyros (float LE) + 3 mags (floatLE)    
 #define USR_OUT_SCALED1_PAYLOAD_LEN (52)   // See UserMessaging.c for make-up of Scaled1 message
 
-extern int userPacketOut;
 
 #define USER_OK      0x00
 #define USER_NAK     0x80
 #define USER_INVALID 0x81
 
-
-
 extern int userPacketOut;
-
 
 extern int       getUserPayloadLength(void);
 extern int       checkUserPacketType(uint16_t receivedCode);
@@ -158,12 +153,12 @@ typedef struct {
 
     // Algorithm states
     double accel_g[3];
+    double rate_radPerSec[3];
     double rate_degPerSec[3];
     double mag_G[3];
     double temp_C;
 } IMUDataStruct;
 
 extern IMUDataStruct gIMU;
+
 #endif /* USER_CONFIGURATION_H */
-
-

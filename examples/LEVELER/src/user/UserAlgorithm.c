@@ -23,145 +23,188 @@ See the License for the specific language governing permissions and
 limitations under the License.
 *******************************************************************************/
 
-#include "userAPI.h"
+#include <stddef.h>
+
+#include "algorithmAPI.h"
 #include "gpsAPI.h"
-#include "stddef.h"
+#include "platformAPI.h"
+#include "userAPI.h"
+
 #include "Indices.h"
 #include "GlobalConstants.h"
-#include "gpsAPI.h"
-#include "algorithmAPI.h"
 
 #include "math.h"
-
-//#include "xbowsp_configuration.h"
-#include "algorithm.h"
-#include "UserAlgorithm.h"
-#include "platformAPI.h"
-
 #include "VectorMath.h"
 
-// Declare the leveler data structure
-LevelerDataStruct gLeveler;
 
-// Initialize leveler algorithm variables
-void InitUserAlgorithm()
-{
-    // 
-    Leveler_SetExeFreq(FREQ_50_HZ);
-    Leveler_InitializeDataStruct();
-}
+//
+#include "algorithm.h"
+#include "UserAlgorithm.h"
 
 #include "bsp.h"
 #include "debug.h"
 
-void *RunUserNavAlgorithm(double *accels_B, double *rates_B, double *mags_B, gpsDataStruct_t *gps, int dacqRate)
+// Declare the leveler data structure
+#include "Leveler.h"
+
+//
+static void _Algorithm(uint16_t dacqRate, uint8_t algoType);
+static void _GenerateDebugMessage(uint16_t dacqRate, uint16_t debugOutputFreq);
+static void _InitAlgo(uint8_t algoType);
+
+// Initialize leveler algorithm variables
+void InitUserAlgorithm()
 {
-    // Initialization variable
-    static int initAlgo = 1;
+    // Initialize built-in algorithm structure
+    Leveler_InitializeAlgorithmStruct(FREQ_200_HZ);
 
-    // Measurement variables
-    float accelsFloat_B[3], aHat_B[3];
-    volatile float gHat_B[3];
+    // place additional required initialization here
+}
 
-    // Variables that control the output frequency of the debug statement
-    static uint8_t debugOutputCntr, debugOutputCntrLimit;
 
-    // The following control the execution rate of the algorithm by forcing the
-    //   algorithm to run at a fraction of the data-acquisition task
+void *RunUserNavAlgorithm(double *accels, double *rates, double *mags, gpsDataStruct_t *gps, uint16_t dacqRate)
+{
+    // This can be set at startup based on the packet type selected
+    static uint8_t algoType = IMU;
+
+    // Initialize variable related to the UserNavAlgorithm
+    _InitAlgo(algoType);
+
+    // Populate the leveler input data structure.  Load the GPS data
+    //   structure as NULL.
+    Leveler_SetInputStruct(accels, rates, mags, NULL);
+
+    // Call the desired algorithm based on the EKF with different
+    //   calling rates and different settings.
+    _Algorithm(dacqRate, algoType);
+
+    // Fill the output data structure with the algorithm  states and other 
+    //   desired information
+    Leveler_SetOutputStruct();
+
+    // Generate a debug message that provides algorithm output to verify the
+    //   algorithm is generating the proper output.
+    _GenerateDebugMessage(dacqRate, ZERO_HZ);
+
+    // The returned value from this function is unused by external functions.  The
+    //   NULL pointer is returned instead of a data structure.
+    return NULL;
+}
+
+
+//
+static void _InitAlgo(uint8_t algoType)
+{
+    // Initialize the timer variables
+    static uint8_t initAlgo = 1;
+    if(initAlgo) {
+        // Reset 'initAlgo' so this is not executed more than once.  This
+        //   prevents the algorithm from being switched during run-time.
+        initAlgo = 0;
+        
+        // Set the configuration variables for a VG-type solution
+        //   (useMags = 0 forces the VG solution)
+        gAlgorithm.Behavior.bit.freeIntegrate      = 0;
+        gAlgorithm.Behavior.bit.useMag             = 0;
+        gAlgorithm.Behavior.bit.useGPS             = 0;
+        gAlgorithm.Behavior.bit.stationaryLockYaw  = 0;
+        gAlgorithm.Behavior.bit.restartOnOverRange = 0;
+        gAlgorithm.Behavior.bit.dynamicMotion      = 1;
+
+        // Set the system configuration based on system type
+        switch( algoType ) {
+            case VG:
+                // Nothing additional to do (already configured for a VG
+                //   solution)
+                break;
+            case AHRS:
+                // Set the configuration variables for AHRS solution
+                //   (useMags = 1 and enable mags)
+                enableMagInAlgorithm(TRUE);
+                gAlgorithm.Behavior.bit.useMag = 1;
+                break;
+            case INS:
+                // Nothing additional to do (already configured for a VG
+                //   solution)
+                enableMagInAlgorithm(TRUE);
+                gAlgorithm.callingFreq = FREQ_100_HZ;  // redundant; set above
+                gAlgorithm.Behavior.bit.useMag = 1;
+                gAlgorithm.Behavior.bit.useGPS = 1;
+                break;
+            default:
+                // Nothing to do
+                break;
+        }
+    }
+}
+
+
+//
+static void _Algorithm(uint16_t dacqRate, uint8_t algoType)
+{
+    //
     static uint8_t algoCntr = 0, algoCntrLimit = 0;
 
-    // Initialize the timer variables
+    // Initialize the configuration variables needed to make the system
+    //   generate a VG-type solution.
+    static uint8_t initAlgo = 1;
     if(initAlgo) {
-        // Reset 'initAlgo' so this is not executed more than once.
+        // Reset 'initAlgo' so this is not executed more than once.  This
+        //   prevents the algorithm from being switched during run-time.
         initAlgo = 0;
 
         //  Set the variables that control the algorithm execution rate
-        algoCntrLimit = (int)( dacqRate / (int)gLeveler.callingFreq );
+        algoCntrLimit = (uint8_t)( (float)dacqRate / (float)gLeveler.callingFreq + 0.5 );
+        if( algoCntrLimit < 1 ) {
+            // If this logic is reached, also need to adjust the algorithm
+            //   parameters to match the modified calling freq (or stop the
+            //   program to indicate that the user must adjust the program)
+            algoCntrLimit = 1;
+        }
         algoCntr = algoCntrLimit;
-
-        // Set the variables that control the debug-message output-rate (based on
-        //   the desired calling frequency of the debug output)
-        debugOutputCntr = 0;
-
-        uint16_t debugOutputFreq = 2;  // [Hz]
-        debugOutputCntrLimit = gLeveler.callingFreq / debugOutputFreq;
     }
 
-    // ------------ Static-leveler algorithm ------------
-
-    // Increment algoCntr.  If greater than or equal to the limit, execute the
-    //   algorithm and reset the counter so the algorithm will not run until
-    //   the counter limit is once again reached.
+    // Increment the counter.  If greater than or equal to the limit, reset
+    //   the counter to cause the algorithm to run on the next pass through.
     algoCntr++;
     if(algoCntr >= algoCntrLimit) {
         // Reset counter
         algoCntr = 0;
 
-        // Increment the timerCntr
-        gLeveler.timerCntr = gLeveler.timerCntr + gLeveler.dTimerCntr;
+        // Aceinna VG/AHRS/INS algorithm
+        Leveler_Algorithm();
+    }
+}
 
-        // Compute the acceleration unit-vector
-        accelsFloat_B[X_AXIS] = (float)accels_B[X_AXIS];
-        accelsFloat_B[Y_AXIS] = (float)accels_B[Y_AXIS];
-        accelsFloat_B[Z_AXIS] = (float)accels_B[Z_AXIS];
 
-        VectorNormalize( accelsFloat_B, aHat_B );
+//
+static void _GenerateDebugMessage(uint16_t dacqRate, uint16_t debugOutputFreq)
+{
+    // Variables that control the output frequency of the debug statement
+    static uint8_t debugOutputCntr, debugOutputCntrLimit;
 
-        // Form the gravity vector in the body-frame (negative of the
-        //   accelerometer measurement)
-        gHat_B[X_AXIS] = -aHat_B[X_AXIS];
-        gHat_B[Y_AXIS] = -aHat_B[Y_AXIS];
-        gHat_B[Z_AXIS] = -aHat_B[Z_AXIS];
+    // Check debug flag.  If set then generate the debug message to verify
+    //   the output of the EKF algorithm
+    if( debugOutputFreq > ZERO_HZ ) {
+        // Initialize variables used to control the output of the debug messages
+        static int initFlag = 1;
+        if(initFlag) {
+            // Reset 'initFlag' so this section is not executed more than once.
+            initFlag = 0;
 
-        // Form the roll and pitch angles (in radians) from the gravity
-        //   unit-vector.  Formulation is based on a 321-rotation sequence
-        //   and assumption that the gravity-vector is constant.
-        gLeveler.measuredEulerAngles_BinN[ROLL]  = (real)( atan2( gHat_B[Y_AXIS],
-                                                                  gHat_B[Z_AXIS] ) );
-        gLeveler.measuredEulerAngles_BinN[PITCH] = (real)( -asin( gHat_B[X_AXIS] ) );
+            // Set the variables that control the debug-message output-rate (based on
+            //   the desired calling frequency of the debug output)
+            debugOutputCntrLimit = (uint8_t)( (float)dacqRate / (float)debugOutputFreq + 0.5 );
+            debugOutputCntr      = debugOutputCntrLimit;
+        }
 
-        // Generate the debug output
         debugOutputCntr++;
         if(debugOutputCntr >= debugOutputCntrLimit) {
             debugOutputCntr = 0;
-            DebugPrintFloat("Time: ", gLeveler.timerCntr * 0.001, 3);
-            DebugPrintFloat(", Roll: ", gLeveler.measuredEulerAngles_BinN[ROLL] * RAD_TO_DEG, 5);
-            DebugPrintFloat(", Pitch: ", gLeveler.measuredEulerAngles_BinN[PITCH] * RAD_TO_DEG, 5);
+            DebugPrintFloat("Time: ",    gLeveler.timerCntr * 0.001, 3);
+            DebugPrintFloat(", Roll: ",  gLeveler.output.measuredEulerAngles_BinN[ROLL],  5);
+            DebugPrintFloat(", Pitch: ", gLeveler.output.measuredEulerAngles_BinN[PITCH], 5);
             DebugPrintEndline();
         }
     }
-
-    return NULL;
 }
-
-
-// Extract the attitude (expressed in Euler-angles) of the body-frame (B)
-//   in the NED-frame (N) in degrees.
-void Leveler_GetAttitude_EA(real *EulerAngles)
-{
-    EulerAngles[ROLL]  = gLeveler.measuredEulerAngles_BinN[ROLL]  * RAD_TO_DEG;
-    EulerAngles[PITCH] = gLeveler.measuredEulerAngles_BinN[PITCH] * RAD_TO_DEG;
-}
-
-
-// Setter used to specify the leveler execution frequency at initialization
-void Leveler_SetExeFreq(uint16_t freq)
-{
-    gLeveler.callingFreq = freq;
-}
-
-
-// Initialization routine used to set up the timing output variables
-void Leveler_InitializeDataStruct(void)
-{
-    // Compute dt from the calling frequency of the function, compute the
-    //   timer delta-value from dt (account for rounding), and initialize
-    //   the timer.
-    gLeveler.dt = 1.0 / (real)gLeveler.callingFreq;
-    gLeveler.dTimerCntr = (uint32_t)( 1000.0 * gLeveler.dt + 0.5 );
-    gLeveler.timerCntr = 0;
-}
-
-
-
-

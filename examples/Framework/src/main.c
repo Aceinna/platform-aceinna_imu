@@ -84,7 +84,7 @@ void DebugInterfaceInit(void)
     char status[100];
 
     // Initialize the DEBUG USART (serial) port
-    InitDebugSerialCommunication( 9600 ); // debug_usart.c
+    InitDebugSerialCommunication(38400 ); // debug_usart.c
     DEBUG_STRING("\r\nOpenIMU System\r\n");
 
     // Add a delay to allow the system to stabilize after the reset line (nRst)
@@ -129,6 +129,7 @@ void CreateTasks(void)
         while(1);
     }
     cliSem  = osSemaphoreCreate(osSemaphore(CLI_SEM), 1);
+    platformRegisterRxSerialSemaphoreID(DEBUG_SERIAL_PORT, cliSem);
 #endif
 
 }
@@ -144,8 +145,7 @@ void CreateTasks(void)
  ******************************************************************************/
 int main(void)
 {
-
-
+ 
     // Initialize processor and board-related signals  
     BoardInit();
 
@@ -155,7 +155,7 @@ int main(void)
     // Apply user-chosen configuration
     userInitConfigureUnit(); 
 
-
+ 
     // Initialize OS and create required tasks
     CreateTasks();
  
