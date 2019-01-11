@@ -7,7 +7,7 @@
   "docs": "https://github.com/aceinna/platform-aceinna_imu",
   "license": "Apache-2.0",
   "engines": {
-    "platformio": "^3.0.0"
+    "platformio": "<5"
   },
   "repository": {
     "type": "git",
