@@ -212,13 +212,13 @@ elif upload_protocol in debug_tools:
         UPLOADERFLAGS=["-s", platform.get_package_dir("tool-openocd") or ""] +
         debug_tools.get(upload_protocol).get("server").get("arguments", []) +
         ["-c",
-            "program {{$SOURCE}} verify reset; shutdown;"],
+            "program {$SOURCE} verify reset; shutdown;"],
         UPLOADCMD="$UPLOADER $UPLOADERFLAGS")
     upload_source = target_elf
     upload_actions = [env.VerboseAction("$UPLOADCMD", "Uploading $SOURCE")]
 
 # custom upload tool
-elif "UPLOADCMD" in env:
+elif upload_protocol == "custom":
     upload_actions = [env.VerboseAction("$UPLOADCMD", "Uploading $SOURCE")]
 
 else:

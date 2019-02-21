@@ -7,13 +7,13 @@
   "docs": "https://github.com/aceinna/platform-aceinna_imu",
   "license": "Apache-2.0",
   "engines": {
-    "platformio": "^3.0.0"
+    "platformio": "<5"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/aceinna/platform-aceinna_imu.git"
   },
-  "version": "1.1.0",
+  "version": "1.1.1",
   "packageRepositories": [
     "https://dl.bintray.com/platformio/dl-packages/manifest.json",
     "http://dl.platformio.org/packages/manifest.json"
@@ -26,7 +26,7 @@
     "tool-openocd": {
       "type": "uploader",
       "optional": true,
-      "version": "~1.1000.0"
+      "version": "~2.1000.0"
     },
     "tool-jlink": {
       "type": "uploader",
