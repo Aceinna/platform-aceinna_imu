@@ -23,7 +23,7 @@
   "frameworks": [],
   "name": "Aceinna OpenIMU 300ZA",
   "upload": {
-    "flash_start": "0x08010000",
+    "offset_address": "0x08010000",
     "maximum_ram_size": 131072,
     "maximum_size": 1048576,
     "protocols": [
