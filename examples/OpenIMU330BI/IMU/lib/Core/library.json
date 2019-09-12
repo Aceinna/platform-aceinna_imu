@@ -1,0 +1,22 @@
+{
+	"name": "Core",
+ 	"version": "1.0.4",
+ 	"description": "Algorithm and GPS libraries",
+ 	"build": {
+ 		"flags": [
+			"-I Algorithm",
+			"-I Algorithm/include",
+			"-I Buffer",
+			"-I Buffer/include",
+			"-I Common",
+			"-I Common/include",
+			"-I GPS",
+			"-I GPS/include",
+			"-I Math",
+			"-I Math/include",
+			"-I SPIComm",
+			"-I UARTComm",
+			"-I ."
+ 		]
+ 	}
+ }

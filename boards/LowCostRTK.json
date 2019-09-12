@@ -1,0 +1,31 @@
+{
+  "build": {
+    "cpu": "cortex-m4",
+    "extra_flags": "-DSTM32F469xx",
+    "ldscript": "STM32F469NI.ld",
+    "f_cpu": "180000000L",
+    "mcu": "stm32f469nih6"
+  },
+  "debug": {
+    "default_tools": ["stlink"],
+    "jlink_device": "STM32F469NI",
+    "onboard_tools": ["stlink"],
+    "openocd_board": "stm32f469discovery",
+    "openocd_target": "stm32f4x",
+    "svd_path": "STM32F46_79x.svd"
+  },
+  "frameworks": ["stm32cube"],
+  "name": "Aceinna Low Cost RTK",
+  "upload": {
+    "maximum_ram_size": 393216,
+    "maximum_size": 1048576,
+    "protocols": [
+      "jlink",
+      "stlink",
+      "blackmagic"
+    ],
+    "protocol": "stlink"
+  },
+  "url": "https://www.aceinna.com/inertial-systems/",
+  "vendor": "Aceinna"
+}

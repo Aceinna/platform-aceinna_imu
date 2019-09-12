@@ -1,0 +1,9 @@
+.pio/**
+.pio/libdeps/**
+.vscode/**
+.pioenvs/**
+.piolibdeps/**
+*.map
+.settings
+.cproject
+.project
