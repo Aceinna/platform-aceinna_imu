@@ -25,7 +25,7 @@
   ],
   "name": "Aceinna OpenIMU 330",
   "upload": {
-    "flash_start": "0x08010000",
+    "offset_address": "0x08010000",
     "maximum_ram_size": 65536,
     "maximum_size": 131072,
     "protocols": [
