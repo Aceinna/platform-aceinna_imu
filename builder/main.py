@@ -185,7 +185,7 @@ elif upload_protocol.startswith("jlink"):
             "h",
             "loadbin %s,%s" % (
                 source,
-                board.get("upload").get("offset_address", "")),
+                board.get("upload").get("offset_address", "0x8000000")),
             "r",
             "q"
         ]
@@ -214,8 +214,9 @@ elif upload_protocol in debug_tools:
     openocd_args.extend(
         debug_tools.get(upload_protocol).get("server").get("arguments", []))
     openocd_args.extend([
-        "-c", "program {$SOURCE} %s verify reset; shutdown;" %
-        board.get("upload.offset_address", "")
+        "-c", "program %s %s verify reset; shutdown;" % (
+            env.subst(upload_source)[0].replace("\\", "/"), board.get(
+                "upload.offset_address", "0x8000000"))
     ])
     openocd_args = [
         f.replace("$PACKAGE_DIR",
