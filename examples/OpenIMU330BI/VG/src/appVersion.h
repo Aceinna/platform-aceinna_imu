@@ -28,7 +28,7 @@ limitations under the License.
 #define  _APP_VERSION_H
 
 
-#define  APP_VERSION_STRING     "OpenIMU330BI VG_AHRS 1.1.1"
-#define  SPI_SW_VERSION         120
+#define  APP_VERSION_STRING     "OpenIMU330BI VG_AHRS 1.1.3"
+#define  SPI_SW_VERSION         113
 
 #endif

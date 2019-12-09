@@ -73,12 +73,28 @@ real UnitGravityAndMagToYaw(real *unitGravityVector, real *magFieldVector);
 ******************************************************************************/
 real RollPitchAndMagToYaw(real roll, real pitch, real *magFieldVector);
 
+/******************************************************************************
+* @brief Limit angle error to be [-180, 180].
+* TRACE:
+* @param [in] aErr in [deg].
+* @retval aErr within [-180, 180]deg.
+******************************************************************************/
+real AngleErrDeg(real aErr);
+
+/******************************************************************************
+* @brief Limit angle error to be [-PI, PI].
+* TRACE:
+* @param [in] aErr in [rad].
+* @retval aErr within [-2*PI, 2*PI].
+******************************************************************************/
+real AngleErrRad(real aErr);
 //
 BOOL LLA_To_R_EinN( double* llaRad, real* R_EinN);
 BOOL LLA_To_R_NinE( double* llaRad, real* R_NinE);
-BOOL LLA_To_Base( double* llaRad, double* rECEF_Init,
-                  real* dr_N,
-                  real* R_NinE, double* rECEF );
+BOOL ECEF_To_Base( double* rECEF_Init,
+                  double* rECEF ,
+                  real* R_NinE, 
+                  real* dr_N);
 BOOL LLA_To_ECEF( double* lla_Rad, double* ecef_m);
 BOOL PosNED_To_PosECEF( real*  r_N, double* rECEF_Init,
                         real* R_NinE, double* rECEF );
@@ -86,10 +102,9 @@ BOOL ECEF_To_LLA( double* llaDeg, double* ecef_m );
 
 BOOL VelECEF_To_VelNED( double* LLA, real* VelECEF, real* VelNED );
 
+
 void printMtx(float *a, int m, int n);
 void printVec(float *v, int n);
-int realSymmetricMtxEig(float *a, int n, float *v, float eps, int jt);
-
 
 #endif /* TRANSFORMATIONMATH_H */
 

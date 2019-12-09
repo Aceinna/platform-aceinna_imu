@@ -34,6 +34,7 @@ limitations under the License.
 #include "spiAPI.h"
 #include "taskDataAcquisition.h"
 #include "commAPI.h"
+#include "UserMessagingSPI.h"
 
 #include "osapi.h"
 #include "osresources.h"
@@ -50,6 +51,7 @@ void TaskDataAcquisition(void const *argument)
 {
     //
     int  res;
+    int  spiRateRef = 0, spiRateDiv = 0;
 
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
     BOOL overRange  = FALSE;        //uncomment this line if overrange processing required
@@ -142,15 +144,6 @@ void TaskDataAcquisition(void const *argument)
         //applyNewScaledSensorsData();
         //*****************************************************************
 
-        // Inform user, that new data set is ready (if required)
-        // in case of UART communication interface clears pin IO2
-        // in case of SPI  communication interface clears pin DRDY
-        if(platformGetUnitCommunicationType() != UART_COMM){
-            setDataReadyPin(0);
-        }else{
-        setIO2Pin (0);
-        }
-        
         if(platformHasMag() ) {
             // Mag Alignment (follows Kalman filter or user algorithm as the
             // innovation routine calculates the euler angles and the magnetic
@@ -161,9 +154,23 @@ void TaskDataAcquisition(void const *argument)
         if(platformGetUnitCommunicationType() != UART_COMM){
             // Perform interface - specific processing here
             FillSPIBurstDataBuffer();
+            if(spiRateRef){
+                spiRateDiv++;
+                if(spiRateDiv >= spiRateRef){
+                    // Inform user, that new data set is ready (if required)
+                    setDataReadyPin(0); // activate data ready - set low 
+                    spiRateDiv = 0;
+                    spiRateRef = GetSpiPacketRateDivider();
+                }
+            }else {
+                spiRateRef = GetSpiPacketRateDivider();
+            }
+            UpdateSpiUserConfig();
         }else {
             // Process user commands and  output continuous packets to UART
             // Processing of user commands always goes first
+            // Inform user, that new data set is ready (if required)
+            setIO2Pin (0);
             ProcessUserCommands ();
             SendContinuousPacket(200);
         }

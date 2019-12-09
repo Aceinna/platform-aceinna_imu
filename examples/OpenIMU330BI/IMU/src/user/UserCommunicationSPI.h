@@ -51,26 +51,48 @@ typedef struct{
 #define  SPI_BURST_DATA_SIZE 16
 #define  NUM_SPI_REGS        128
 
-#define SPI_REG_CHIP1_SENSORS_CTRL     0x1A
-#define SPI_REG_CHIP2_SENSORS_CTRL     0x1B
-#define SPI_REG_CHIP3_SENSORS_CTRL     0x1C
+#define SPI_REG_RESET_LSB_CTRL          0x02
+#define SPI_REG_RESET_MSB_CTRL          0x03
+
 #define SPI_REG_DRDY_RATE_CTRL         0x37
+#define SPI_REG_ACCEL_FILTER_TYPE_CTRL  0x38
+#define SPI_REG_ACCEL_SENSOR_RANGE_CTRL 0x70
+#define SPI_REG_RATE_SENSOR_RANGE_CTRL  0x71
+#define SPI_REG_MAG_SENSOR_RANGE_CTRL   0x72
 #define SPI_REG_ORIENTATION_LSB_CTRL   0x75
 #define SPI_REG_ORIENTATION_MSB_CTRL   0x74
-#define SPI_REG_FILTER_TYPE_CTRL       0x38
-#define SPI_REG_RATE_SENSOR_RANGE_CTRL 0x39
+#define SPI_REG_SAVE_CFG_CTRL           0x76
+#define SPI_REG_RATE_FILTER_TYPE_CTRL   0x78
+
 #define SPI_REG_SELF_TEST_CTRL         0x35
 #define SPI_REG_CLOB_CTRL              0x3E
 #define SPI_REG_DRDY_CTRL              0x34
 
 
+#define SPI_REG_XRATE_REQUEST           0x04
+#define SPI_REG_YRATE_REQUEST           0x06
+#define SPI_REG_ZRATE_REQUEST           0x08
+#define SPI_REG_XACCEL_REQUEST          0x0A
+#define SPI_REG_YACCEL_REQUEST          0x0C
+#define SPI_REG_ZACCEL_REQUEST          0x0E
+#define SPI_REG_RTEMP_REQUEST           0x16
+#define SPI_REG_BTEMP_REQUEST           0x18
+
 #define SPI_REG_BURST_MSG_REQUEST      0x3E
+
+
+
+#define SPI_REG_MAG_SENSOR_SCALE        0x32
+#define SPI_REG_ACCEL_SENSOR_SCALE      0x46
+#define SPI_REG_RATE_SENSOR_SCALE       0x47
 #define SPI_REG_MANUF_CODE_REQUEST     0x52
 #define SPI_REG_MANUF_LOC_REQUEST      0x53
 #define SPI_REG_UNIT_CODE_REQUEST      0x54
 #define SPI_REG_PROD_ID_REQUEST        0x56     // 0x3830
 #define SPI_REG_SERIAL_NUM_REQUEST     0x58
 #define SPI_REG_MASTER_STATUS_REQUEST  0x5A
+#define SPI_REG_HW_STATUS_REQUEST       0x5C
+#define SPI_REG_SW_STATUS_REQUEST       0x5E
 #define SPI_REG_HW_VERSION_REQUEST     0x7E
 #define SPI_REG_SW_VERSION_REQUEST     0x7F
 
@@ -89,21 +111,31 @@ enum output_drdy_rate {
 };
 
 enum output_rate_sensor_dyn_range{
-    SPI_RATE_SENSOR_RANGE_62P5 = 0x01,
-    SPI_RATE_SENSOR_RANGE_125  = 0x02,
-    SPI_RATE_SENSOR_RANGE_250  = 0x04,
     SPI_RATE_SENSOR_RANGE_500  = 0x08,
     SPI_RATE_SENSOR_RANGE_1000 = 0x10,
+    SPI_RATE_SENSOR_RANGE_2000 = 0x20,
 };
 
-#define SENSOR_OVER_RANGE_STATUS_MASK  0x0010 
+enum output_accel_sensor_dyn_range{
+    SPI_ACCEL_SENSOR_RANGE_8G   = 8,
+    SPI_ACCEL_SENSOR_RANGE_16G  = 16,
+};
+
+
+#define  ACCEL_SENSOR_OVER_RANGE_STATUS_MASK  0x0010 
+#define  RATE_SENSOR_OVER_RANGE_STATUS_MASK   0x0020 
+#define  HW_FAILURE_MASK                      0x0002 
+#define  SW_FAILURE_MASK                      0x0004 
+#define  SENSOR_FAILURE_MASK                  0x1000 
+
 
 BOOL     LoadSPIBurstData(spi_burst_data_t *data);
 void     InitUserCommunicationSPI();
-float    GetSpiAccelScaleFactor();
-float    GetSpiRateScaleFactor();
+float    GetSpiAccelScaleFactor(uint8_t *out);
+float    GetSpiRateScaleFactor(uint8_t *out);
 float    GetSpiAccelLimit();
 float    GetSpiRateLimit();
 void     FillSPIDataBuffer();
-
+int      GetSpiPacketRateDivider();
+void     UpdateSpiUserConfig();
 #endif

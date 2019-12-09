@@ -36,7 +36,7 @@ limitations under the License.
  *
  * @retval N/A
  *****************************************************************************/
-void InitializeAlgorithmStruct(uint16_t callingFreq);
+void InitializeAlgorithmStruct(uint8_t callingFreq);
 
 /******************************************************************************
  * @brief Get algorithm status.
@@ -68,7 +68,11 @@ void enableGpsInAlgorithm(BOOL enable);
 
 BOOL gpsUsedInAlgorithm();
 
-void   SetAlgorithmUseDgps(BOOL d);
+void enableOdoInAlgorithm(BOOL enable);
+
+BOOL odoUsedInAlgorithm();
+
+void SetAlgorithmUseDgps(BOOL d);
 
 void updateAlgorithmTimings(int corr, uint32_t tmrVal );
 

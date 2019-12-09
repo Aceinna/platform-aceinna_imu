@@ -29,9 +29,11 @@ limitations under the License.
 #include "platformAPI.h"
 #include "eepromAPI.h"
 #include "configurationAPI.h"
+#include "hwAPI.h"
 
 #include "UserConfiguration.h"
 #include "Indices.h"
+#include "UserCommunicationSPI.h"
 
 
 // Default user configuration structure
@@ -44,12 +46,19 @@ const UserConfigurationStruct gDefaultUserConfig = {
     .dataSize            =  sizeof(UserConfigurationStruct),
     .userUartBaudRate    =  115200,  
     .userPacketType      =  "a1",  
-    .userPacketRate      =  100,  
+    .userPacketRate      =  50,  
     .lpfAccelFilterFreq  =  25,
     .lpfRateFilterFreq   =  25,
     .orientation         =  "+X+Y+Z",
+    .gyroRange           = SPI_RATE_SENSOR_RANGE_500,   // 500 DPS
+    .accelRange          = SPI_ACCEL_SENSOR_RANGE_8G,     // 8G
     // add default parameter values here, if desired
-    .appBehavior         = APP_BEHAVIOR_USE_EXT_SYNC
+    .spiOrientation         = 0x006b,           //-X -Y -Z
+    .spiSyncRate         = 1,               // 200Hz
+    .appBehavior         = APP_BEHAVIOR_USE_EXT_SYNC,
+    .extSyncFreq         = 1,               // 1Hz
+    .spiAccelLpfType        = IIR_20HZ_LPF,    // Butterworth 20Hz      
+    .spiGyroLpfType         = IIR_20HZ_LPF,    // Butterworth 20Hz
 };
 
 UserConfigurationStruct gUserConfiguration;
@@ -73,7 +82,7 @@ void ApplyUserConfiguration()
     // Validate checksum of user configuration structure
     configValid = validateUserConfigInEeprom(&size);
     
-    if(!configValid) {
+    if(!configValid || factoryMode) {
         // Load default user parameters but do not apply them to the system 
         memcpy((void*)&gUserConfiguration, (void*)&gDefaultUserConfig, sizeof(UserConfigurationStruct));
     } else {
@@ -86,17 +95,17 @@ void ApplyUserConfiguration()
     gUserConfiguration.dataSize = sizeof(UserConfigurationStruct);
     
     // apply parameters to the platform
-    for(int i = USER_USER_BAUD_RATE; i <= USER_LAST_SYSTEM_PARAM && !factoryMode; i++){
+    for(int i = USER_UART_BAUD_RATE; i <= USER_LAST_SYSTEM_PARAM && !factoryMode; i++){
         UpdateSystemParameter(i, ptr[i], TRUE);
     }
 
-    // validate and apply own parameters if desired
-    for(int i = USER_LAST_SYSTEM_PARAM+1; i < USER_MAX_PARAM; i++){
-        UpdateUserParameter(i, ptr[i], TRUE);
+    if(fSPI){
+        configApplyOrientation((uint16_t )gUserConfiguration.spiOrientation);
+        configSetAccelSensorFilterTypeForSPI((uint16_t )gUserConfiguration.spiAccelLpfType);
+        configSetRateSensorFilterTypeForSPI((uint16_t )gUserConfiguration.spiGyroLpfType);
     }
 
 } 
-
 
 
 /** ***************************************************************************
@@ -112,19 +121,20 @@ BOOL  UpdateSystemParameter(uint32_t number, uint64_t data, BOOL fApply)
 {
      BOOL result = TRUE;
      uint64_t *ptr = (uint64_t *)&gUserConfiguration;
+    int tmp;
 
      if(number < USER_CRC || number >= USER_MAX_PARAM ){
          return FALSE;
      }
 
      switch (number) {
-            case USER_USER_BAUD_RATE:
+            case USER_UART_BAUD_RATE:
                 result = configSetBaudRate((int)data, fApply);
                 break;
-            case USER_USER_PACKET_TYPE:
+            case USER_UART_PACKET_TYPE:
                 result = setUserPacketType((uint8_t*)&data, fApply);
                 break;
-            case USER_USER_PACKET_RATE:
+            case USER_UART_PACKET_RATE:
                 result = configSetPacketRate((int)data, fApply);
                 break;
             case USER_LPF_ACCEL_TYPE:
@@ -136,8 +146,17 @@ BOOL  UpdateSystemParameter(uint32_t number, uint64_t data, BOOL fApply)
             case  USER_ORIENTATION:
                 result = configSetUserOrientation((uint16_t*)&data, fApply);
                 break;
+            case  USER_GYRO_RANGE:
+                tmp = *(int*)&data;
+                tmp = tmp*125/2; 
+                result = configSetGyroRange(&tmp, fApply); 
+                break;
+            case  USER_ACCEL_RANGE:
+                result = configSetAccelRange((int*)&data, fApply);
+                break;
             case  USER_CRC:
             case  USER_DATA_SIZE:
+            case  USER_SPI_SYNC_RATE:
                 return TRUE;
         
         // case USER_XXX:  add function calls here if parameter XXXX
@@ -176,12 +195,14 @@ BOOL  UpdateUserParameter(uint32_t number, uint64_t data, BOOL fApply)
      }
 
      switch (number) {
-        case USER_APPLICATION_BEHAVIOR:  
-            if(fApply){
-                if(data & APP_BEHAVIOR_USE_EXT_SYNC){
-                    platformEnableExtSync(TRUE);
-                }
-            }
+        case USER_SPI_ORIENTATION:
+            configApplyOrientation((uint16_t )data);
+            break;
+        case USER_SPI_ACCEl_LPF:
+            configSetAccelSensorFilterTypeForSPI((uint16_t )data);
+            break;
+        case USER_SPI_RATE_LPF:
+            configSetRateSensorFilterTypeForSPI((uint16_t )data);
             break;
         //case: 
         //    add function calls here if parameter XXXX
@@ -521,3 +542,36 @@ BOOL RestoreDefaultUserConfig(void)
     }
     return valid;
 }
+
+
+BOOL ExtSyncEnabled()
+{
+    return (gUserConfiguration.appBehavior & APP_BEHAVIOR_USE_EXT_SYNC) != 0;
+}
+
+int ExtSyncFrequency()
+{
+    return  gUserConfiguration.extSyncFreq;
+}
+
+
+uint8_t SpiSyncRate()
+{
+    return (uint8_t)gUserConfiguration.spiSyncRate;
+}
+
+uint8_t SpiAccelLpfType()
+{
+    return (uint8_t)gUserConfiguration.spiAccelLpfType;
+}
+
+uint8_t SpiGyroLpfType()
+{
+    return (uint8_t)gUserConfiguration.spiGyroLpfType;
+}
+
+uint16_t SpiOrientation()
+{
+    return (uint16_t)gUserConfiguration.spiOrientation;
+}
+

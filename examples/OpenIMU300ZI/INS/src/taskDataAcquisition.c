@@ -180,7 +180,8 @@ void TaskDataAcquisition(void const *argument)
             // Process commands and output continuous packets to UART
             // Processing of user commands always goes first
             ProcessUserCommands ();
-            SendContinuousPacket(dacqRate);
+            int rate = fAlgorithmSynced? 0: dacqRate; 
+            SendContinuousPacket(rate);
         }
     }
 }

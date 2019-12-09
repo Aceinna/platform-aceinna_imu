@@ -221,16 +221,17 @@ void _parseBestPosB_Fast(logBestPosB   *bestPosB,
 {
     GPSData->lat = bestPosB->Lat;
     GPSData->lon = bestPosB->Lon;
-    GPSData->alt = bestPosB->hgt; ///alt
+    GPSData->alt = bestPosB->hgt + bestPosB->undulation;    // altitude above ellipsoid
+    GPSData->geoidAboveEllipsoid = bestPosB->undulation;    // geoid above ellipsoid
 
     if (bestPosB->sol_status != 0)   // zero is good fix anything else is
     {                                //   enumeration for bad fix
-        GPSData->GPSFix = 0;// PosVelType
+        GPSData->gpsFixType = 0;// PosVelType
         gBitStatus.hwStatus.bit.unlockedInternalGPS = 1; // locked
         gBitStatus.swStatus.bit.noGPSTrackReference = 1; // no GPS track
         gGpsDataPtr->HDOP = 21.0f; // force to above threshold
     } else {
-        GPSData->GPSFix = bestPosB->pos_type;
+        GPSData->gpsFixType = bestPosB->pos_type;
         gBitStatus.hwStatus.bit.unlockedInternalGPS = 0; // locked
         gBitStatus.swStatus.bit.noGPSTrackReference = 0; // GPS track
         gGpsDataPtr->HDOP = 1.0f; // force to below threshold
@@ -269,7 +270,7 @@ void _parseBestPosB_Fast(logBestPosB   *bestPosB,
     GPSData->GPSHorizAcc = sqrtf( bestPosB->lat_sigma * bestPosB->lat_sigma + bestPosB->lon_sigma * bestPosB->lon_sigma );    // [m]
     GPSData->GPSVertAcc  = bestPosB->hgt_sigma;     // [m]
 
-    GPSData->numSatelites = bestPosB->num_obs;
+    GPSData->numSatellites = bestPosB->num_obs;
 }
 
 /** ****************************************************************************
@@ -329,7 +330,7 @@ void _parseBestPosB(char           *completeMessage,
         gBitStatus.hwStatus.bit.unlockedInternalGPS = 0; // locked
         gBitStatus.swStatus.bit.noGPSTrackReference = 0; // GPS track
     }
-	GPSData->GPSFix = SolStatus[0];
+	GPSData->gpsFixType = SolStatus[0];
 
 	memcpy(&GPSData->itow, &completeMessage[16], 4); ///Itow
 
@@ -371,12 +372,12 @@ void _parseBestVelB_Fast(logBestVelB   *bestVelB,
 
     if (bestVelB->sol_status != 0)   // zero is good fix anything else is
     {                                //   enumeration for bad fix
-        GPSData->GPSFix = bestVelB->vel_type;
+        GPSData->gpsFixType = bestVelB->vel_type;
         gBitStatus.hwStatus.bit.unlockedInternalGPS = 1; // not locked
         gBitStatus.swStatus.bit.noGPSTrackReference = 1; // no GPS track
         gGpsDataPtr->HDOP = 21.0f; //
     } else {
-        GPSData->GPSFix = 0;
+        GPSData->gpsFixType = 0;
         gBitStatus.hwStatus.bit.unlockedInternalGPS = 0; // not locked
         gBitStatus.swStatus.bit.noGPSTrackReference = 0; // GPS track
         gGpsDataPtr->HDOP = 1.0f; //
@@ -437,7 +438,7 @@ void _parseBestVelB(char           *completeMessage,
         gBitStatus.hwStatus.bit.unlockedInternalGPS = 0; // not locked
         gBitStatus.swStatus.bit.noGPSTrackReference = 0; // GPS track
     }
-	GPSData->GPSFix = SolStatus[0];
+	GPSData->gpsFixType = SolStatus[0];
 
 	memcpy(&GPSData->itow, &completeMessage[16], 4); ///Itow
 

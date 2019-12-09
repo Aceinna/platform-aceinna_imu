@@ -26,7 +26,7 @@ limitations under the License.
 #ifndef _VG_APP_VERSION_H
 #define _VG_APP_VERSION_H
 
-#define  APP_VERSION_STRING  "OpenIMU300ZI VG_AHRS 1.1.2"
+#define  APP_VERSION_STRING  "OpenIMU300ZI VG_AHRS 1.1.3"
 
 
 #endif

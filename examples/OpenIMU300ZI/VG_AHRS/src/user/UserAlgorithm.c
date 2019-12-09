@@ -176,7 +176,7 @@ static void _Algorithm(uint16_t dacqRate, uint8_t algoType)
         algoCntr = 0;
 
         // Log GPS measurement update
-        if (gEKFInputData.gpsUpdate)
+        if (gEKFInput.gpsUpdate)
         {
             gAlgoStatus.bit.gpsUpdate = 1;
         }
@@ -228,35 +228,35 @@ static void _GenerateDebugMessage(uint16_t dacqRate, uint16_t debugOutputFreq)
 
             DebugPrintLongInt("", gGPS.itow );
 
-            DebugPrintFloat(",   ", gEKFOutputData.eulerAngs_BinN[ROLL],  4);
-            DebugPrintFloat(",   ", gEKFOutputData.eulerAngs_BinN[PITCH], 4);
-            DebugPrintFloat(",   ", gEKFOutputData.eulerAngs_BinN[YAW],   4);
+            DebugPrintFloat(",   ", gEKFOutput.eulerAngs_BinN[ROLL],  4);
+            DebugPrintFloat(",   ", gEKFOutput.eulerAngs_BinN[PITCH], 4);
+            DebugPrintFloat(",   ", gEKFOutput.eulerAngs_BinN[YAW],   4);
 
-            DebugPrintFloat(",   ", gEKFInputData.angRate_B[X_AXIS], 5);
-            DebugPrintFloat(",   ", gEKFInputData.angRate_B[Y_AXIS], 5);
-            DebugPrintFloat(",   ", gEKFInputData.angRate_B[Z_AXIS], 5);
+            DebugPrintFloat(",   ", gEKFInput.angRate_B[X_AXIS], 5);
+            DebugPrintFloat(",   ", gEKFInput.angRate_B[Y_AXIS], 5);
+            DebugPrintFloat(",   ", gEKFInput.angRate_B[Z_AXIS], 5);
 
-            DebugPrintFloat(",   ", gEKFOutputData.angRateBias_B[X_AXIS], 5);
-            DebugPrintFloat(",   ", gEKFOutputData.angRateBias_B[Y_AXIS], 5);
-            DebugPrintFloat(",   ", gEKFOutputData.angRateBias_B[Z_AXIS], 5);
+            DebugPrintFloat(",   ", gEKFOutput.angRateBias_B[X_AXIS], 5);
+            DebugPrintFloat(",   ", gEKFOutput.angRateBias_B[Y_AXIS], 5);
+            DebugPrintFloat(",   ", gEKFOutput.angRateBias_B[Z_AXIS], 5);
 
-            DebugPrintFloat(",   ", gEKFInputData.accel_B[X_AXIS], 5);
-            DebugPrintFloat(",   ", gEKFInputData.accel_B[Y_AXIS], 5);
-            DebugPrintFloat(",   ", gEKFInputData.accel_B[Z_AXIS], 5);
+            DebugPrintFloat(",   ", gEKFInput.accel_B[X_AXIS], 5);
+            DebugPrintFloat(",   ", gEKFInput.accel_B[Y_AXIS], 5);
+            DebugPrintFloat(",   ", gEKFInput.accel_B[Z_AXIS], 5);
 
-            DebugPrintFloat(",   ", gEKFOutputData.accelBias_B[X_AXIS], 5);
-            DebugPrintFloat(",   ", gEKFOutputData.accelBias_B[Y_AXIS], 5);
-            DebugPrintFloat(",   ", gEKFOutputData.accelBias_B[Z_AXIS], 5);
+            DebugPrintFloat(",   ", gEKFOutput.accelBias_B[X_AXIS], 5);
+            DebugPrintFloat(",   ", gEKFOutput.accelBias_B[Y_AXIS], 5);
+            DebugPrintFloat(",   ", gEKFOutput.accelBias_B[Z_AXIS], 5);
 
-            DebugPrintFloat(",   ", gEKFOutputData.llaDeg[LAT], 8);
-            DebugPrintFloat(",   ", gEKFOutputData.llaDeg[LON], 8);
-            DebugPrintFloat(",   ", gEKFOutputData.llaDeg[ALT], 5);
+            DebugPrintFloat(",   ", gEKFOutput.llaDeg[LAT], 8);
+            DebugPrintFloat(",   ", gEKFOutput.llaDeg[LON], 8);
+            DebugPrintFloat(",   ", gEKFOutput.llaDeg[ALT], 5);
 
-            DebugPrintFloat(",   ", gEKFOutputData.velocity_N[X_AXIS], 5);
-            DebugPrintFloat(",   ", gEKFOutputData.velocity_N[Y_AXIS], 5);
-            DebugPrintFloat(",   ", gEKFOutputData.velocity_N[Z_AXIS], 5);
+            DebugPrintFloat(",   ", gEKFOutput.velocity_N[X_AXIS], 5);
+            DebugPrintFloat(",   ", gEKFOutput.velocity_N[Y_AXIS], 5);
+            DebugPrintFloat(",   ", gEKFOutput.velocity_N[Z_AXIS], 5);
 #if 1
-            DebugPrintInt(",   ", gEKFOutputData.opMode);
+            DebugPrintInt(",   ", gEKFOutput.opMode);
 #else
             switch(gEKFOutputData.opMode) {
                 case 0:

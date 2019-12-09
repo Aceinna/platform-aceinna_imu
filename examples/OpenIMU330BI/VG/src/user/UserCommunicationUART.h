@@ -81,8 +81,8 @@ typedef enum {
 typedef enum {
     USR_OUT_NONE  = 0,  // 0
     USR_OUT_DATA1,      // 1
-    USR_OUT_ANG1,       // 2
-    USR_OUT_SCALED1,    // 3
+    USR_OUT_SCALED1,    // 2
+    USR_OUT_ANG1,       // 3
 // add new output packet type here, before USR_OUT_MAX  
     USR_OUT_MAX
 } UserOutPacketType;

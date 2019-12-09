@@ -49,7 +49,7 @@ int cycleError = 0;
  ******************************************************************************/
 void TaskDataAcquisition()
 {
-
+    int spiRateRef = 0, spiRateDiv = 0;
     InitSensorsData();
     
     // Frequency 200 Hz. Do not change
@@ -88,17 +88,28 @@ void TaskDataAcquisition()
         //******************************************************************
 
 
+        // **********************  Algorithm *******************************
         HW_IO2_On();
 
-        // **********************  Algorithm ************************
         inertialAndPositionDataProcessing(200);
         
         HW_IO2_Off();
+        //******************************************************************
 
         if(fSPI){
             // Perform interface - specific processing here
             FillSPIDataBuffer();
+            if(spiRateRef){
+                spiRateDiv++;
+                if(spiRateDiv >= spiRateRef){
             HW_DRDY_On(); // activate data ready - set low 
+                    spiRateDiv = 0;
+                    spiRateRef = GetSpiPacketRateDivider();
+                }
+            }else {
+                spiRateRef = GetSpiPacketRateDivider();
+            }
+            UpdateSpiUserConfig();
        } else {
             // Process commands and output continuous packets to UART
             // Processing of user commands always goes first

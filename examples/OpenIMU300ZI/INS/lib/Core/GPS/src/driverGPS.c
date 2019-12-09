@@ -273,7 +273,6 @@ int writeGps(char  *data, uint16_t len)
 
 void GetGPSData(gpsDataStruct_t *data)
 {
-    data->gpsValid          = gGpsDataPtr->gpsValid;
     data->gpsUpdate        =  ( gGpsDataPtr->updateFlagForEachCall >> GOT_VTG_MSG ) & 0x00000001 &&
                                ( gGpsDataPtr->updateFlagForEachCall >> GOT_GGA_MSG ) & 0x00000001;
     // gGpsDataPtr->updateFlagForEachCall &= 0xFFFFFFFD;
@@ -281,33 +280,36 @@ void GetGPSData(gpsDataStruct_t *data)
     {
         // Reset GPS update flag only when pos and vel are both available
         gGpsDataPtr->updateFlagForEachCall &= 0xFFFFFFFC;
+
+        data->gpsFixType        = gGpsDataPtr->gpsFixType;
+        data->numSatellites     = gGpsDataPtr->numSatellites;
+
+        data->latitude          = gGpsDataPtr->lat;
+        data->longitude         = gGpsDataPtr->lon;
+        data->altitude          = gGpsDataPtr->alt;
+
+        data->vNed[0]           = gGpsDataPtr->vNed[0];
+        data->vNed[1]           = gGpsDataPtr->vNed[1];
+        data->vNed[2]           = gGpsDataPtr->vNed[2];
+
+        data->trueCourse        = gGpsDataPtr->trueCourse;
+        data->rawGroundSpeed    = gGpsDataPtr->rawGroundSpeed;
+
+        data->GPSSecondFraction = gGpsDataPtr->GPSSecondFraction; 
+
+        data->itow              = gGpsDataPtr->itow;       
+        data->GPSmonth          = gGpsDataPtr->GPSmonth;
+        data->GPSday            = gGpsDataPtr->GPSday;
+        data->GPSyear           = gGpsDataPtr->GPSyear;  
+        data->GPSHour           = gGpsDataPtr->GPSHour;
+        data->GPSMinute         = gGpsDataPtr->GPSMinute; 
+        data->GPSSecond         = gGpsDataPtr->GPSSecond; 
+
+        data->HDOP              = gGpsDataPtr->HDOP;
+        data->GPSHorizAcc       = gGpsDataPtr->GPSHorizAcc;
+        data->GPSVertAcc        = gGpsDataPtr->GPSVertAcc;
+        data->geoidAboveEllipsoid = gGpsDataPtr->geoidAboveEllipsoid;
     }
-
-    data->latitude          = gGpsDataPtr->lat;
-    data->longitude         = gGpsDataPtr->lon;
-    data->altitude          = gGpsDataPtr->alt;
-
-    data->vNed[0]           = gGpsDataPtr->vNed[0];
-    data->vNed[1]           = gGpsDataPtr->vNed[1];
-    data->vNed[2]           = gGpsDataPtr->vNed[2];
-
-    data->trueCourse        = gGpsDataPtr->trueCourse;
-    data->rawGroundSpeed    = gGpsDataPtr->rawGroundSpeed;
-
-    data->GPSSecondFraction = gGpsDataPtr->GPSSecondFraction; 
-    data->altEllipsoid      = gGpsDataPtr->altEllipsoid;
-
-    data->itow              = gGpsDataPtr->itow;       
-    data->GPSmonth          = gGpsDataPtr->GPSmonth;
-    data->GPSday            = gGpsDataPtr->GPSday;
-    data->GPSyear           = gGpsDataPtr->GPSyear;  
-    data->GPSHour           = gGpsDataPtr->GPSHour;
-    data->GPSMinute         = gGpsDataPtr->GPSMinute; 
-    data->GPSSecond         = gGpsDataPtr->GPSSecond; 
-
-    data->HDOP              = gGpsDataPtr->HDOP;
-    data->GPSHorizAcc       = gGpsDataPtr->GPSHorizAcc;
-    data->GPSVertAcc        = gGpsDataPtr->GPSVertAcc;
 }
 
 
@@ -439,9 +441,6 @@ BOOL _handleGpsMessages(GpsData_t *GPSData)
         }
         tmp = gpsUartBuf[pos++];
         bytesInBuffer--;
-#ifdef DETECT_USER_SERIAL_CMD
-        platformDetectUserSerialCmd(tmp);
-#endif
         switch(GPSData->GPSProtocol){
             case NMEA_TEXT: 
                 parseNMEAMessage(tmp, gpsMsg, GPSData);

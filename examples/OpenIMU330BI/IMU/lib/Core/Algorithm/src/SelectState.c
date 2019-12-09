@@ -11,6 +11,7 @@
 
 #include "GlobalConstants.h"
 #include "platformAPI.h"  
+#include "TimingVars.h"
 
 #include "algorithm.h"        // gAlgorithm
 #include "algorithmAPI.h"
@@ -22,7 +23,6 @@
 #include "TransformationMath.h"  // FieldVectorsToEulerAngles
 #include "EKF_Algorithm.h"
 #include "PredictFunctions.h"
-#include "TimingVars.h"
 
 #ifndef INS_OFFLINE
 #ifdef DISPLAY_DIAGNOSTIC_MSG
@@ -45,8 +45,6 @@ static BOOL _AverageFieldVectors(uint16_t pointsToAverage);
 static void _DropToHighGainAHRS(void);
 static void _ResetAlgorithm(void);
 
-static uint8_t _InitINSFilter(real* leverArmN);
-
 // StabilizeSystem: Run for a prescribed period to let the sensors settle.
 void StabilizeSystem(void)
 {
@@ -60,11 +58,11 @@ void StabilizeSystem(void)
      */
     if (gAlgorithm.stateTimer == 0) {
         #ifdef INS_OFFLINE
-        printf("To ini att. %u\n", gEKFInputData.itow);
+        printf("To ini att. %u\n", gEKFInput.itow);
         #else
 #ifdef DISPLAY_DIAGNOSTIC_MSG
         DebugPrintString("To ini att. ");
-        DebugPrintInt("", gEKFInputData.itow);
+        DebugPrintInt("", gEKFInput.itow);
         DebugPrintEndline();
 #endif
         #endif
@@ -111,9 +109,9 @@ void InitializeAttitude(void)
     /* Quasi-static check: check for motion over threshold. If detected, reset
      * the accumulation variables and restart initialization phase.
      */
-    if ((fabs(gEKFInputData.angRate_B[X_AXIS]) > LIMIT_QUASI_STATIC_STARTUP_RATE) ||
-        (fabs(gEKFInputData.angRate_B[Y_AXIS]) > LIMIT_QUASI_STATIC_STARTUP_RATE) ||
-        (fabs(gEKFInputData.angRate_B[Z_AXIS]) > LIMIT_QUASI_STATIC_STARTUP_RATE))
+    if ((fabs(gEKFInput.angRate_B[X_AXIS]) > LIMIT_QUASI_STATIC_STARTUP_RATE) ||
+        (fabs(gEKFInput.angRate_B[Y_AXIS]) > LIMIT_QUASI_STATIC_STARTUP_RATE) ||
+        (fabs(gEKFInput.angRate_B[Z_AXIS]) > LIMIT_QUASI_STATIC_STARTUP_RATE))
     {
         accumulatedAccelVector[X_AXIS] = (real)0.0;
         accumulatedAccelVector[Y_AXIS] = (real)0.0;
@@ -136,11 +134,11 @@ void InitializeAttitude(void)
      */
     if (gAlgorithm.stateTimer == 0) {
         #ifdef INS_OFFLINE
-        printf("To HG. %u\n", gEKFInputData.itow);
+        printf("To HG. %u\n", gEKFInput.itow);
         #else
 #ifdef DISPLAY_DIAGNOSTIC_MSG
         DebugPrintString("To HG. ");
-        DebugPrintInt("", gEKFInputData.itow);
+        DebugPrintInt("", gEKFInput.itow);
         DebugPrintEndline();
 #endif
         #endif
@@ -187,6 +185,10 @@ void InitializeAttitude(void)
          */
         EulerAnglesToQuaternion( gKalmanFilter.measuredEulerAngles,
                                  gKalmanFilter.quaternion );
+        gKalmanFilter.quaternion_Past[0] = gKalmanFilter.quaternion[0];
+        gKalmanFilter.quaternion_Past[1] = gKalmanFilter.quaternion[1];
+        gKalmanFilter.quaternion_Past[2] = gKalmanFilter.quaternion[2];
+        gKalmanFilter.quaternion_Past[3] = gKalmanFilter.quaternion[3];
         // Euler angles from the initial measurement (DEBUG: initial output of the system)
         gKalmanFilter.eulerAngles[ROLL] = gKalmanFilter.measuredEulerAngles[ROLL];
         gKalmanFilter.eulerAngles[PITCH] = gKalmanFilter.measuredEulerAngles[PITCH];
@@ -242,11 +244,11 @@ void HG_To_LG_Transition_Test(void)
      */
     if (gAlgorithm.stateTimer == 0) {
         #ifdef INS_OFFLINE
-        printf("To LG. %u\n", gEKFInputData.itow);
+        printf("To LG. %u\n", gEKFInput.itow);
         #else
 #ifdef DISPLAY_DIAGNOSTIC_MSG
         DebugPrintString("To LG. ");
-        DebugPrintInt("", gEKFInputData.itow);
+        DebugPrintInt("", gEKFInput.itow);
         DebugPrintEndline();
 #endif
         #endif
@@ -292,14 +294,14 @@ void LG_To_INS_Transition_Test(void)
         /* If GPS output is valid (GPS providing data with a good signal lock)
          * then transit to INS mode.
          */
-        if ( gpsUsedInAlgorithm() && gEKFInputData.gpsUpdate ) 
+        if ( gpsUsedInAlgorithm() && gEKFInput.gpsUpdate && gEKFInput.gpsFixType ) 
         {
             #ifdef INS_OFFLINE
-            printf("To INS. %u\n", gEKFInputData.itow);
+            printf("To INS. %u\n", gEKFInput.itow);
             #else
 #ifdef DISPLAY_DIAGNOSTIC_MSG
             DebugPrintString("To INS. ");
-            DebugPrintInt("", gEKFInputData.itow);
+            DebugPrintInt("", gEKFInput.itow);
             DebugPrintEndline();
 #endif
             #endif
@@ -309,147 +311,15 @@ void LG_To_INS_Transition_Test(void)
 
             // Transit to INS solution
             gAlgorithm.state = INS_SOLUTION;
-
-            // Sync the algorithm and GPS ITOW
-            gAlgorithm.itow = gEKFInputData.itow;
-            
-            /* We have a good GPS reading now - set this variable so we
-             * don't drop into INS right away
-             */
-            gAlgorithm.timeOfLastGoodGPSReading = gEKFInputData.itow;
-
-            /* Prepare for INS.
-			 * R_NinE and rGPS_E are used later. rGPS_E is used in _InitINSFilter to initialize rGPS0_E.
-			 * R_NinE is in UpdateFunctions.c to convert position to ECEF. R_NinE is also calculated in
-			 * UpdateFunctions.c. But it is necessary here because it is needed to calculate position
-			 * after switching to INS and before the next GNSS measurement to trigger a Kalman update.
-			 */
-            LLA_To_Base(&gEKFInputData.llaRad[0],
-                        &gAlgorithm.rGPS0_E[0],
-                        &gAlgorithm.rGPS_N[0],
-                        &gAlgorithm.R_NinE[0][0],
-                        &gAlgorithm.rGPS_E[0]);
-
-            /* Lever-arm is antenna position w.r.t to IMU in body. rGPS_N is antenna positive
-             * w.r.t to initial point in NED. IMU positive w.r.t initial point is
-             * rGPS_N - R_b_to_N * lever-arm
-             */
-            float leverArmN[3];
-            leverArmN[0] = gKalmanFilter.R_BinN[0][0] * gAlgorithm.leverArmB[0] +
-                gKalmanFilter.R_BinN[0][1] * gAlgorithm.leverArmB[1] +
-                gKalmanFilter.R_BinN[0][2] * gAlgorithm.leverArmB[2];
-            leverArmN[1] = gKalmanFilter.R_BinN[1][0] * gAlgorithm.leverArmB[0] +
-                gKalmanFilter.R_BinN[1][1] * gAlgorithm.leverArmB[1] +
-                gKalmanFilter.R_BinN[1][2] * gAlgorithm.leverArmB[2];
-            leverArmN[2] = gKalmanFilter.R_BinN[2][0] * gAlgorithm.leverArmB[0] +
-                gKalmanFilter.R_BinN[2][1] * gAlgorithm.leverArmB[1] +
-                gKalmanFilter.R_BinN[2][2] * gAlgorithm.leverArmB[2];
             
             // Initialize the algorithm with GNSS position and lever arm
-            _InitINSFilter(leverArmN);
+            InitINSFilter();
 
             // Set linear-acceleration switch variables
             gAlgorithm.linAccelSwitchCntr = 0;
         }
     }
 }
-
-
-
-
-//
-static uint8_t _InitINSFilter(real* leverArmN)
-{
-    real tmp[7][7];
-    int rowNum, colNum;
-
-    gAlgorithm.insFirstTime = FALSE;
-
-    /* Upon the first entry into INS, save off the base position and reset the
-     *   Kalman filter variables.
-     */
-    // Save off the base ECEF location
-    gAlgorithm.rGPS0_E[X_AXIS] = gAlgorithm.rGPS_E[X_AXIS];
-    gAlgorithm.rGPS0_E[Y_AXIS] = gAlgorithm.rGPS_E[Y_AXIS];
-    gAlgorithm.rGPS0_E[Z_AXIS] = gAlgorithm.rGPS_E[Z_AXIS];
-
-    /* Reset the gps position (as position is relative to starting location)
-     * rGPS_N is the IMU position, while starting location is the antenna position.
-     * rGPS_N is reset to lever-arm.
-     */
-    gAlgorithm.rGPS_N[X_AXIS] = -leverArmN[0];
-    gAlgorithm.rGPS_N[Y_AXIS] = -leverArmN[1];
-    gAlgorithm.rGPS_N[Z_AXIS] = -leverArmN[2];
-
-    // Reset prediction values. Position_N is also IMU position.
-    gKalmanFilter.Position_N[X_AXIS] = (real)-leverArmN[0];
-    gKalmanFilter.Position_N[Y_AXIS] = (real)-leverArmN[1];
-    gKalmanFilter.Position_N[Z_AXIS] = (real)-leverArmN[2];
-
-    gKalmanFilter.Velocity_N[X_AXIS] = (real)gEKFInputData.vNed[X_AXIS];
-    gKalmanFilter.Velocity_N[Y_AXIS] = (real)gEKFInputData.vNed[Y_AXIS];
-    gKalmanFilter.Velocity_N[Z_AXIS] = (real)gEKFInputData.vNed[Z_AXIS];
-
-    gKalmanFilter.accelBias_B[X_AXIS] = (real)0.0;
-    gKalmanFilter.accelBias_B[Y_AXIS] = (real)0.0;
-    gKalmanFilter.accelBias_B[Z_AXIS] = (real)0.0;
-
-    /* Extract the Quaternion and rate-bias values from the matrix before
-     * resetting
-     */
-    // Save off the quaternion and rate-bias covariance values
-    for (rowNum = Q0; rowNum <= Q3 + Z_AXIS + 1; rowNum++) 
-    {
-        for (colNum = Q0; colNum <= Q3 + Z_AXIS + 1; colNum++) 
-        {
-            tmp[rowNum][colNum] = gKalmanFilter.P[rowNum + STATE_Q0][colNum + STATE_Q0];
-        }
-    }
-
-    // Reset P
-    memset(gKalmanFilter.P, 0, sizeof(gKalmanFilter.P));
-    for (rowNum = 0; rowNum < NUMBER_OF_EKF_STATES; rowNum++) 
-    {
-        gKalmanFilter.P[rowNum][rowNum] = (real)INIT_P_INS;
-    }
-
-    // Repopulate the P matrix with the quaternion and rate-bias values
-    for (rowNum = Q0; rowNum <= Q3 + Z_AXIS + 1; rowNum++) 
-    {
-        for (colNum = Q0; colNum <= Q3 + Z_AXIS + 1; colNum++) 
-        {
-            gKalmanFilter.P[rowNum + STATE_Q0][colNum + STATE_Q0] = tmp[rowNum][colNum];
-        }
-    }
-
-    /* Use the GPS-provided horizontal and vertical accuracy values to populate
-     *   the covariance values.
-     */
-    gKalmanFilter.P[STATE_RX][STATE_RX] = gEKFInputData.GPSHorizAcc * gEKFInputData.GPSHorizAcc;
-    gKalmanFilter.P[STATE_RY][STATE_RY] = gKalmanFilter.P[STATE_RX][STATE_RX];
-    gKalmanFilter.P[STATE_RZ][STATE_RZ] = gEKFInputData.GPSVertAcc * gEKFInputData.GPSVertAcc;
-
-    /* Scale the best velocity error by HDOP then multiply by the z-axis angular
-     * rate PLUS one (to prevent the number from being zero) so the velocity
-     * update during high-rate turns is reduced.
-     */
-    float temp = (real)0.0625 * gEKFInputData.HDOP;  // 0.0625 = 0.05 / 0.8
-    real absFilteredYawRate = (real)fabs(gAlgorithm.filteredYawRate);
-    if (absFilteredYawRate > TEN_DEGREES_IN_RAD)
-    {
-        temp *= (1.0f + absFilteredYawRate);
-    }
-    gKalmanFilter.P[STATE_VX][STATE_VX] = temp;// *((real)1.0 + fabs(gAlgorithm.filteredYawRate) * (real)RAD_TO_DEG);
-    gKalmanFilter.P[STATE_VX][STATE_VX] = gKalmanFilter.P[STATE_VX][STATE_VX] * gKalmanFilter.P[STATE_VX][STATE_VX];
-    gKalmanFilter.P[STATE_VY][STATE_VY] = gKalmanFilter.P[STATE_VX][STATE_VX];
-
-    // z-axis velocity isn't really a function of yaw-rate and hdop
-    //gKalmanFilter.R[STATE_VZ][STATE_VZ] = gKalmanFilter.R[STATE_VX][STATE_VX];
-    gKalmanFilter.P[STATE_VZ][STATE_VZ] = (float)(0.1 * 0.1);
-
-    return 1;
-}
-
 
 /* INS_To_AHRS_Transition_Test:  Drop back to LG AHRS operation if...
  *   1) GPS drops out for more than 3 seconds
@@ -459,21 +329,25 @@ static uint8_t _InitINSFilter(real* leverArmN)
 void INS_To_AHRS_Transition_Test(void)
 {
     // Record last GPS velocity large enough to give a good heading measurement
-    if (gEKFInputData.rawGroundSpeed >= LIMIT_MIN_GPS_VELOCITY_HEADING)
+    if (gEKFInput.rawGroundSpeed >= LIMIT_MIN_GPS_VELOCITY_HEADING)
     {
-        gAlgorithm.timeOfLastSufficientGPSVelocity = (int32_t)gEKFInputData.itow;
+        gAlgorithm.timeOfLastSufficientGPSVelocity = (int32_t)gEKFInput.itow;
     }
     /* Determine the length of time it has been since the system 'moved' --
      * only linear motion considered (rotations ignored).
      */
-    int32_t timeSinceRestBegan = (int32_t)gEKFInputData.itow - gAlgorithm.timeOfLastSufficientGPSVelocity;
+    int32_t timeSinceRestBegan = (int32_t)gEKFInput.itow - gAlgorithm.timeOfLastSufficientGPSVelocity;
     if (timeSinceRestBegan < 0)
     {
         timeSinceRestBegan = timeSinceRestBegan + MAX_ITOW;
     }
-    if (timeSinceRestBegan > LIMIT_MAX_REST_TIME_BEFORE_HEADING_INVALID)
+    if (timeSinceRestBegan > LIMIT_MAX_REST_TIME_BEFORE_HEADING_INVALID && gAlgorithm.headingIni != HEADING_UNINITIALIZED)
     {
-        gAlgorithm.gnssHeadingFirstTime = TRUE;
+        gAlgorithm.headingIni = HEADING_GNSS_LOW;
+#ifdef DISPLAY_DIAGNOSTIC_MSG
+        DebugPrintString("Rest for too long.");
+        DebugPrintEndline();
+#endif
     }
 
     // compute time since the last good GPS reading
@@ -482,11 +356,15 @@ void INS_To_AHRS_Transition_Test(void)
         timeSinceLastGoodGPSReading = timeSinceLastGoodGPSReading + MAX_ITOW;
     }
 
-    if ( timeSinceLastGoodGPSReading > gAlgorithm.Limit.Max_GPS_Drop_Time )
+    if ( timeSinceLastGoodGPSReading > gAlgorithm.Limit.maxGpsDropTime )
     {
+#ifdef INS_OFFLINE
+        printf("GPS outage too long\n");
+#endif // INS_OFFLINE
+
         // Currently in INS mode but requiring a transition to AHRS / VG
         gAlgorithm.insFirstTime = TRUE;
-        gAlgorithm.gnssHeadingFirstTime = TRUE;
+        gAlgorithm.headingIni = HEADING_UNINITIALIZED;
 
         /* The transition from INS to AHRS and back to INS does not seem to
          * generate a stable solution if we transition to LG AHRS for only 30
@@ -511,7 +389,6 @@ void INS_To_AHRS_Transition_Test(void)
         gAlgoStatus.bit.highGain              = ( gAlgorithm.state == HIGH_GAIN_AHRS );
         gAlgoStatus.bit.attitudeOnlyAlgorithm = TRUE;
     }
-
 }
 
 
@@ -581,22 +458,22 @@ static void _DropToHighGainAHRS(void)
 static BOOL _AccumulateFieldVectors(void)
 {
     // Accumulate the acceleration vector readings (accels in g's)
-    accumulatedAccelVector[X_AXIS] += (real)gEKFInputData.accel_B[X_AXIS];
-    accumulatedAccelVector[Y_AXIS] += (real)gEKFInputData.accel_B[Y_AXIS];
-    accumulatedAccelVector[Z_AXIS] += (real)gEKFInputData.accel_B[Z_AXIS];
+    accumulatedAccelVector[X_AXIS] += (real)gEKFInput.accel_B[X_AXIS];
+    accumulatedAccelVector[Y_AXIS] += (real)gEKFInput.accel_B[Y_AXIS];
+    accumulatedAccelVector[Z_AXIS] += (real)gEKFInput.accel_B[Z_AXIS];
 
     // Accumulate the gyroscope vector readings (accels in rad/s)
-    accumulatedGyroVector[X_AXIS] += gEKFInputData.angRate_B[X_AXIS];
-    accumulatedGyroVector[Y_AXIS] += gEKFInputData.angRate_B[Y_AXIS];
-    accumulatedGyroVector[Z_AXIS] += gEKFInputData.angRate_B[Z_AXIS];
+    accumulatedGyroVector[X_AXIS] += gEKFInput.angRate_B[X_AXIS];
+    accumulatedGyroVector[Y_AXIS] += gEKFInput.angRate_B[Y_AXIS];
+    accumulatedGyroVector[Z_AXIS] += gEKFInput.angRate_B[Z_AXIS];
 
     // Accumulate the magnetic-field vector readings (or set to zero if the
     //   product does not have magnetometers)
     if (magUsedInAlgorithm() )
     {
-        accumulatedMagVector[X_AXIS] += (real)gEKFInputData.magField_B[X_AXIS];
-        accumulatedMagVector[Y_AXIS] += (real)gEKFInputData.magField_B[Y_AXIS];
-        accumulatedMagVector[Z_AXIS] += (real)gEKFInputData.magField_B[Z_AXIS];
+        accumulatedMagVector[X_AXIS] += (real)gEKFInput.magField_B[X_AXIS];
+        accumulatedMagVector[Y_AXIS] += (real)gEKFInput.magField_B[Y_AXIS];
+        accumulatedMagVector[Z_AXIS] += (real)gEKFInput.magField_B[Z_AXIS];
     } else {
         accumulatedMagVector[X_AXIS] = (real)0.0;
         accumulatedMagVector[Y_AXIS] = (real)0.0;

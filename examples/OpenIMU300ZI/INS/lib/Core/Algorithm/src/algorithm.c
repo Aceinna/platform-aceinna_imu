@@ -15,6 +15,9 @@
 ******************************************************************************/
 
 #include <math.h>
+#include <string.h>
+
+#include "SensorNoiseParameters.h"
 #include "platformAPI.h"
 #include "algorithm.h"
 #include "AlgorithmLimits.h"
@@ -24,11 +27,16 @@ AlgorithmStruct gAlgorithm;
 AlgoStatus      gAlgoStatus;
 
 
-void InitializeAlgorithmStruct(uint16_t callingFreq)
+void InitializeAlgorithmStruct(uint8_t callingFreq)
 {
+    //----------------------------algortihm config-----------------------------
     gAlgorithm.Behavior.bit.freeIntegrate = FALSE;
     // The calling frequency drives the execution rate of the EKF and dictates
     //   the algorithm constants
+    if(callingFreq == 0){
+        // IMU case
+        callingFreq = FREQ_200_HZ;
+    }
     gAlgorithm.callingFreq = callingFreq;
 
     // Set dt based on the calling frequency of the EKF
@@ -50,7 +58,7 @@ void InitializeAlgorithmStruct(uint16_t callingFreq)
     // Set up other timing variables
     gAlgorithm.dtOverTwo = (real)(0.5) * gAlgorithm.dt;
     gAlgorithm.dtSquared = gAlgorithm.dt * gAlgorithm.dt;
-    gAlgorithm.sqrtDt = sqrt(gAlgorithm.dt);
+    gAlgorithm.sqrtDt = sqrtf(gAlgorithm.dt);
 
     // Set the algorithm duration periods
     gAlgorithm.Duration.Stabilize_System = (uint32_t)(gAlgorithm.callingFreq * STABILIZE_SYSTEM_DURATION);
@@ -72,6 +80,7 @@ void InitializeAlgorithmStruct(uint16_t callingFreq)
     gAlgorithm.applyDeclFlag = FALSE;
 
     gAlgorithm.insFirstTime = TRUE;
+    gAlgorithm.headingIni = HEADING_UNINITIALIZED;
 
     //gAlgorithm.magAlignUnderway = FALSE; // Set and reset in mag-align code
 
@@ -79,7 +88,8 @@ void InitializeAlgorithmStruct(uint16_t callingFreq)
     gAlgorithm.itow = 0;
 
     // Limit is compared to ITOW.  Time must be in [msec].
-    gAlgorithm.Limit.Max_GPS_Drop_Time = LIMIT_MAX_GPS_DROP_TIME * 1000;
+    gAlgorithm.Limit.maxGpsDropTime = LIMIT_MAX_GPS_DROP_TIME * 1000;
+    gAlgorithm.Limit.maxReliableDRTime = LIMIT_RELIABLE_DR_TIME * 1000;
 
     // Limit is compared to count (incremented upon loop through
     //   taskDataAcquisition).  Time must be in [count] based on ODR.
@@ -105,15 +115,46 @@ void InitializeAlgorithmStruct(uint16_t callingFreq)
     gAlgorithm.useRawAccToDetectLinAccel = TRUE;
 
     // Set the turn-switch threshold to a default value in [deg/sec]
-    gAlgorithm.turnSwitchThreshold = 2.0;
+    gAlgorithm.turnSwitchThreshold = 6.0;
 
 	// default lever arm and point of interest
-	gAlgorithm.leverArmB[X_AXIS] = 0.0;
-	gAlgorithm.leverArmB[Y_AXIS] = 0.0;
-	gAlgorithm.leverArmB[Z_AXIS] = 0.0;
-	gAlgorithm.pointOfInterestB[X_AXIS] = 0.0;
-	gAlgorithm.pointOfInterestB[Y_AXIS] = 0.0;
-	gAlgorithm.pointOfInterestB[Z_AXIS] = 0.0;
+    gAlgorithm.leverArmB[X_AXIS] = 0.0;
+    gAlgorithm.leverArmB[Y_AXIS] = 0.0;
+    gAlgorithm.leverArmB[Z_AXIS] = 0.0;
+    gAlgorithm.pointOfInterestB[X_AXIS] = 0.0;
+    gAlgorithm.pointOfInterestB[Y_AXIS] = 0.0;
+    gAlgorithm.pointOfInterestB[Z_AXIS] = 0.0;
+
+    // For most vehicles, the velocity is always along the body x axis
+    gAlgorithm.velocityAlwaysAlongBodyX = TRUE;
+
+    // enable yaw lock when vehicle is static
+    gAlgorithm.Behavior.bit.enableStationaryLockYaw = TRUE;
+
+    // enable zero velocity detection by IMU
+    gAlgorithm.Behavior.bit.enableImuStaticDetect = TRUE;
+
+    // get IMU specifications
+    gAlgorithm.imuSpec.arw = (real)ARW_300ZA;
+    gAlgorithm.imuSpec.sigmaW = (real)(1.25 * ARW_300ZA / sqrt(1.0/RW_ODR));
+    gAlgorithm.imuSpec.biW = (real)BIW_300ZA;
+    gAlgorithm.imuSpec.maxBiasW = (real)MAX_BW;
+    gAlgorithm.imuSpec.vrw = (real)VRW_300ZA;
+    gAlgorithm.imuSpec.sigmaA = (real)(1.25 * VRW_300ZA / sqrt(1.0/RW_ODR));
+    gAlgorithm.imuSpec.biA = (real)BIA_300ZA;
+    gAlgorithm.imuSpec.maxBiasA = (real)MAX_BA;
+
+    // default noise level multiplier for static detection
+    gAlgorithm.staticDetectParam.staticVarGyro = (real)(gAlgorithm.imuSpec.sigmaW * gAlgorithm.imuSpec.sigmaW);
+    gAlgorithm.staticDetectParam.staticVarAccel = (real)(gAlgorithm.imuSpec.sigmaA * gAlgorithm.imuSpec.sigmaA);
+    gAlgorithm.staticDetectParam.maxGyroBias = gAlgorithm.imuSpec.maxBiasW;
+    gAlgorithm.staticDetectParam.staticGnssVel = 0.2;
+    gAlgorithm.staticDetectParam.staticNoiseMultiplier[0] = 4.0;
+    gAlgorithm.staticDetectParam.staticNoiseMultiplier[1] = 4.0;
+    gAlgorithm.staticDetectParam.staticNoiseMultiplier[2] = 1.0;
+
+    //----------------------------algorithm states-----------------------------
+    memset(&gAlgoStatus, 0, sizeof(gAlgoStatus));
 }
 
 void GetAlgoStatus(AlgoStatus *algoStatus)
@@ -170,4 +211,23 @@ void setPointOfInterest( real poiBx, real poiBy, real poiBz )
     gAlgorithm.pointOfInterestB[0] = poiBx;
     gAlgorithm.pointOfInterestB[1] = poiBy;
     gAlgorithm.pointOfInterestB[2] = poiBz;
+}
+
+void UpdateImuSpec(real rwOdr, real arw, real biw, real maxBiasW,
+    real vrw, real bia, real maxBiasA)
+{
+    // Update IMU specifications
+    gAlgorithm.imuSpec.arw = arw;
+    gAlgorithm.imuSpec.sigmaW = (real)(1.25 * arw / sqrt(1.0 / rwOdr));
+    gAlgorithm.imuSpec.biW = biw;
+    gAlgorithm.imuSpec.maxBiasW = maxBiasW;
+    gAlgorithm.imuSpec.vrw = vrw;
+    gAlgorithm.imuSpec.sigmaA = (real)(1.25 * vrw / sqrt(1.0 / rwOdr));
+    gAlgorithm.imuSpec.biA = bia;
+    gAlgorithm.imuSpec.maxBiasA = maxBiasA;
+
+    // Update affected params related to zero velocity detection
+    gAlgorithm.staticDetectParam.staticVarGyro = (real)(gAlgorithm.imuSpec.sigmaW * gAlgorithm.imuSpec.sigmaW);
+    gAlgorithm.staticDetectParam.staticVarAccel = (real)(gAlgorithm.imuSpec.sigmaA * gAlgorithm.imuSpec.sigmaA);
+    gAlgorithm.staticDetectParam.maxGyroBias = gAlgorithm.imuSpec.maxBiasW;
 }

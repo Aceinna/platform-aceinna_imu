@@ -77,8 +77,8 @@ usr_packet_t userOutputPackets[] = {
 //   Packet Type                Packet Code
     {USR_OUT_NONE,              {0x00, 0x00}},
     {USR_OUT_DATA1,             "z1"},
-// place new type and code here
     {USR_OUT_SCALED1,           "s1"},
+// place new type and code here
     {USR_OUT_MAX,               {0xff, 0xff}},   //  "" 
 };
 

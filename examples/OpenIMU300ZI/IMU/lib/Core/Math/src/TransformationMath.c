@@ -204,68 +204,32 @@ BOOL LLA_To_R_NinE( double* llaRad,
 
 
 ///** ***************************************************************************
-//* @name LLA2Base Express LLA in a local NED Base Frame
+//* @name Calculate NED relative position of two ECEF positions.
 //* @details Pre calculated all non-changing constants and unfolded the matrices
-//* @param [in]  LLA - array with the current Latitude, Longitude and Altitude [rad]
-//* @param [in]  BaseECEF - start of frame position
-//* @param [in]  Rne - rotation matrix from ECEF to NED
-//* @param [out] NED - output of the position in North East and Down coords
-//* @param [out] newECEF - current position in ECEF from LLA
+//* @param [in]     rECEF_Init - start of frame position
+//* @param [in]     rECEF - current position in ECEF from LLA
+//* @param [in]     R_NinE - rotation matrix from NED to ECEF
+//* @param [out]    dr_N - output of the position in North East and Down coords
 //* @retval always 1
 //******************************************************************************/
-BOOL LLA_To_Base( double* llaRad,  // in
-                  double* rECEF_Init,  // in
-                  real* dr_N,  //NED,
+BOOL ECEF_To_Base( double* rECEF_Init,
+                  double* rECEF,
                   real* R_NinE,
-                  double* rECEF)  // out
+                  real* dr_N)
 {
     real dr_E[NUM_AXIS];
-
-    double N;
-    double sinLat = sin(llaRad[LAT]);
-    double cosLat = cos(llaRad[LAT]);
-    double sinLon = sin(llaRad[LON]);
-    double cosLon = cos(llaRad[LON]);
-
-    real sinLat_r = (real)sinLat;
-    real cosLat_r = (real)cosLat;
-    real sinLon_r = (real)sinLon;
-    real cosLon_r = (real)cosLon;
-
-    N = E_MAJOR / sqrt(1.0 - (E_ECC_SQ * sinLat * sinLat)); // radius of Curvature [meters]
-
-    //LLA_To_ECEF(llaRad, rECEF);
-    double temp_d = (N + llaRad[ALT]) * cosLat;
-    rECEF[X_AXIS] = temp_d * cosLon;
-    rECEF[Y_AXIS] = temp_d * sinLon;
-    rECEF[Z_AXIS] = ((E_MINOR_OVER_MAJOR_SQ * N) + llaRad[ALT]) * sinLat;
 
     dr_E[X_AXIS] = (real)( rECEF[X_AXIS] - *(rECEF_Init + X_AXIS) );
     dr_E[Y_AXIS] = (real)( rECEF[Y_AXIS] - *(rECEF_Init + Y_AXIS) );
     dr_E[Z_AXIS] = (real)( rECEF[Z_AXIS] - *(rECEF_Init + Z_AXIS) );
 
-    // Form R_NinE
-    // First row
-    *(R_NinE + 0 * 3 + 0) = -sinLat_r * cosLon_r;
-    *(R_NinE + 0 * 3 + 1) = -sinLon_r;
-    *(R_NinE + 0 * 3 + 2) = -cosLat_r * cosLon_r;
-
-    // Second row
-    *(R_NinE + 1 * 3 + 0) = -sinLat_r * sinLon_r;
-    *(R_NinE + 1 * 3 + 1) =  cosLon_r;
-    *(R_NinE + 1 * 3 + 2) = -cosLat_r * sinLon_r;
-
-    // Third row
-    *(R_NinE + 2 * 3 + 0) =  cosLat_r;
-    *(R_NinE + 2 * 3 + 1) =       0.0;
-    *(R_NinE + 2 * 3 + 2) = -sinLat_r;
-
-    // Convert from delta-position in the ECEF-frame to the NED-frame (the transpose
-    //   in the equations that followed is handled in the formulation)
-    //
-    //       N E          ( E N )T
-    // dr_N = R  * dr_E = (  R  )  * dr_E
-    //                    (     )
+    /* Convert from delta-position in the ECEF-frame to the NED-frame (the transpose
+     * in the equations that followed is handled in the formulation)
+     *
+     *       N E          ( E N )T
+     * dr_N = R  * dr_E = (  R  )  * dr_E
+     *                    (     )
+     */
     dr_N[X_AXIS] = *(R_NinE + X_AXIS * 3 + X_AXIS) * dr_E[X_AXIS] +
                    *(R_NinE + Y_AXIS * 3 + X_AXIS) * dr_E[Y_AXIS] +
                    *(R_NinE + Z_AXIS * 3 + X_AXIS) * dr_E[Z_AXIS];
@@ -438,97 +402,36 @@ void printVec(float *v, int n)
     printf("%.9g\n", v[i]);
 }
 
-int realSymmetricMtxEig(float *a, int n, float *v, float eps, int jt)
+real AngleErrDeg(real aErr)
 {
-    int i, j, p, q, u, w, t, s, l;
-    double fm, cn, sn, omega, x, y, d;
-    l = 1;
-    p = 0; q = 0;   // initialized AB
-    for (i = 0; i <= n - 1; i++)
-    {
-        v[i*n + i] = 1.0;
-        for (j = 0; j <= n - 1; j++)
+    while (fabs(aErr) > 180.0)
         {
-            if (i != j)
+        if (aErr > 180.0)
             {
-                v[i*n + j] = 0.0;
-            }
-        }
+            aErr -= (real)360.0;
     }
-    while (1)
+        else if (aErr < -180.0)
     {
-        fm = 0.0;
-        for (i = 0; i <= n - 1; i++)
-        {
-            for (j = 0; j <= n - 1; j++)
-            {
-                d = fabs(a[i*n + j]);
-                if ((i != j) && (d > fm))
-                {
-                    fm = d;
-                    p = i;
-                    q = j;
+            aErr += (real)360.0;
                 }
             }
-        }
-        if (fm < eps)
+
+    return aErr;
+}
+
+real AngleErrRad(real aErr)
+{
+    while (fabs(aErr) > PI)
         {
-            return(1);
-        }
-        if (l > jt)
+        if (aErr > PI)
         {
-            return(-1);
+            aErr -= (real)TWO_PI;
         }
-        l = l + 1;
-        u = p * n + q;
-        w = p * n + p;
-        t = q * n + p;
-        s = q * n + q;
-        x = -a[u];
-        y = (a[s] - a[w]) / 2.0;
-        omega = x / sqrt(x*x + y * y);
-        if (y < 0.0)
+        else if (aErr < -PI)
         {
-            omega = -omega;
+            aErr += (real)TWO_PI;
         }
-        sn = 1.0 + sqrt(1.0 - omega * omega);
-        sn = omega / sqrt(2.0*sn);
-        cn = sqrt(1.0 - sn * sn);
-        fm = a[w];
-        a[w] = fm * cn*cn + a[s] * sn*sn + a[u] * omega;
-        a[s] = fm * sn*sn + a[s] * cn*cn - a[u] * omega;
-        a[u] = 0.0;
-        a[t] = 0.0;
-        for (j = 0; j <= n - 1; j++)
-        {
-            if ((j != p) && (j != q))
-            {
-                u = p * n + j;
-                w = q * n + j;
-                fm = a[u];
-                a[u] = fm * cn + a[w] * sn;
-                a[w] = -fm * sn + a[w] * cn;
             }
-        }
-        for (i = 0; i <= n - 1; i++)
-        {
-            if ((i != p) && (i != q))
-            {
-                u = i * n + p;
-                w = i * n + q;
-                fm = a[u];
-                a[u] = fm * cn + a[w] * sn;
-                a[w] = -fm * sn + a[w] * cn;
-            }
-        }
-        for (i = 0; i <= n - 1; i++)
-        {
-            u = i * n + p;
-            w = i * n + q;
-            fm = v[u];
-            v[u] = fm * cn + v[w] * sn;
-            v[w] = -fm * sn + v[w] * cn;
-        }
-    }
-    return(1);
+
+    return aErr;
 }

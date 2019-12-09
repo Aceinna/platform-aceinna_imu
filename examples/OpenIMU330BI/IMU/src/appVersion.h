@@ -1,5 +1,5 @@
 /** ***************************************************************************
- * File:   app_version.h
+ * @file app_version.h
  *
  * THIS CODE AND INFORMATION ARE PROVIDED "AS IS" WITHOUT WARRANTY OF ANY
  * KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
@@ -23,16 +23,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 *******************************************************************************/
-/*****************************************************************************
- * @file app_version.h
- *
- * @brief Application version information.
- ******************************************************************************/
+
 #ifndef  _APP_VERSION_H
 #define  _APP_VERSION_H
 
 
-#define  APP_VERSION_STRING     "OpenIMU330BI IMU 1.1.1"
-#define  SPI_SW_VERSION         120
+#define  APP_VERSION_STRING     "OpenIMU330BI IMU 1.1.4"
+#define  SPI_SW_VERSION         114
 
 #endif

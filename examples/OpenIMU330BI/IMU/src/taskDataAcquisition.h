@@ -1,14 +1,15 @@
-/** ***************************************************************************
- * File:   taskDataAcuisition.h
+/*****************************************************************************
+ * @file   taskDataAcquisition.h
  *
  * THIS CODE AND INFORMATION ARE PROVIDED "AS IS" WITHOUT WARRANTY OF ANY
  * KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
  * PARTICULAR PURPOSE.
  *
- ******************************************************************************/
-
-/*******************************************************************************
+ * sensor data acquisition task runs at 200Hz, gets the data for each sensor
+ * and applies available calibration
+*******************************************************************************
+*******************************************************************************
 Copyright 2018 ACEINNA, INC
 
 Licensed under the Apache License, Version 2.0 (the "License");

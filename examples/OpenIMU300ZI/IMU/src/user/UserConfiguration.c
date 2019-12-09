@@ -50,13 +50,12 @@ const UserConfigurationStruct gDefaultUserConfig = {
     .hardIron_Y          = 0.0,
     .softIron_Ratio      = 1.0,
     .softIron_Angle      = 0.0,
-    .appBehavior         = APP_BEHAVIOR_USE_GPS_PPS,
-    .rateBiasX           = 0.0,
-    .rateBiasY           = 0.0,
-    .rateBiasZ           = 0.0,
-    .accelBiasX          = 0.0,
-    .accelBiasY          = 0.0,
-    .accelBiasZ          = 0.0
+    .appBehavior         = APP_BEHAVIOR_USE_EXT_SYNC,
+    .spiOrientation      = 0x0000,          //+X +Y +Z
+    .spiSyncRate         = 1,               // 200Hz
+    .extSyncFreq         = 1,               // 1Hz
+    .spiAccelLpfType     = IIR_20HZ_LPF,    // Butterworth 20Hz      
+    .spiGyroLpfType      = IIR_20HZ_LPF,    // Butterworth 20Hz
 };
 
 UserConfigurationStruct gUserConfiguration;
@@ -86,6 +85,7 @@ void userInitConfigureUnit()
 {
     uint64_t *ptr       = (uint64_t*)&gUserConfiguration;
     int       size      = sizeof(gUserConfiguration);        // total size in bytes
+    BOOL      factoryMode =   EEPROM_IsConfigSectorLocked()? FALSE : TRUE;
     
     // sanity check for maximum size of user config structure;
     if(size >= 0x4000){
@@ -122,6 +122,16 @@ void userInitConfigureUnit()
     // validate and apply own parameters if desired
     for(int i = USER_LAST_SYSTEM_PARAM+1; i < USER_MAX_PARAM && configValid; i++){
         UpdateUserParameter(i, ptr[i], TRUE);
+    }
+
+    if(((gUserConfiguration.appBehavior & APP_BEHAVIOR_USE_EXT_SYNC) != 0) && (gUserConfiguration.extSyncFreq == 1) && !factoryMode){
+        platformEnableGpsPps(TRUE);
+    }
+    bool fSPI = platformGetUnitCommunicationType() == SPI_COMM;
+    if(fSPI && !factoryMode){
+        platformApplyOrientation((uint16_t)gUserConfiguration.spiOrientation);
+        platformUpdateAccelFilterType((uint8_t)gUserConfiguration.spiAccelLpfType);
+        platformUpdateRateFilterType((uint8_t)gUserConfiguration.spiGyroLpfType);
     }
 
     info = getBuildInfo();
@@ -206,12 +216,14 @@ BOOL  UpdateUserParameter(uint32_t number, uint64_t data, BOOL fApply)
      }
 
      switch (number) {
-        case USER_APPLICATION_BEHAVIOR:  
-            if(fApply){
-                if(data & APP_BEHAVIOR_USE_GPS_PPS){
-                    platformEnableGpsPps(TRUE);
-                }
-            }
+        case USER_SPI_ORIENTATION:
+            platformApplyOrientation((uint16_t )data);
+            break;
+        case USER_SPI_ACCEl_LPF:
+            platformUpdateAccelFilterType((uint8_t )data);
+            break;
+        case USER_SPI_RATE_LPF:
+            platformUpdateRateFilterType((uint8_t )data);
             break;
         //case: 
         //    add function calls here if parameter XXXX
@@ -556,3 +568,36 @@ BOOL UpdateBias(void) {
     fUpdateBias = TRUE;
     return  TRUE;
 }
+
+
+BOOL ExtSyncEnabled()
+{
+    return (gUserConfiguration.appBehavior & APP_BEHAVIOR_USE_EXT_SYNC) != 0;
+}
+
+int ExtSyncFrequency()
+{
+    return  gUserConfiguration.extSyncFreq;
+}
+
+
+uint8_t SpiSyncRate()
+{
+    return (uint8_t)gUserConfiguration.spiSyncRate;
+}
+
+uint8_t SpiAccelLpfType()
+{
+    return (uint8_t)gUserConfiguration.spiAccelLpfType;
+}
+
+uint8_t SpiGyroLpfType()
+{
+    return (uint8_t)gUserConfiguration.spiGyroLpfType;
+}
+
+uint16_t SpiOrientation()
+{
+    return (uint16_t)gUserConfiguration.spiOrientation;
+}
+

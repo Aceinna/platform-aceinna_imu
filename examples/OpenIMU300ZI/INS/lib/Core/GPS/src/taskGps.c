@@ -89,16 +89,6 @@ void TaskGps(void const *argument)
                 pollSirfCnt++;
                 }
             }
-
-            // Set the GPS validity, based on the Horizontal Dilution of Precision
-            if (gGpsDataPtr->gpsValid && gGpsDataPtr->HDOP > 15.0) 
-            {
-                gGpsDataPtr->gpsValid = false;
-            }
-            else if (gGpsDataPtr->HDOP < 10.0)
-            {
-                gGpsDataPtr->gpsValid = true;
-            }
         }
     }
 }

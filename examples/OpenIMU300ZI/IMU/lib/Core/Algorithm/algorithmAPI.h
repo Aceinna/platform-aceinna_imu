@@ -36,7 +36,7 @@ limitations under the License.
  *
  * @retval N/A
  *****************************************************************************/
-void InitializeAlgorithmStruct(uint16_t callingFreq);
+void InitializeAlgorithmStruct(uint8_t callingFreq);
 
 /******************************************************************************
  * @brief Get algorithm status.

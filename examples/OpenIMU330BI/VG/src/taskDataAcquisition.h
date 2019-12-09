@@ -6,12 +6,11 @@
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
  * PARTICULAR PURPOSE.
  *
- * sensor data acquisition task runs at 100Hz, gets the data for each sensor
+ * sensor data acquisition task runs at 200Hz, gets the data for each sensor
  * and applies available calibration
- ******************************************************************************/
-/*******************************************************************************
-Copyright 2018 ACEINNA, INC
-
+ * Copyright 2018 ACEINNA, INC
+*******************************************************************************
+*******************************************************************************
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at

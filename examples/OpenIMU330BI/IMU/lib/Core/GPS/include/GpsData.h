@@ -43,35 +43,36 @@ This Data structure is not only used for all GPS interface and process
 but also used to be accessed by other modules rather than GPS files.
 */
 typedef struct  {
-    BOOL                 gpsValid;
-    long double          lat; // concatinated from int components [deg.dec]
-    long double          lon;
-    double               vNed[3];    // NED North East Down [m/s] x, y, z
-    uint32_t             itow;           ///< gps milisecond Interval Time Of Week
+    uint8_t         gpsFixType;    // GPS solution type: invalid, spp, dgps, spp, rtk_float, rtk_fix
+    uint8_t         numSatellites;
 
-    int                  updateFlagForEachCall; /// changed to 16 bits
-    int                  totalGGA;
-    int                  totalVTG;
+    uint8_t         GPSmonth;      // mm
+    uint8_t         GPSday;        // dd
+    uint8_t         GPSyear;       // yy last two digits of year
+    char            GPSHour;       // hh
+    char            GPSMinute;     // mm
+    char            GPSSecond;     // ss
+    double          GPSSecondFraction; // FIXME used?
 
-    double               trueCourse; // [deg]
-    double               rawGroundSpeed; // NMEA kph, SiRf m/s
+    uint32_t        itow;           ///< gps milisecond Interval Time Of Week
+    int             updateFlagForEachCall; /// changed to 16 bits
 
-    double               alt;          // above mean sea level [m]
-    double               filteredAlt; // FIXME should this be local?
-    float                altEllipsoid; // [km] altitude above ellipsoid for WMM
-    uint8_t              GPSmonth;     // mm
-    uint8_t              GPSday;       // dd
-    uint8_t              GPSyear;      // yy last two digits of year
-    char                 GPSHour;      // hh
-    char                 GPSMinute;    // mm
-    char                 GPSSecond;    // ss
-    double               GPSSecondFraction; // FIXME used?
+    int             totalGGA;
+    int             totalVTG;
+    
+    double          lat;           // [deg], latitude
+    double          lon;           // [lon], longitude
+    double          alt;          // [m] above WGS84 ellipsoid
+    double          vNed[3];       // NED North East Down [m/s] x, y, z
+    double          trueCourse; // [deg]
+    double          rawGroundSpeed; // [m/s]
+
+    float                geoidAboveEllipsoid;    // [m] Height of geoid (mean sea level) above WGS84 ellipsoid
 
     /// compatible with Ublox driver FIXME should these be seperate data structure?
     unsigned char        ubloxClassID;
     unsigned char        ubloxMsgID;
     signed long          LonLatH[3]; // SiRF Lat Lon[deg] * 10^7 Alt ellipse [m]*100 <-- UNUSED
-    char                 GPSFix;
     float                HDOP;       // Horizontal Dilution Of Precision x.x
     double               GPSVelAcc;
     unsigned short       GPSStatusWord;  /// will replace GPSfix
@@ -114,9 +115,6 @@ typedef struct  {
 
     float                GPSHorizAcc;
     float                GPSVertAcc;
-
-    int                  numSatelites;
-
 } GpsData_t;
 
 extern GpsData_t *gGpsDataPtr; // definition in driverGPSAllentrance.c

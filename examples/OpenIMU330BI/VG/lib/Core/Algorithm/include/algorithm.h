@@ -47,6 +47,12 @@ limitations under the License.
 #define HIGH_GAIN_AHRS_DURATION      30.0    // 60.0 * SAMPLING_RATE
 #define LOW_GAIN_AHRS_DURATION       30.0    // 30.0 * SAMPLING_RATE
 
+// Define heading initialization reliability
+#define HEADING_UNINITIALIZED   0
+#define HEADING_MAG             1
+#define HEADING_GNSS_LOW        2
+#define HEADING_GNSS_HIGH       3
+
 typedef struct {
 	uint32_t Stabilize_System;      // SAMPLING_RATE * 0.36
 	uint32_t Initialize_Attitude;   // SAMPLING_RATE * ( 1.0 - 0.36 )
@@ -61,7 +67,12 @@ typedef struct {
 } InnovationStruct;
 
 typedef struct {
-	int32_t Max_GPS_Drop_Time;   // [msec]
+    int32_t maxGpsDropTime;     // [msec]
+    int32_t maxReliableDRTime;  /* [msec] When GPS outage duration exceeds this limit,
+                                 * the position and velocity will be reinitialized when GPS
+                                 * is available again. Otherwise, the fusion algorithm will
+                                 * gradually correct the position and velocity to the GPS.
+                                 */
 	int32_t Max_Rest_Time_Before_Drop_To_AHRS;   // [msec]
 	int32_t Declination_Expiration_Time;   // [msec]
 
@@ -114,55 +125,86 @@ typedef union ALGO_STATUS
 
 extern AlgoStatus gAlgoStatus;
 
+typedef struct
+{
+    real arw;                       // [rad/sqrt(s)], gyro angle random walk
+    real sigmaW;                    // [rad/s], gyro noise std
+    real biW;                       // [rad/s], gyro bias instability
+    real maxBiasW;                  // [rad/s], max possible gyro bias
+    real vrw;                       // [m/s/sqrt(s)], accel velocity random walk
+    real sigmaA;                    // [m/s/s], accel noise std
+    real biA;                       // [m/s/s], accel bias instability
+    real maxBiasA;                  // [m/s/s], max possible accel bias
+} IMU_SPEC;
+
+typedef struct 
+{
+    real staticVarGyro;             // [rad/s]^2
+    real staticVarAccel;            // [m/s/s]^2
+    real maxGyroBias;               // [rad/s]
+    real staticGnssVel;             // [m/s]
+    real staticNoiseMultiplier[3];  /* Use IMU noise level and gyro output to detect static period.
+                                     * The nominal noise level and max gyro bias of an IMU is defined in
+                                     * SensorNoiseParameters.h. These parameters are determined by IMU
+                                     * output when static and are hightly related to ARW and VRW.
+                                     * When IMU is installed on a vehicle, its noise level when
+                                     * vehicle is static could be higher than the nominal noise
+                                     * level due to vibration. This setting is used to scale
+                                     * the nominal noise level and gyro bias for static detection.
+                                     * [scale_gyro_var, scale_accel_var, scale_gyro_bias]
+                                     */
+} STATIC_DETECT_SETTING;
+
+
 /* Global Algorithm structure  */
 typedef struct {
-	uint32_t    itow;
-	uint32_t    dITOW;
+    uint32_t    itow;
+    uint32_t    dITOW;
 
-	// control the stage of operation for the algorithms
-	uint32_t          stateTimer;
-	uint8_t           state;			// takes values from HARDWARE_STABILIZE to INIT_ATTITUDE to HG_AHRS
+    // control the stage of operation for the algorithms
+    uint32_t    stateTimer;
+    uint8_t     state;			// takes values from HARDWARE_STABILIZE to INIT_ATTITUDE to HG_AHRS
 
-	uint8_t insFirstTime;
-	uint8_t gnssHeadingFirstTime;
-	uint8_t applyDeclFlag;
+    uint8_t insFirstTime;
+    uint8_t headingIni;
+    uint8_t applyDeclFlag;
 
-	int32_t timeOfLastSufficientGPSVelocity;
-	int32_t timeOfLastGoodGPSReading;
+    int32_t timeOfLastSufficientGPSVelocity;
+    int32_t timeOfLastGoodGPSReading;
 
-	real  rGPS_N[3];					// current IMU position (lever-arm) w.r.t rGPS0_E in NED.
-	real  R_NinE[3][3];					// convert NED to ECEF
-	double rGPS0_E[3];					// Initial antenna ECEF position when first entering INS state
-	double  rGPS_E[3];					// current antenna ECEF position
+    real filteredYawRate;				// Yaw-Rate (Turn-Switch) filter
 
-	real filteredYawRate;				// Yaw-Rate (Turn-Switch) filter
+    /* The following variables are used to increase the Kalman filter gain when the
+     * acceleration is very close to one (i.e. the system is at rest)
+     */
+    uint32_t linAccelSwitchCntr;
+    uint8_t linAccelSwitch;
 
-	/* The following variables are used to increase the Kalman filter gain when the
-	 * acceleration is very close to one (i.e. the system is at rest)
-	 */
-	uint32_t linAccelSwitchCntr;
-	uint8_t linAccelSwitch;
+    uint8_t linAccelLPFType;
+    uint8_t useRawAccToDetectLinAccel;
 
-	uint8_t linAccelLPFType;
-	uint8_t useRawAccToDetectLinAccel;
+    uint8_t callingFreq;
+    real    dt;
+    real    dtOverTwo;
+    real    dtSquared;
+    real    sqrtDt;
 
-	uint8_t callingFreq;
-	real    dt;
-	real    dtOverTwo;
-	real    dtSquared;
-	real    sqrtDt;
+    volatile uint32_t timer;  			// timer since power up (ms)
+    volatile uint16_t counter;			// inc. with every continuous mode output packet
 
-	volatile uint32_t timer;  			// timer since power up (ms)
-	volatile uint16_t counter;			// inc. with every continuous mode output packet
+    union   AlgoBehavior Behavior;
+    float    turnSwitchThreshold;		// 0, 0.4, 10 driving, 1 flying [deg/sec]   0x000d
 
-	union   AlgoBehavior Behavior;
-	float    turnSwitchThreshold;		// 0, 0.4, 10 driving, 1 flying [deg/sec]   0x000d
+    real leverArmB[3];					// Antenna position w.r.t IMU in vehicle body frame
+    real pointOfInterestB[3];			// Point of interest position w.r.t IMU in vehicle body frame
 
-	real leverArmB[3];					// Antenna position w.r.t IMU in vehicle body frame
-	real pointOfInterestB[3];			// Point of interest position w.r.t IMU in vehicle body frame
+    BOOL velocityAlwaysAlongBodyX;      // enable zero velocity update
 
-	DurationStruct    Duration;
-	LimitStruct       Limit;
+    IMU_SPEC imuSpec;                   // IMU specifications
+    STATIC_DETECT_SETTING staticDetectParam;    // params used for static detection         
+
+    DurationStruct    Duration;
+    LimitStruct       Limit;
 } AlgorithmStruct;
 
 extern AlgorithmStruct gAlgorithm;
