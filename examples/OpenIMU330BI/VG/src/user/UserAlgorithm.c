@@ -205,7 +205,7 @@ static void _Algorithm(uint16_t dacqRate, uint8_t algoType)
         algoCntr = 0;
 
         // Log GPS measurement update
-        if (gEKFInputData.gpsUpdate)
+        if (gEKFInput.gpsUpdate)
         {
             gBitStatus.swStatus.bit.gpsUpdate = 1;
         }

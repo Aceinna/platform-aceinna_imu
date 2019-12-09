@@ -41,15 +41,19 @@ limitations under the License.
 
 #include <stdint.h>
 #include "gpsAPI.h"
+#include "odoAPI.h"
 
 void  inertialAndPositionDataProcessing(uint16_t dacqRate);
 
-void *RunUserNavAlgorithm(double *accels, double *rates, double* mags, gpsDataStruct_t *gps, uint16_t dacqRate);
+void *RunUserNavAlgorithm(double *accels, double *rates, double *mags,
+                          gpsDataStruct_t *gps, odoDataStruct_t *odo, BOOL ppsDetected);
 void  WriteResultsIntoOutputStream(void *results) ;
 void  InitUserDataStructures();
 void  InitUserFilters();       
 void  InitUserAlgorithm();     
 void  initUserDataProcessingEngine();
 void  userInitConfigureUnit();
+
+extern BOOL  fAlgorithmSynced;
 
 #endif

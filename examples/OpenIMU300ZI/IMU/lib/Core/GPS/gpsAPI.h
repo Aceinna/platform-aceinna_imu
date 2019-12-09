@@ -43,20 +43,31 @@ void TaskGps(void const *argument);
 }
 #endif
 
+// Fix type
+#define INVALID     0   // GNSS not fixed yet
+#define SPP         1   // Single Point Positioning
+#define DGPS        2   // Pseudorange Differential
+#define PPP         3   // Precise Point Positioning
+#define RTK_FIX     4   // RTK Fixed
+#define RTK_FLOAT   5   // RTK Float
+#define DEAD_REC    6   // Dead Reckoning (will be considered as INVALID)
+#define MANUAL      7   // Manual Input Mode (will be considered as INVALID)
+#define SIMULATION  8   // Simulation Mode (will be considered as INVALID)
+
 typedef struct  {
-    int                  gpsValid;   // 1 if data is valid
+    uint8_t     gpsFixType;     // 1 if data is valid
     uint8_t              gpsUpdate;    // 1 if contains new data
+    uint8_t     numSatellites;  // num of satellites in the solution    
+    uint32_t    itow;           // gps Time Of Week, miliseconds
     
     double               latitude;   // latitude ,  degrees 
     double               longitude;  // longitude,  degrees 
     double                vNed[3];   // velocities,  m/s  NED (North East Down) x, y, z
     double               trueCourse; // [deg]
-    double               rawGroundSpeed;    // NMEA kph, SiRf m/s - change to m/s
-    double               altitude;          // above ellipsoid [m]
+    double      rawGroundSpeed; // [m/s]
+    double      altitude;       // above WGS84 ellipsoid [m]
     double               GPSSecondFraction; 
-    float                altEllipsoid; // [km] altitude above ellipsoid for WMM
 
-    uint32_t             itow;         // gps Time Of Week, miliseconds
  
     uint8_t              GPSmonth;     // mm
     uint8_t              GPSday;       // dd
@@ -67,9 +78,10 @@ typedef struct  {
 
     float                GPSHorizAcc, GPSVertAcc;
     float                HDOP;
+    float       geoidAboveEllipsoid;    // [m] Height of geoid (mean sea level) above WGS84 ellipsoid
 } gpsDataStruct_t;
 
-extern gpsDataStruct_t gGPS;
+extern gpsDataStruct_t gGPS, gCanGps;
 
 /** ****************************************************************************
  * @name GetGPSData

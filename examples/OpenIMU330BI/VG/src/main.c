@@ -33,9 +33,10 @@ limitations under the License.
 #include "sensorsAPI.h"
 #include "UserCommunicationSPI.h"
 #include "taskDataAcquisition.h"
-#include "platformAPI.h"
 #include "UserConfiguration.h"
+#include "platformAPI.h"
 #include "debug.h"
+
 
 int main(void)
 {
@@ -56,15 +57,19 @@ int main(void)
 
     // parameter is timer resolution in uS
     StartReferenceTimer(1);
-//    platformEnableExternalSync();   // enable external 1KHZ sync - can be adjusted to any frequency
+
+    if(ExtSyncEnabled()){
+        res = platformActivateExternalSync(ExtSyncFrequency());   // enable external 1KHZ sync
+    }
     
     if(fSPI){
-#ifdef USE_SPI 
         InitUserCommunicationSPI();
-#endif
     }else{
         rate = configGetBaudRate();
-        UART_Init(USER_SERIAL_PORT, rate);
+        //  User serial port defaulted to 0 (USER_SERIAL_PORT) but can be redefined using next
+        //  function if needed. Debug port in this case reassigned to user port if debug enabled
+        //  platformSetUserSerialPort(DEBUG_SERIAL_PORT);
+        platformInitUserSerialPort(rate);
     }
 
 #ifdef DEBUG_ENABLED

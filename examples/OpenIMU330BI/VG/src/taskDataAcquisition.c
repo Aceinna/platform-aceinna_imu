@@ -38,7 +38,6 @@ limitations under the License.
 #include "commAPI.h"
 
 
-extern BOOL fSPI;
 int cycleError = 0; 
 /** ***************************************************************************
  * @name TaskDataAcquisition() CALLBACK main loop
@@ -50,9 +49,10 @@ int cycleError = 0;
  ******************************************************************************/
 void TaskDataAcquisition()
 {
-
+    int spiRateRef = 0, spiRateDiv = 0;
     InitSensorsData();
     
+    // Frequency 200 Hz. Do not change
     StartDacqTimer(200);
 
     initUserDataProcessingEngine();
@@ -69,11 +69,17 @@ void TaskDataAcquisition()
 
         HW_IO3_On();
         
-        SampleSensorsData();
+        if(fSPI){
+            // deactivate data ready - set hi 
+            // add timing logic here to match SPI data rate
+            HW_DRDY_Off();             
+        }
         
-        HW_IO3_Off();
+        SampleSensorsData();
 
         ApplyFactoryCalibration();
+
+        HW_IO3_Off();
 
         // *****************************************************************
         // At this we have calibrated sensors data in next units
@@ -81,23 +87,29 @@ void TaskDataAcquisition()
         // Rates        - rad/s
         //******************************************************************
 
-        if(fSPI){
-            // deactivate data ready - set hi 
-            // add timing logic here to match SPI data rate
-            HW_DRDY_Off();             
-        }
 
+        // **********************  Algorithm *******************************
         HW_IO2_On();
 
-        // **********************  Algorithm ************************
         inertialAndPositionDataProcessing(200);
         
         HW_IO2_Off();
+        //******************************************************************
 
         if(fSPI){
             // Perform interface - specific processing here
             FillSPIDataBuffer();
+            if(spiRateRef){
+                spiRateDiv++;
+                if(spiRateDiv >= spiRateRef){
             HW_DRDY_On(); // activate data ready - set low 
+                    spiRateDiv = 0;
+                    spiRateRef = GetSpiPacketRateDivider();
+                }
+            }else {
+                spiRateRef = GetSpiPacketRateDivider();
+            }
+            UpdateSpiUserConfig();
        } else {
             // Process commands and output continuous packets to UART
             // Processing of user commands always goes first

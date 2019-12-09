@@ -253,7 +253,7 @@ BOOL Fill_e1PacketPayload(uint8_t *payload, uint8_t *payloadLen)
 
     *payloadLen  = sizeof(ekf1_payload_t);
     pld->tstmp   = platformGetIMUCounter();
-    pld->dbTstmp = (double)platformGetSolutionTstamp() * 0.000001;  // seconds
+    pld->dbTstmp = platformGetSolutionTstampAsDouble() * 0.000001;  // seconds
 
     EKF_GetAttitude_EA(EulerAngles);
     pld->roll    = (float)EulerAngles[ROLL];
@@ -306,8 +306,7 @@ BOOL Fill_e2PacketPayload(uint8_t *payload, uint8_t *payloadLen)
     
     *payloadLen  = sizeof(ekf2_payload_t);
     pld->tstmp   = platformGetIMUCounter();
-    pld->dbTstmp = (double)platformGetSolutionTstamp() * 0.000001;  // seconds
-
+    pld->dbTstmp = platformGetSolutionTstampAsDouble() * 0.000001;  // seconds
 
     EKF_GetAttitude_EA(rData);
     pld->roll  = (float)rData[ROLL];
@@ -347,7 +346,7 @@ BOOL Fill_e2PacketPayload(uint8_t *payload, uint8_t *payloadLen)
 
     EKF_GetEstimatedLLA(dData);
     for(int i = 0; i < NUM_AXIS; i++){
-        pld->pos[i] = (float)dData[i]; 
+        pld->pos[i] = dData[i]; 
     }
 
     uint8_t opMode, linAccelSw, turnSw;

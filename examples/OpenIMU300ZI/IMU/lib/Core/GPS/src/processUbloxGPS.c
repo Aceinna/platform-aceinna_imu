@@ -32,6 +32,7 @@ limitations under the License.
 
 #include "driverGPS.h"
 #include "platformAPI.h"
+#include "gpsAPI.h"
 
 #ifdef DISPLAY_DIAGNOSTIC_MSG
 #include "debug.h"
@@ -312,7 +313,7 @@ void processUbloxBinaryMessage(char          *msg,
             GPSData->VELCounter++;
 		break;
 		case UBLOX_NAV_STATUS: ///NAV_STATUS
-            GPSData->GPSFix = msg[10]; ///fix indicator
+            GPSData->gpsFixType = msg[10]; ///fix indicator
             if((msg[11]&0x02) == 0x02)  ///6+5
                 GPSData->GPSStatusWord |=1 << DGPS_ON;	///on
             else
@@ -422,10 +423,34 @@ void processUbloxBinaryMessage(char          *msg,
 
 void decodeNavPvt(char *msg, GpsData_t *GPSData)
 {
+    // Decode
     ubloxNavPvtSTRUCT *navPvt;
     navPvt = (ubloxNavPvtSTRUCT*)(&msg[UBLOX_BINAERY_HEADER_LEN]);
+
+    // Get decoded results
     // fix type
-    GPSData->gpsValid = navPvt->fixType == 3;
+    GPSData->gpsFixType = INVALID;
+    if (navPvt->flags & 0x01)
+    {
+        GPSData->gpsFixType = SPP;
+        if (navPvt->flags & 0x02)
+        {
+            GPSData->gpsFixType = DGPS;
+        }
+        uint8_t carrSoln = navPvt->flags >> 6;
+        if (carrSoln == 1)
+        {
+            GPSData->gpsFixType = RTK_FLOAT;
+        }
+        else if(carrSoln == 2)
+        {
+            GPSData->gpsFixType = RTK_FIX;
+        }
+    }
+
+    // num of satellites
+    GPSData->numSatellites = navPvt->numSV;
+
     // lat
     GPSData->lat = navPvt->lat * 1.0e-7;
 
@@ -444,9 +469,12 @@ void decodeNavPvt(char *msg, GpsData_t *GPSData)
     // fractional second
     GPSData->GPSSecondFraction = navPvt->nano * 1.0e-9;
     // ellipsoid height
-    GPSData->altEllipsoid = navPvt->height * 1.0e-3;
+    GPSData->geoidAboveEllipsoid = (navPvt->height - navPvt->hMSL) * 1.0e-3;
     // itow
     GPSData->itow = navPvt->iTOW;
+    if(GPSData->itow%1000 != 0){
+        GPSData->itow+=1;           // correction of numerical issue
+    }
     platformUpdateITOW(GPSData->itow);
     // year month day hour min sec
     GPSData->GPSmonth = navPvt->month;

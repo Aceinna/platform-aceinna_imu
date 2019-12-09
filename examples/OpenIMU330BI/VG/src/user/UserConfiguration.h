@@ -36,6 +36,8 @@ limitations under the License.
 ///Please notice, that parameters are 64 bit to accomodate double types as well as longer string types
 
 typedef struct {
+
+//*************************** System parameters *********************************************************************
     uint64_t           dataCRC;             /// CRC of user configuration structure CRC-16
     uint64_t           dataSize;            /// Size of the user configuration structure 
     
@@ -74,6 +76,16 @@ typedef struct {
                                             /// 'X' (0x58) -> plus  X, 'Y' (0x59) -> plus Y,  'Z' (0x5a) -> plus Z
                                             /// 'x' (0x78) -> minus X, 'y' (0x79) -> minus Y, 'z' (0x7a) ->minusZ
 
+    int64_t           accelRange;           /// accelerometer range
+                                            /// 0 or 8 - 8G   
+                                            /// 16     - 16G   
+
+    int64_t           gyroRange;            /// rate sensor range
+                                            /// 8  - 500 dps   
+                                            /// 16 - 1000 dps   
+                                            /// 32 - 2000 dps   
+    
+
     //***************************************************************************************
     // here is the border between arbitrary parameters and platform configuration parameters
     //***************************************************************************************
@@ -81,8 +93,61 @@ typedef struct {
     // parameter size should even to 8 bytes
     // Add parameter offset in UserConfigParamOffset structure if validation or
     // special processing required 
+    int64_t           spiSyncRate;          /// SPI data ready rate
+                                            /// 0 - 0 Hz   
+                                            /// 1 - 200 Hz   
+                                            /// 2 - 100 Hz   
+                                            /// 3 - 50 Hz   
+                                            /// 4 - 25 Hz   
+                                            /// 5 - 20 Hz   
+                                            /// 6 - 10 Hz   
+                                            /// 7 - 5 Hz   
+                                            /// 8 - 4 Hz   
+                                            /// 9 - 2 Hz   
 
-    uint64_t appBehavior;
+    int64_t           spiOrientation;       /// orientation for SPI mode
+                                               //0x0000	+Ux	+Uy	+Uz
+	                                           //0x0009	-Ux	-Uy	+Uz
+	                                           //0x0023	-Uy	+Ux	+Uz
+	                                           //0x002A	+Uy	-Ux	+Uz
+	                                           //0x0041	-Ux	+Uy	-Uz
+	                                           //0x0048	+Ux	-Uy	-Uz
+	                                           //0x0062	+Uy	+Ux	-Uz
+	                                           //0x006B	-Uy	-Ux	-Uz
+	                                           //0x0085	-Uz	+Uy	+Ux
+	                                           //0x008C	+Uz	-Uy	+Ux
+	                                           //0x0092	+Uy	+Uz	+Ux
+	                                           //0x009B	-Uy	-Uz	+Ux
+	                                           //0x00C4	+Uz	+Uy	-Ux
+	                                           //0x00CD	-Uz	-Uy	-Ux
+	                                           //0x00D3	-Uy	+Uz	-Ux
+	                                           //0x00DA	+Uy	-Uz	-Ux
+	                                           //0x0111	-Ux	+Uz	+Uy
+	                                           //0x0118	+Ux	-Uz	+Uy
+	                                           //0x0124	+Uz	+Ux	+Uy
+	                                           //0x012D	-Uz	-Ux	+Uy
+	                                           //0x0150	+Ux	+Uz	-Uy
+	                                           //0x0159	-Ux	-Uz	-Uy
+	                                           //0x0165	-Uz	+Ux	-Uy
+	                                           //0x016C	+Uz	-Ux	-Uy
+
+    int64_t           spiAccelLpfType;        /// built-in lpf filter cutoff frequency selection for accelerometers   
+    int64_t           spiGyroLpfType;         /// built-in lpf filter cutoff frequency selection for rate sensors   
+                                              /// Options are:
+                                              /// 0  -  Filter turned off
+                                              /// 3  -  40 Hz Bartlett
+                                              /// 4  -  20 Hz Bartlett
+                                              /// 5  -  10 Hz Bartlett
+                                              /// 6  -  5 Hz Bartlett
+                                              /// 48 -  50 Hz Butterworth
+                                              /// 64 -  20 Hz Butterworth
+                                              /// 80 -  10 Hz Butterworth
+                                              /// 96 -  5  Hz Butterworth
+
+    uint64_t          appBehavior;            /// application-specific behaviour bitmask
+    uint64_t          extSyncFreq;            /// external sync frequency
+                                              /// 1    - 1 Hz
+                                              /// 1000 - 1000 Hz     
 } UserConfigurationStruct;
 
 typedef enum{
@@ -90,16 +155,23 @@ typedef enum{
 // add system parameters here and reassign USER_LAST_SYSTEM_PARAM (DO NOT CHANGE THIS!!!)
     USER_CRC                       = 0,
     USER_DATA_SIZE                    ,   // 1
-    USER_USER_BAUD_RATE               ,   // 2  order of next 4 parameters
-    USER_USER_PACKET_TYPE             ,   // 3  of required unit output bandwidth
-    USER_USER_PACKET_RATE             ,   // 4 
+    USER_UART_BAUD_RATE               ,   // 2  order of next 4 parameters
+    USER_UART_PACKET_TYPE             ,   // 3  of required unit output bandwidth
+    USER_UART_PACKET_RATE             ,   // 4 
     USER_LPF_ACCEL_TYPE               ,   // 5  prefered LPF filter type for accelerometer
     USER_LPF_RATE_TYPE                ,   // 6  prefered LPF filter type for rate sensor
     USER_ORIENTATION                  ,   // 7  unit orientation
-    USER_LAST_SYSTEM_PARAM = USER_ORIENTATION, 
+    USER_ACCEL_RANGE                  ,   // 8  Accelerometer range
+    USER_GYRO_RANGE                   ,   // 9  Gyro range
+    USER_LAST_SYSTEM_PARAM = USER_GYRO_RANGE, 
 //*****************************************************************************************
 // add parameter enumerator here while adding new parameter in user UserConfigurationStruct
-    USER_APPLICATION_BEHAVIOR         ,
+    USER_SPI_SYNC_RATE                ,   // 10  SPI data ready rate
+    USER_SPI_ORIENTATION              ,   // 11  SPI mode orientation
+    USER_SPI_ACCEl_LPF                ,   // 12  SPI mode accel lpf
+    USER_SPI_RATE_LPF                 ,   // 13  SPI mode gyro  lpf
+    USER_APPLICATION_BEHAVIOR         ,   // Extern sync frequency applied tp SYNC/1PPS input
+    USER_EXT_SYNC_FREQ                ,
     USER_MAX_PARAM
 } UserConfigParamNumber;
 
@@ -136,6 +208,13 @@ extern BOOL      GetAllUserParams(allUserParamsPayload*  pld, uint8_t *payloadLe
 extern BOOL      UpdateUserParameter(uint32_t number, uint64_t data, BOOL fApply);
 extern BOOL      UpdateSystemParameter(uint32_t offset, uint64_t data, BOOL fApply);
 extern void      ApplyUserConfiguration();
+extern BOOL      ExtSyncEnabled();
+extern int       ExtSyncFrequency();
+uint16_t         SpiOrientation();
+uint8_t          SpiSyncRate();
+uint8_t          SpiAccelLpfType();
+uint8_t          SpiGyroLpfType();
+
 #endif /* USER_CONFIGURATION_H */
 
 

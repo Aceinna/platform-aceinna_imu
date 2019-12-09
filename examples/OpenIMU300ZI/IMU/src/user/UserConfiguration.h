@@ -82,12 +82,65 @@ typedef struct {
     double   softIron_Ratio;
     double   softIron_Angle;
     uint64_t appBehavior;
-    double   rateBiasX;
-    double   rateBiasY;
-    double   rateBiasZ;
-    double   accelBiasX;
-    double   accelBiasY;
-    double   accelBiasZ;
+
+    //***************************************************************************************
+    // SPI-Related specific parameters
+    //***************************************************************************************
+    int64_t           spiSyncRate;          /// SPI data ready rate
+                                            /// 0 - 0 Hz   
+                                            /// 1 - 200 Hz   
+                                            /// 2 - 100 Hz   
+                                            /// 3 - 50 Hz   
+                                            /// 4 - 25 Hz   
+                                            /// 5 - 20 Hz   
+                                            /// 6 - 10 Hz   
+                                            /// 7 - 5 Hz   
+                                            /// 8 - 4 Hz   
+                                            /// 9 - 2 Hz   
+
+    int64_t           spiOrientation;       /// orientation for SPI mode
+                                               //0x0000	+Ux	+Uy	+Uz
+	                                           //0x0009	-Ux	-Uy	+Uz
+	                                           //0x0023	-Uy	+Ux	+Uz
+	                                           //0x002A	+Uy	-Ux	+Uz
+	                                           //0x0041	-Ux	+Uy	-Uz
+	                                           //0x0048	+Ux	-Uy	-Uz
+	                                           //0x0062	+Uy	+Ux	-Uz
+	                                           //0x006B	-Uy	-Ux	-Uz
+	                                           //0x0085	-Uz	+Uy	+Ux
+	                                           //0x008C	+Uz	-Uy	+Ux
+	                                           //0x0092	+Uy	+Uz	+Ux
+	                                           //0x009B	-Uy	-Uz	+Ux
+	                                           //0x00C4	+Uz	+Uy	-Ux
+	                                           //0x00CD	-Uz	-Uy	-Ux
+	                                           //0x00D3	-Uy	+Uz	-Ux
+	                                           //0x00DA	+Uy	-Uz	-Ux
+	                                           //0x0111	-Ux	+Uz	+Uy
+	                                           //0x0118	+Ux	-Uz	+Uy
+	                                           //0x0124	+Uz	+Ux	+Uy
+	                                           //0x012D	-Uz	-Ux	+Uy
+	                                           //0x0150	+Ux	+Uz	-Uy
+	                                           //0x0159	-Ux	-Uz	-Uy
+	                                           //0x0165	-Uz	+Ux	-Uy
+	                                           //0x016C	+Uz	-Ux	-Uy
+
+    int64_t           spiAccelLpfType;        /// built-in lpf filter cutoff frequency selection for accelerometers   
+    int64_t           spiGyroLpfType;         /// built-in lpf filter cutoff frequency selection for rate sensors   
+                                              /// Options are:
+                                              //  UNFILTERED          = 0x00,
+                                              //  FIR_40HZ_LPF        = 0x03,  // Bartlett LPF 40HZ
+                                              //  FIR_20HZ_LPF        = 0x04,  // Bartlett LPF 20HZ
+                                              //  FIR_10HZ_LPF        = 0x05,  // Bartlett LPF 10HZ
+                                              //  FIR_05HZ_LPF        = 0x06,  // Bartlett LPF 5HZ
+                                              //  IIR_50HZ_LPF        = 0x30, // Butterworth LPF 50HZ
+                                              //  IIR_20HZ_LPF        = 0x40, // Butterworth LPF 20HZ
+                                              // IIR_10HZ_LPF         = 0x50, // Butterworth LPF 10HZ
+                                              //  IIR_05HZ_LPF        = 0x60, // Butterworth LPF 5HZ
+                                              //  IIR_02HZ_LPF        = 0x70, // Butterworth LPF 2HZ
+                                              //  IIR_25HZ_LPF        = 0x80, // Butterworth LPF 25HZ
+                                              //  IIR_40HZ_LPF        = 0x90, // Butterworth LPF 40HZ
+    uint64_t          extSyncFreq;            /// external sync frequency
+
 } UserConfigurationStruct;
 
 typedef enum{
@@ -109,12 +162,12 @@ typedef enum{
     USER_SOFT_IRON_RATIO              ,
     USER_SOFT_IRON_ANGLE              ,
     USER_APPLICATION_BEHAVIOR         ,
-    USER_RATE_OFFX                    ,
-    USER_RATE_OFFY                    ,
-    USER_RATE_OFFZ                    ,
-    USER_ACCEL_OFFX                   ,
-    USER_ACCEL_OFFY                   ,
-    USER_ACCEL_OFFZ                   ,
+// spi-specific parameters
+    USER_SPI_SYNC_RATE                ,   // SPI data ready rate
+    USER_SPI_ORIENTATION              ,   // SPI mode orientation
+    USER_SPI_ACCEl_LPF                ,   // SPI mode accel lpf
+    USER_SPI_RATE_LPF                 ,   // SPI mode gyro  lpf
+    USER_EXT_SYNC_FREQ                ,   // Extern sync frequency applied tp SYNC/1PPS input
     USER_MAX_PARAM
 } UserConfigParamNumber;
 
@@ -131,7 +184,7 @@ extern BOOL fUpdateBias;
 #define INVALID_VALUE           -2
 #define INVALID_PAYLOAD_SIZE    -3
 
-#define APP_BEHAVIOR_USE_GPS_PPS  0x0000000000000001LL
+#define APP_BEHAVIOR_USE_EXT_SYNC  0x0000000000000001LL
 
 extern UserConfigurationStruct gUserConfiguration;
 
@@ -149,6 +202,12 @@ extern BOOL      RestoreDefaultUserConfig(void);
 extern BOOL      UpdateUserParameter(uint32_t number, uint64_t data, BOOL fApply);
 extern BOOL      UpdateSystemParameter(uint32_t offset, uint64_t data, BOOL fApply);
 extern BOOL      UpdateBias();
+extern BOOL      ExtSyncEnabled();
+extern int       ExtSyncFrequency();
+uint16_t         SpiOrientation();
+uint8_t          SpiSyncRate();
+uint8_t          SpiAccelLpfType();
+uint8_t          SpiGyroLpfType();
 
 #endif /* USER_CONFIGURATION_H */
 

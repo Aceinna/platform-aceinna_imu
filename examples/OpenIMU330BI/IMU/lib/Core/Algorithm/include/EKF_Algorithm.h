@@ -30,8 +30,6 @@ typedef struct {
     real rateBias_B[NUM_AXIS];
     real accelBias_B[NUM_AXIS];
 
-    real stateUpdate[NUMBER_OF_EKF_STATES];
-
     // Prediction variables: P = FxPxFTranspose + Q
     real F[NUMBER_OF_EKF_STATES][NUMBER_OF_EKF_STATES];
     real P[NUMBER_OF_EKF_STATES][NUMBER_OF_EKF_STATES];
@@ -42,26 +40,33 @@ typedef struct {
                  * is symmetric, only 6 off-diagonal terms need stored.
                  */
 
-    real correctedRate_B[NUM_AXIS];
-    real correctedAccel_B[NUM_AXIS];
-    real aCorr_N[NUM_AXIS];
+    real correctedRate_B[NUM_AXIS];     // [rad/s]
+    real correctedAccel_B[NUM_AXIS];    // [m/s/s]
+    real linearAccel_B[NUM_AXIS];       // [m/s/s], linear acceleration in body frame, used to detect drive position
 
-    real R_BinN[NUM_AXIS][NUM_AXIS];   // convert body to NED
-    real eulerAngles[NUM_AXIS], measuredEulerAngles[NUM_AXIS];
+    /* Algorithm results. Velocity states are directly used as results for output.
+     * The following two are calculated from state
+     */
+    real eulerAngles[NUM_AXIS];
+    double llaDeg[NUM_AXIS];
+
+    // measurements
+    real R_BinN[3][3];                  // convert body to NED
+    real Rn2e[3][3];                    // Coordinate tranformation matrix from NED to ECEF
+    real measuredEulerAngles[3];        // Euler angles measurements
+    real rGPS_N[3];                     // current IMU position w.r.t rGPS0_E in NED.
+    double rGPS0_E[3];                  // Initial IMU ECEF position when first entering INS state.
+    double rGPS_E[3];                   // current IMU ECEF position
 
     // Update variables: S = HxPxHTranspose + R
-    // DEBUG H is 3x16 or 9x16 (AHRS vs INS)
     real nu[9];
-
     real H[3][NUMBER_OF_EKF_STATES];
     real R[9];
     real K[NUMBER_OF_EKF_STATES][3];
+    real stateUpdate[NUMBER_OF_EKF_STATES];
 
-    double llaDeg[NUM_AXIS];
-//    double Position_E[NUM_AXIS];
-
+    // The following two are used in more than one functions, so they are pre-computed.
     real wTrueTimesDtOverTwo[NUM_AXIS];
-
     real turnSwitchMultiplier;
 } KalmanFilterStruct;
 
@@ -70,27 +75,30 @@ extern KalmanFilterStruct gKalmanFilter;
 /* Global Algorithm structure  */
 typedef struct {
     // Sensor readings in the body-frame (B)
-    real            accel_B[NUM_AXIS];      // [g]
-    real            angRate_B[NUM_AXIS];    // [rad/s]
-    real            magField_B[NUM_AXIS];   // [G]
+    real accel_B[NUM_AXIS];         // [m/s/s]
+    real angRate_B[NUM_AXIS];       // [rad/s]
+    real magField_B[NUM_AXIS];      // [G]
 
     // GPS information
-    BOOL gpsValid;
-    BOOL gpsUpdate;
-    
-    double llaRad[3];
-    double vNed[NUM_AXIS];
-
-    double trueCourse;
-    double rawGroundSpeed;
-    
     uint32_t itow;
-
-    float GPSHorizAcc, GPSVertAcc;
+    double llaAnt[3];               // Antenna Lat, Lon, ellipsoid Altitude, [rad, rad, meter]
+    double vNedAnt[NUM_AXIS];       // Antenna NED velocity, [m/s, m/s, m/s]
+    double lla[3];                  // IMU Lat, Lon, ellipsoid Altitude, [rad, rad, meter]
+    double vNed[3];                 // IMU NED velocity, [m/s, m/s, m/s]
+    float geoidAboveEllipsoid;      // [m]
+    real trueCourse;                // Antenna heading, [deg]
+    real rawGroundSpeed;            // IMU ground speed, calculated from vNed, [m/s]
+    float GPSHorizAcc;              // [m]
+    float GPSVertAcc;               // [m]
     float HDOP;
+    uint8_t gpsFixType;             // Indicate if this GNSS measurement is valid
+    uint8_t numSatellites;          /* Num of satellites in this GNSS measurement.
+                                     * This is valid only when there is gps udpate.
+                                     */
+    BOOL gpsUpdate;                 // Indicate if GNSS measurement is updated.
 } EKF_InputDataStruct;
 
-extern EKF_InputDataStruct gEKFInputData;
+extern EKF_InputDataStruct gEKFInput;
 
 
 /* Global Algorithm structure  */
@@ -113,21 +121,13 @@ typedef struct {
     uint8_t           opMode;
     uint8_t           turnSwitchFlag;
     uint8_t           linAccelSwitch;
-    uint8_t           gpsMeasurementUpdate;
 } EKF_OutputDataStruct;
 
-extern EKF_OutputDataStruct gEKFOutputData;
+extern EKF_OutputDataStruct gEKFOutput;
 
-typedef struct
-{
-    BOOL bValid;        // tell if stats are valid
-	BOOL accelErrLimit; // accelErr is set to max/min limit
-	real lpfAccel[3];   // low-pass filtered accel
-    real accelNorm;     // magnitude of current accel
-    real accelMean[3];  // average of past n accel
-    real accelVar[3];   // variance of past n accel
-    real accelErr[3];   // estimated accel error
-} AccelStatsStruct;
+
+// Initialize Kalman filter parameters of the INS app
+uint8_t InitINSFilter(void);
 
 void EKF_Algorithm(void);
 void enableFreeIntegration(BOOL enable);

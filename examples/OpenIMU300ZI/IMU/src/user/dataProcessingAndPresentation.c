@@ -67,47 +67,6 @@ void initUserDataProcessingEngine()
 }
 
 
-#define NUMBER_CYCLES_TO_AVERAGE 1000       // 5 seconds at 200Hz
-// Compensate rate sensors bias (device should be stationary while command "uB"being issued)
-// Stationary biases estimated upon reception of "uB" command from serial interface
-// After averaging of biases during NUMBER_CYCLES_TO_AVERAGE/200 seconds, calculated values will be constantly
-// applied to rate sensors data each data acquisition cycle
-// This function provided just for reference. Do  not call it if compensation is not needed
-// Any other compensation mechanism can be used in this place if desired - for example compensation of unit
-// mounting orientation  
-void CompensateSensorsDataForTiltAndBias()
-{
-    static double avgRateX = 0.0;
-    static double avgRateY = 0.0;
-    static double avgRateZ = 0.0;
-    static int    avgCnt   = 0;
-    double ratesData[3];
-    
-    // Obtain rate-sensor data [rad/sec]
-    GetRateData_radPerSec(ratesData);
-
-    if (fUpdateBias) {
-        if (avgCnt == 0) { 
-            avgCnt   = NUMBER_CYCLES_TO_AVERAGE; 
-            avgRateX = 0.0;
-            avgRateY = 0.0;
-            avgRateZ = 0.0;
-        }
-        avgRateX += ratesData[X_AXIS];
-        avgRateY += ratesData[Y_AXIS];
-        avgRateZ += ratesData[Z_AXIS];
-        avgCnt -= 1;
-        if (avgCnt == 0) {
-            gUserConfiguration.rateBiasX  = avgRateX / NUMBER_CYCLES_TO_AVERAGE;
-            gUserConfiguration.rateBiasY  = avgRateY / NUMBER_CYCLES_TO_AVERAGE;        
-            gUserConfiguration.rateBiasZ  = avgRateZ / NUMBER_CYCLES_TO_AVERAGE;
-            fUpdateBias = 0;
-        }
-    } 
-
-    ApplyRatesBiasCompensation( &gUserConfiguration.rateBiasX);
-
-}
 // Notes:
 // 1) 'inertialAndPositionDataProcessing' is common for all platforms, but implementation
 //    of the methods inside is platform and user-dependent.
