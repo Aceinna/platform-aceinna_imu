@@ -33,5 +33,8 @@
       "optional": true,
       "version": "^1.63208.0"
     }
+  },
+  "pythonPackages": {
+      "openimu": ">=1.0.4,<2"
   }
 }
