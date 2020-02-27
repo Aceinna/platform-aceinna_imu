@@ -18,8 +18,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 *******************************************************************************/
 
-#ifndef _USER_MESSAGING_UART_H
-#define _USER_MESSAGING_UART_H
+#ifndef USER_MESSAGING_H
+#define USER_MESSAGING_H
 
 #include <stdint.h>
 
@@ -32,7 +32,8 @@ limitations under the License.
 
 // here is definition for packet rate divider
 // considering that data acquisition task runs at 200 Hz 
-typedef enum {
+typedef enum
+{
     PACKET_RATE_INVALID = -1,
     PACKET_RATE_QUIET = 0,      // quiet mode
     PACKET_RATE_200HZ = 200,     // packet rate 200 Hz
@@ -47,90 +48,50 @@ typedef enum {
 } packet_rate_t;
 
 
-// User Input packet payload has next structure:
-// number      offset
-// of          of  first 
-// parameters  parameter    
-// U2          U2          U4/I4/F    
-// XXXX        YYYY       [parameters]
-// User input packet codes, change at will
-typedef enum {
-    USR_IN_NONE         = 0 ,
-    USR_IN_PING             ,     
-    USR_IN_UPDATE_CONFIG    ,
-    USR_IN_UPDATE_PARAM     ,
-    USR_IN_UPDATE_ALL       ,
-    USR_IN_SAVE_CONFIG      ,
-    USR_IN_GET_CONFIG       ,
-    USR_IN_GET_PARAM        ,
-    USR_IN_GET_ALL          ,
-    USR_IN_GET_VERSION      ,
-    USR_IN_RESET            ,
-    // add new packet type here, before USR_IN_MAX
-    USR_IN_MAX              ,
-}UserInPacketType;
-
-// User output packet codes, change at will
-typedef enum {
-    USR_OUT_NONE  = 0,  // 0
-    USR_OUT_TEST,       // 1
-    USR_OUT_DATA1,      // 2
-    USR_OUT_DATA2,      // 3
-// add new output packet type here, before USR_OUT_MAX  
-    USR_OUT_SCALED1,    // 4
-    USR_OUT_ANG1,
-    USR_OUT_ANG2,
-    USR_OUT_MAX
-} UserOutPacketType;
-
-
-// total size of user packet structure should not exceed 255 bytes
-#pragma pack(1)
-typedef struct {
-    uint8_t  packetPayload[252];    // maximum 252 bytes     
-} userPacket;
 #define MAX_NUMBER_OF_USER_PARAMS_IN_THE_PACKET 30
 #define FIRST_30_PARAMS 0xFFFFFFFF
 
+// total size of user packet structure should not exceed 255 bytes
+#pragma pack(1)
+
+typedef struct
+{
+    uint8_t  packetPayload[252];    // maximum 252 bytes     
+} userPacket;
+
 // example of user payload structure
-typedef struct {
+typedef struct
+{
     uint32_t   numParams;                                            // number of consecutive parameters to update (little endian)
     uint32_t   paramOffset;                                          // parameter number in parameters structure   (little endian)
     uint64_t   parameters[MAX_NUMBER_OF_USER_PARAMS_IN_THE_PACKET];  // up to 30 64-bit parameters  (little endian)
-}userConfigPayload;
+} userConfigPayload;
 
-#pragma pack(1)
 // example of user payload structure
 typedef struct {
     uint32_t   paramNum;                                             // parameter number in parameters structure   (little endian)
-    uint64_t   parameter;                                            // up to 30 64-bit parameters  (little endian)
+    uint8_t    parameter[64];                                        // up to 30 64-bit parameters  (little endian)
 }userParamPayload;
-#pragma pack()
 
 // example of user payload structure
 typedef struct {
     uint64_t   parameters[MAX_NUMBER_OF_USER_PARAMS_IN_THE_PACKET];  // up to 30 64-bit parameters  (little endian)
 }allUserParamsPayload;
 
-#pragma pack(1)
-typedef struct {
-    uint32_t   timer;
-    uint8_t    c;
-    short      s;
-    int        i;
-    long long  ll;
-    double     d;
-}data2_payload_t;
-
 #pragma pack()
 
 
-#define USR_OUT_TEST_PAYLOAD_LEN   (4)     // test parameter (uint32_t)    
-#define USR_OUT_DATA1_PAYLOAD_LEN  (4*10)  // 1 integer +3accels (float LE) + 3gyros (float LE) + 3 mags (floatLE)    
-#define USR_OUT_SCALED1_PAYLOAD_LEN (52)   // See UserMessaging.c for make-up of Scaled1 message
-#define USR_OUT_ANG1_PAYLOAD_LEN    (47)   // See message loading code,HandleUserOutputPacket(), for information
+#define USR_OUT_TEST_PAYLOAD_LEN    (4)    // test parameter (uint32_t)    
+#define USR_OUT_DATA1_PAYLOAD_LEN   (40)
+#define USR_OUT_ANG1_PAYLOAD_LEN    (47)
 #define USR_OUT_ANG2_PAYLOAD_LEN    (48)
-
+#define USR_OUT_SCALED1_PAYLOAD_LEN (52)
+#define USR_OUT_EKF1_PAYLOAD_LEN    (75)
+#define USR_OUT_EKF2_PAYLOAD_LEN    (123) // 147 DEBUG
+#define USR_OUT_RTK1_PAYLOAD_LEN    (87)
+#define USR_OUT_NAV_PAYLOAD_LEN     (96)
+#define USR_OUT_SAT_PAYLOAD_LEN     (28)
+#define USR_OUT_SKY_PAYLOAD_LEN     (24)
 
 #define USER_OK      0x00
 #define USER_NAK     0x80
@@ -140,16 +101,9 @@ extern int userPacketOut;
 
 extern int       getUserPayloadLength(void);
 extern int       checkUserPacketType(uint16_t receivedCode);
+extern int       checkUserOutPacketType(uint16_t receivedCode);
 extern void      userPacketTypeToBytes(uint8_t bytes[]);
 extern void      WriteResultsIntoOutputStream(void *results);
 BOOL             setUserPacketType(uint8_t* type, BOOL fApply);
-
-
-extern BOOL      UpdateUserConfig(userConfigPayload*  pld, uint8_t *payloadLen);
-extern BOOL      UpdateUserParam(userParamPayload*  pld, uint8_t *payloadLen);
-extern BOOL      UpdateAllUserParams(allUserParamsPayload*  pld, uint8_t *payloadLen);
-extern BOOL      GetUserConfig(userConfigPayload*  pld, uint8_t *payloadLen);
-extern BOOL      GetUserParam(userParamPayload*  pld, uint8_t *payloadLen);
-extern BOOL      GetAllUserParams(allUserParamsPayload*  pld, uint8_t *payloadLen);
 
 #endif /* USER_CONFIGURATION_H */

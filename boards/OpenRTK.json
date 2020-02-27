@@ -1,0 +1,41 @@
+{
+  "build": {
+    "core": "stm32",
+    "cpu": "cortex-m4",
+    "extra_flags": [
+      "-mcpu=cortex-m4",
+      "-mfloat-abi=softfp",
+      "-mfpu=fpv4-sp-d16",
+      "-DSTM32F4",
+      "-DSTM32F469IG",
+      "-DSTM32F469xx"
+    ],
+    "ldscript": "stm32f469.ld",
+    "f_cpu": "180000000L",
+    "mcu": "stm32f469IG"
+  },
+  "debug": {
+    "default_tools": ["stlink"],
+    "openocd_target": "stm32F4x",
+    "jlink_device": "STM32F469NI",
+    "svd_path": "STM32F46_79x.svd"
+  },
+  "frameworks": [
+    "mbed",
+    "stm32cube"
+  ],
+  "name": "Aceinna OpenIMU 330ZA",
+  "upload": {
+    "flash_start": "0x08010000",
+    "maximum_ram_size": 393216,
+    "maximum_size": 1048576,
+    "protocols": [
+      "blackmagic",
+      "stlink",
+      "jlink"
+    ],
+    "protocol": "stlink"
+  },
+  "url": "https://www.aceinna.com/inertial-systems/",
+  "vendor": "Aceinna"
+}

@@ -78,8 +78,8 @@ typedef enum {
     USR_OUT_DATA2,      // 3
 // add new output packet type here, before USR_OUT_MAX  
     USR_OUT_SCALED1,    // 4
-    USR_OUT_ANG1,
-    USR_OUT_ANG2,
+    USR_OUT_EKF1,
+    USR_OUT_EKF2,
     USR_OUT_MAX
 } UserOutPacketType;
 
@@ -128,8 +128,8 @@ typedef struct {
 #define USR_OUT_TEST_PAYLOAD_LEN   (4)     // test parameter (uint32_t)    
 #define USR_OUT_DATA1_PAYLOAD_LEN  (4*10)  // 1 integer +3accels (float LE) + 3gyros (float LE) + 3 mags (floatLE)    
 #define USR_OUT_SCALED1_PAYLOAD_LEN (52)   // See UserMessaging.c for make-up of Scaled1 message
-#define USR_OUT_ANG1_PAYLOAD_LEN    (47)   // See message loading code,HandleUserOutputPacket(), for information
-#define USR_OUT_ANG2_PAYLOAD_LEN    (48)
+#define USR_OUT_EKF1_PAYLOAD_LEN    (75)
+#define USR_OUT_EKF2_PAYLOAD_LEN    (123)
 
 
 #define USER_OK      0x00
