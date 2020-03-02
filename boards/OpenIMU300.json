@@ -21,7 +21,7 @@
     "svd_path": "STM32F40x.svd"
   },
   "frameworks": [],
-  "name": "Aceinna OpenIMU 300ZA",
+  "name": "Aceinna OpenIMU 300",
   "upload": {
     "offset_address": "0x08010000",
     "maximum_ram_size": 131072,

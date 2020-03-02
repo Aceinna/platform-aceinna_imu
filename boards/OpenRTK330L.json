@@ -20,10 +20,7 @@
     "jlink_device": "STM32F469NI",
     "svd_path": "STM32F46_79x.svd"
   },
-  "frameworks": [
-    "mbed",
-    "stm32cube"
-  ],
+  "frameworks": [],
   "name": "Aceinna OpenRTK330L",
   "upload": {
     "offset_address": "0x08010000",

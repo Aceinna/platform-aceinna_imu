@@ -20,9 +20,7 @@
     "jlink_device": "STM32L431CB",
     "svd_path": "STM32L4x1.svd"
   },
-  "frameworks": [
-    "stm32cube"
-  ],
+  "frameworks": [],
   "name": "Aceinna OpenIMU 330",
   "upload": {
     "maximum_ram_size": 65536,
