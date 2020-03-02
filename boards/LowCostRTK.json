@@ -14,7 +14,7 @@
     "openocd_target": "stm32f4x",
     "svd_path": "STM32F46_79x.svd"
   },
-  "frameworks": ["stm32cube"],
+  "frameworks": [],
   "name": "Aceinna Low Cost RTK",
   "upload": {
     "maximum_ram_size": 393216,
