@@ -87,21 +87,15 @@
  #include <stdint.h>
  extern uint32_t SystemCoreClock;
 #endif
-#define TASKRTK_STACK 20*1024
-#define TASKGPS_STACK 6*1024
-#define TASKIMU_STACK 5*1024
-#define TASKETH_STACK 2*1024
-#if SHELL_ENABLE == true
-#define TASKCONSOLE_STACK 2*1024
-#else
-#define TASKCONSOLE_STACK 0
-#endif
-//#define TASKETH_STACK 2*1024
-
-#define TOTAL_STACK (TASKRTK_STACK + TASKGPS_STACK + TASKIMU_STACK + TASKETH_STACK + TASKCONSOLE_STACK)*4
-#define MIN_FREERTOS_HEAP_SIZE  15*1024
 
 
+#define TASK_GNSS_RTK_STACK               (20*1024)
+#define TASK_GNSS_DATA_ACQ_STACK          (6*1024)
+#define TASK_IMU_DATA_ACQ_STACK           (5*1024)
+#define TASK_ETHERNET_STACK               (2*1024)
+
+#define TOTAL_STACK                       (TASK_GNSS_RTK_STACK + TASK_GNSS_DATA_ACQ_STACK + TASK_IMU_DATA_ACQ_STACK + TASK_ETHERNET_STACK)*4
+#define MIN_FREERTOS_HEAP_SIZE            (15*1024)
 
 
 #define configUSE_PREEMPTION              1
