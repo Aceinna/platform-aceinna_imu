@@ -26,7 +26,7 @@ limitations under the License.
 
 #include "gnss_data_api.h"
 #include "uart.h"
-#include "ntripClient.h"
+#include "ntrip_client.h"
 #include "led.h"
 
 #define CCMRAM __attribute__((section(".ccmram")))
@@ -41,6 +41,7 @@ gnss_raw_data_t *g_ptr_gnss_data = &g_gnss_data;
 uint8_t gnss_signal_flag = 0;   //1:Satellite signal availability
 
 uint8_t stnID = 0;
+volatile mcu_time_base_t g_obs_rcv_time;
 
 /** ***************************************************************************
  * @name _handleGpsMessages()
@@ -71,7 +72,7 @@ static void _handleGpsMessages(uint8_t *RtcmBuff, int length)
         /* relocated from rtcm.c */
         if (stnID == BASE && ret_val == 1) //Base station data reception completed
         {
-            ntripStreamCount = 0;
+            clear_ntrip_stream_count();
             LED_RTCM_TOOGLE();
             base_cnt = 0;
         }
@@ -90,6 +91,7 @@ static void _handleGpsMessages(uint8_t *RtcmBuff, int length)
             }
             else if (stnID == ROVER)
             {
+                g_obs_rcv_time = g_MCU_time;
                 static gtime_t timeCpy;
                 if ((timeCpy.sec == obs->time.sec && timeCpy.time == obs->time.time) || obs->n < 4)
                 {
@@ -133,7 +135,7 @@ void GnssDataAcqTask(void const *argument)
     {
         // UBaseType_t uxHighWaterMark;
         // uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
-        if (NTRIP_client_state != NTRIP_STATE_INTERACTIVE)
+        if (!is_ntrip_interactive())
         {
             int BtLen = 0;
             BtLen = uart_read_bytes(UART_BT, bt_buff, GPS_BUFF_SIZE, 0);
@@ -148,6 +150,8 @@ void GnssDataAcqTask(void const *argument)
                 {
                     stnID = BASE;
                     _handleGpsMessages(bt_buff, BtLen);
+                    //send base from DEBUG port
+                    uart_write_bytes(UART_DEBUG, (char*)bt_buff, BtLen, 1);
                 }
             }
         }
@@ -157,11 +161,10 @@ void GnssDataAcqTask(void const *argument)
             ethRxLen = fifo_get(&ntrip_rx_fifo, bt_buff, GPS_BUFF_SIZE);
             if (ethRxLen)
             {
-                if (NTRIP_base_stream == BSAE_ON)
-                {
-                    stnID = BASE;
-                    _handleGpsMessages(bt_buff, ethRxLen);
-                }
+                stnID = BASE;
+                _handleGpsMessages(bt_buff, ethRxLen);
+                //send base from DEBUG port
+                uart_write_bytes(UART_DEBUG, (char*)bt_buff, ethRxLen, 1);
             }
         }
 

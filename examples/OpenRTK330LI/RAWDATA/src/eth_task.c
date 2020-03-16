@@ -25,8 +25,8 @@ limitations under the License.
 #include <string.h>
 
 #include "FreeRTOS.h"
-#include "LwipComm.h"
-#include "ntripClient.h"
+#include "lwip_comm.h"
+#include "ntrip_client.h"
 
 
 /** ***************************************************************************

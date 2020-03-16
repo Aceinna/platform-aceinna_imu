@@ -27,6 +27,7 @@ limitations under the License.
 
 #include "sensorsAPI.h"
 #include "calibrationAPI.h"
+#include "configurationAPI.h"
 #include "commAPI.h"
 #include "uart.h"
 #include "bsp.h"
@@ -45,26 +46,22 @@ mcu_time_base_t imu_time;
 void TaskDataAcquisition(void const *argument)
 {
     int res;
-    uint16_t dacqRate = 0;
-
-#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
-    //BOOL overRange = FALSE; //uncomment this line if overrange processing required
-#pragma GCC diagnostic warning "-Wunused-but-set-variable"
 
     res = InitSensors();
     InitSensorsData();
+
+    configSetPacketRate(100, TRUE);
 
     while (1)
     {
         //UBaseType_t uxHighWaterMark;
         //uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
-        // TimingVars_Increment();
 
         res = osSemaphoreWait(g_sem_imu_data_acq, 1000);
         if (res != osOK)
         {
             continue;
-            // Wait timeout expired. Something wrong wit the dacq system
+            // Wait timeout expired. Something wrong wit the data acq system
             // Process timeout here
         }
         imu_time = g_MCU_time;
@@ -80,11 +77,13 @@ void TaskDataAcquisition(void const *argument)
                 double rates[3];
                 GetRateData_radPerSec_AsDouble(rates);
                 imu_time:imu time
+
+                INS_Algorithm();
         */
-        //INS_Algorithm();
+        
         ProcessUserCommands();
 
-       SendContinuousPacket(dacqRate);
+        SendContinuousPacket();
 
         //uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
         //printf("uxhigh=%d\r\n",TASK_IMU_DATA_ACQ_STACK-uxHighWaterMark);

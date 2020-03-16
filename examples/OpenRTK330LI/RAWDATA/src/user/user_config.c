@@ -27,7 +27,7 @@ limitations under the License.
 
 #include "platformAPI.h"
 #include "eepromAPI.h"
-#include "ntripClient.h"
+#include "ntrip_client.h"
 #include "user_config.h"
 #include "Indices.h"
 #include "configurationAPI.h"
@@ -42,7 +42,6 @@ const UserConfigurationStruct gDefaultUserConfig = {
     .dataSize            =  sizeof(UserConfigurationStruct),
 
     // add default parameter values here, if desired
-    .profile             = 0,
     .leverArmBx          = 0.0,
     .leverArmBy          = 0.0,
     .leverArmBz          = 0.0,
@@ -63,7 +62,7 @@ const UserConfigurationStruct gDefaultUserConfig = {
     // ntrip
     .ip = "106.12.40.121", // rtk.ntrip.qxwz.com // rtk.aceinna.com
 	.port = 2201,
-    .mountPoint = "/RTK",
+    .mountPoint = "RTK",
     .username = "ymj_123",
     .password = "SIGEMZOOMQ1JDJI3",
 };
@@ -184,7 +183,7 @@ BOOL EEPROM_SaveUserConfig(uint8_t *ptrToUserConfigStruct, int userConfigStructL
 
 void userInitConfigureUnit(void)
 {
-    uint8_t *ptrUser = (uint8_t*)&gUserConfiguration.profile;
+    uint8_t *ptrUser = (uint8_t*)&gUserConfiguration.leverArmBx;
     uint8_t offset = 0;
     int size = sizeof(gUserConfiguration);
 
@@ -243,10 +242,6 @@ uint8_t UpdateUserParameter(uint32_t number, uint8_t* data)
     float *tmp;
     switch (number)
     {
-    case USER_PROFILE:
-        gUserConfiguration.profile = *(uint32_t *)data;
-        dataLen = 4;
-        break;
     case USER_LEVER_ARM_BX:
         tmp = (float *)data;
         gUserConfiguration.leverArmBx = *tmp;

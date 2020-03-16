@@ -97,7 +97,7 @@ typedef struct {
     double   timeOfWeek;
     float    accel_g[3];
     float    rate_dps[3];
-    float    temp_C;
+    //float    temp_C;
 } scaled1_payload_t;
 
 // payload structure of standard pos data message

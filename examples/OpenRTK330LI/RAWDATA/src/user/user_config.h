@@ -43,7 +43,6 @@ typedef struct {
     // parameter size should even to 4 bytes
     // Add parameter offset in UserConfigParamOffset structure if validation or
     // special processing required 
-    uint32_t profile;
     float leverArmBx;
     float leverArmBy;
     float leverArmBz;
@@ -83,7 +82,6 @@ typedef enum {
     USER_LAST_SYSTEM_PARAM = USER_DATA_SIZE, 
 //*****************************************************************************************
 // add parameter enumerator here while adding new parameter in user UserConfigurationStruct
-    USER_PROFILE                      ,
     USER_LEVER_ARM_BX                 ,
     USER_LEVER_ARM_BY                 ,
     USER_LEVER_ARM_BZ                 ,

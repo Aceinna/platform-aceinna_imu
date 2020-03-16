@@ -193,7 +193,7 @@ static BOOL Fill_s1PacketPayload(uint8_t *payload, uint8_t *payloadLen)
         pld->week = week;
     }
     
-    pld->temp_C = GetUnitTemp();
+    //pld->temp_C = GetUnitTemp();
     GetAccelData_g(pld->accel_g);
     GetRateData_radPerSec(pld->rate_dps);
 

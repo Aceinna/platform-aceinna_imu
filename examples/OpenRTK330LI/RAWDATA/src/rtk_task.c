@@ -26,12 +26,14 @@ limitations under the License.*/
 #include "gnss_data_api.h"
 #include "uart.h"
 #include "led.h"
-#include "ntripClient.h"
+#include "ntrip_client.h"
+#include "utils.h"
 
 extern gnss_raw_data_t *g_ptr_gnss_data;
 
 
 static void RTKAlgorithm(void);
+
 char gga_buff[200] = "$GPGGA,,,N,,E,,,,,M,,M,,*\r\n";
 
 /** ***************************************************************************
@@ -44,6 +46,7 @@ void RTKTask(void const *argument)
 {
     // UBaseType_t uxHighWaterMark;
     // uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
+    obs_t* ptr_rover_obs = &g_ptr_gnss_data->rtcm.obs[0];
 
     uint8_t res = osSemaphoreWait(g_sem_rtk_start, 0);
     while (1)
@@ -60,6 +63,10 @@ void RTKTask(void const *argument)
 
         RTKAlgorithm();
 
+        // use rover obs to make gga and pull base rtcm data
+        print_pos_gga_util(ptr_rover_obs->time, ptr_rover_obs->pos, ptr_rover_obs->n, 1, 1.0, 0.0, gga_buff);
+        
+        //uart_write_bytes(UART_DEBUG, gga_buff, strlen(gga_buff), 1);
         //send gga from Bluetooth
         uart_write_bytes(UART_BT, gga_buff, strlen(gga_buff), 1);
         //send gga from Internet
