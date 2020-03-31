@@ -101,7 +101,7 @@ BOOL  UpdateSystemParameter(uint32_t number, uint64_t data, BOOL fApply)
 }
 
 
-void userInitConfigureUart()
+void UserInitConfigureUart()
 {
 
      uint64_t *ptr  = (uint64_t*)&gUserUartConfig;

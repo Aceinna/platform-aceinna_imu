@@ -398,12 +398,12 @@ static void _parseSiRFGeodeticNavMsg(char          *msg,
     // Switched at the sazme time as PPS 5 satellites
     if ( geo->navValid > 0) {
           GPSData->HDOP = 50.0;
-          GPSData->GPSFix = 1; // zero is valid anything else is degraded
+          GPSData->gpsFixType = 1; // zero is valid anything else is degraded
           gBitStatus.hwStatus.bit.unlockedInternalGPS = 1; // no signal lock
           gBitStatus.swStatus.bit.noGPSTrackReference = 1; // no GPS track
     } else {
           GPSData->HDOP = geo->hdop;
-          GPSData->GPSFix = 0;
+          GPSData->gpsFixType = 0;
           gBitStatus.hwStatus.bit.unlockedInternalGPS = 0; // locked
           gBitStatus.swStatus.bit.noGPSTrackReference = 0; // GPS track
     }
@@ -422,7 +422,7 @@ static void _parseSiRFGeodeticNavMsg(char          *msg,
     GPSData->GPSday   = geo->utcDay;   // dd
     GPSData->GPSyear  = byteSwap16(geo->utcYear) - 2000;  // last two digits of year
 
-    GPSData->altEllipsoid = (float)byteSwap32(geo->altitudeEllipsoid) / 100.;  // 0x2221201f in m * 10^2
+    GPSData->geoidAboveEllipsoid = (float)byteSwap32(geo->altitudeEllipsoid - geo->altitudeMSL) / 100.;  // 0x2221201f in m * 10^2
 
 	GPSData->GPSHour           = geo->utcHour;
 	GPSData->GPSMinute         = geo->utcMinute;

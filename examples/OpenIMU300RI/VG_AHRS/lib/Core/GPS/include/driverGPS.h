@@ -159,23 +159,33 @@ typedef struct
     uint8_t hour;
     uint8_t min;
     uint8_t sec;
-    uint8_t valid;
+    uint8_t valid;      // Validity flags
     uint32_t tAcc;      // time accuracy estimate (UTC), ns
     int32_t nano;       // fraction of second, range -1e9..1e9 (UTC), ns
-    uint8_t fixType;    // GNSS fix type
-                            // 0: no fix
-                            // 1: dead reckoning only
-                            // 2: 2D-fix
-                            // 3: 3D-fix
-                            // 4: GNSS + dead reckoning combined
-                            // 5: time only fix
-    uint8_t flags;
+    uint8_t fixType;    /* GNSS fix type
+                         *  0: no fix
+                         *  1: dead reckoning only
+                         *  2: 2D-fix
+                         *  3: 3D-fix
+                         *  4: GNSS + dead reckoning combined
+                         *  5: time only fix
+                         */
+    uint8_t flags;      /* Fix status flags
+                         *  bit0:   gnssFixOK, 1 = valid fix (i.e within DOP & accuracy masks)
+                         *  bit1:   diffSoln, 1 = differential corrections were applied
+                         *  bit2-4: psmState, Power Save Mode state
+                         *  bit5:   headVehValid, 1 = heading of vehicle is valid
+                         *  bit6-7: carrSoln, Carrier phase range solution status:
+                         *      0: no carrier phase range solution
+                         *      1: float solution
+                         *      2: fixed solution 
+                         */
     uint8_t flags2;
     uint8_t numSV;      // number of satellites in Nav solution;
     int32_t lon;        // deg, scaling is 1e-7
     int32_t lat;        // deg, scaling is 1e-7
     int32_t height;     // mm, height above ellipsoid;
-    int32_t hMSL;
+    int32_t hMSL;       // mm, hegiht above mean seal level
     uint32_t hAcc;      // mm, horizontal accuracy estimate
     uint32_t vAcc;      // mm, vertical accuracy estimate
     int32_t velN;       // mm/s, north velocity

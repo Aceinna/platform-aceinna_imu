@@ -24,20 +24,19 @@
 #include "algorithm.h"
 #include "algorithmAPI.h"
 #include "AlgorithmLimits.h"
+#include "MotionStatus.h"
 #include "EKF_Algorithm.h"
 #include "UpdateFunctions.h"
 #include "SensorNoiseParameters.h"
 
 
-extern AccelStatsStruct gAccelStats;
+extern ImuStatsStruct gImuStats;
 
 #if FAST_MATH
 #include "arm_math.h"
 #endif // FAST_MATH
 
-#ifdef INS_OFFLINE
-#include "SimulationParameters.h"
-#else
+#ifndef INS_OFFLINE
 #ifdef DISPLAY_DIAGNOSTIC_MSG
 #include "debug.h"
 #endif
@@ -63,20 +62,36 @@ static real _UnwrapAttitudeError( real attitudeError );
 static real _LimitValue( real value, real limit );
 static BOOL _CheckForUpdateTrigger(uint8_t updateRate);
 
+static void ApplyGpsDealyCorrForStateCov();
+
 /******************************************************************************
- * @brief Initializa heading when GPS velocity is above a certain threshhold.
- * If the GPS velocity is above a certain threshold, a global variable useGpsHeading
- * will be set to 1. And in this function, the heading will be initialized to be
- * gEKFInputData.trueCourse, and velocity will also be initiazlied as the
+ * @brief Initializa heading using GNSS heading.
+ * If the GNSS heading is valid and the vehicle is drving forward, the GNSS
+ * heading is considered valid, and the eading will be initialized to be
+ * gEKFInput.trueCourse, and velocity will also be initiazlied as the
  * corresponding NED speed. After this, the quaternion (q0 and q3) and velocity
  * terms in the state covariance matrix P will be reset. Non-diagonal terms will be
  * set as 0s, and diagonal terms will be set according to estimated variance. The
  * cov(quaternion, velocity) should also be updated. But the positive-definiteness
  * is not guaranteed this way.
  * TRACE:
- * @retval TRUE if heading initialized, FALSE if not.
+ * @retval TRUE if heading initialized/reinitialized, FALSE if not.
 ******************************************************************************/
-static int InitializeGnssHeading();
+static int InitializeHeadingFromGnss();
+
+/******************************************************************************
+ * @brief When heading is ready for initialization, the heading angle (yaw, and 
+ * indeed quaternion in the Kalman filter) is initialized to match the value of
+ * gEKFInput.trueCourse, and velocity will also be initiazlied as the
+ * corresponding NED speed. After this, the quaternion (q0 and q3) and velocity
+ * terms in the state covariance matrix P will be reset. Non-diagonal terms will be
+ * set as 0s, and diagonal terms will be set according to estimated variance. The
+ * cov(quaternion, velocity) should also be updated. But the positive-definiteness
+ * is not guaranteed this way.
+ * TRACE:
+ * @retval None.
+******************************************************************************/
+static void InitializeEkfHeading();
 
 // Update rates
 #define  TEN_HERTZ_UPDATE          10
@@ -85,25 +100,28 @@ static int InitializeGnssHeading();
 #define  FIFTY_HERTZ_UPDATE        50
 #define  ONE_HUNDRED_HERTZ_UPDATE  100
 
-static uint32_t updateCntr[2] = { 0, 0 };
 static BOOL useGpsHeading = 0;  /* When GPS velocity is above a certain threshold,
                                  * this is set to 1, and GPS heading measurement
                                  * is used, otherwise, this is set to 0 and magnetic
-                                 * heading is used.    */
+                                 * heading is used.
+                                 */
 static int runInsUpdate = 0;    /* To enable the update to be broken up into
                                  * two sequential calculations in two sucessive
-                                 * 100 Hz periods. */
+                                 * 100 Hz periods.
+                                 */
 
 // Uncomment to run only AHRS-type updates
 //#define ATT_UPDATE_ONLY
 
 static void Update_GPS(void);
+static void Update_PseudoMeasurement(void);
+static void GenPseudoMeasCov(real *r);
 
 // EKF_UpdateStage.m
 void EKF_UpdateStage(void)
 {
     /* Perform a VG/AHRS update, regardless of GPS availability or health,
-     * when the state is HG AHRS or LG AHRS.  Once GPS becomes healthy
+     * when the state is HG AHRS or LG AHRS. Once GPS becomes healthy
      * (and the right conditions are met) perform an INS or reduced-order GPS update.
      */
     if( gAlgorithm.state <= LOW_GAIN_AHRS )
@@ -131,12 +149,76 @@ void EKF_UpdateStage(void)
          * Check for 'new GPS data'. If new, and GPS is valid, perform a
          * GPS-Based update and reset timer values to resync the attitude updates.
          */
-        if( gEKFInputData.gpsUpdate )
-        {   
-            if (gEKFInputData.gpsValid)
+        if( gEKFInput.gpsUpdate )
+        {
+            /* Sync the algorithm itow to the GPS value. GPS time is the time of pps.
+             * It is delayed by (gAlgorithm.itow-gEKFInput.itow). If there is loss of
+             * PPS detection or GPS measuremetn, gEKFInput.itow equals gKalmanFilter.ppsITow.
+             */
+            if (gAlgoStatus.bit.ppsAvailable)
             {
-                Update_GPS();
+                /* If GPS itow is above algorithm itow, something is wrong.
+                 * If algorithm itow is more than 1sec ahead of GPS itow, GPS delay is
+                 * too large and measurement is not used.
+                 */
+                int32_t gnssDelay = gAlgorithm.itow - gEKFInput.itow;
+                if (gnssDelay < 0 || gnssDelay > 1000)
+                {
+                    gAlgoStatus.bit.ppsAvailable = FALSE;
+                }
+                // sync with GPS time
+                gAlgorithm.itow = gEKFInput.itow + gAlgorithm.itow - gKalmanFilter.ppsITow;
             }
+            else
+            {
+                gAlgorithm.itow = gEKFInput.itow;
+            }
+            // update pps detection time
+            gKalmanFilter.ppsITow = gEKFInput.itow;
+
+            // Resync timer
+            timer.tenHertzCntr = 0;
+            timer.subFrameCntr = 0;
+
+            // GNSS update
+            if (gEKFInput.gpsFixType)
+            {
+                // GPS heading valid?
+                gAlgoStatus.bit.gpsHeadingValid = (gEKFInput.rawGroundSpeed >= LIMIT_MIN_GPS_VELOCITY_HEADING);
+                useGpsHeading = gAlgoStatus.bit.gpsHeadingValid;
+
+                /* If GNSS outage is longer than a threshold (maxReliableDRTime), DR results get unreliable
+                 * So, when GNSS comes back, the EKF is reinitialized. Otherwise, the DR results are still
+                 * good, just correct the filter states with input GNSS measurement.
+                 */
+                int32_t timeSinceLastGoodGPSReading = (int32_t)gAlgorithm.itow - gAlgorithm.timeOfLastGoodGPSReading;
+                if (timeSinceLastGoodGPSReading < 0) 
+                {
+                    timeSinceLastGoodGPSReading = timeSinceLastGoodGPSReading + MAX_ITOW;
+                }
+                if (timeSinceLastGoodGPSReading > gAlgorithm.Limit.maxReliableDRTime)
+                {
+#ifdef INS_OFFLINE
+                    printf("GPS relocked.\n");
+#endif // INS_OFFLINE
+                    // Since a relative long time has passed since DR begins, INS states need reinitialized.
+                    InitINSFilter();
+                }
+                else
+                {
+                    // DR for a relative short time, no need to reinitialize the filter.
+                    Update_GPS();
+                }
+                // reset the "last good reading" time
+                gAlgorithm.timeOfLastGoodGPSReading = gEKFInput.itow;
+            }
+            
+            // apply motion constraints
+            if (gAlgorithm.velocityAlwaysAlongBodyX && gAlgorithm.headingIni>HEADING_UNINITIALIZED)
+            {
+                Update_PseudoMeasurement();
+            }
+
             // At 1 Hz mark, update when GPS data is valid, else do an AHRS-update
             runInsUpdate = 1;
         }
@@ -144,33 +226,12 @@ void EKF_UpdateStage(void)
         {
             Update_Att();
             runInsUpdate = 0;  // set up for next pass
-            useGpsHeading = 0;
-        }
-
-        // Update LLA at 100/200 Hz
-        if ( gEKFInputData.gpsValid && ( gAlgorithm.insFirstTime == FALSE ) ) 
-        {
-            //r_E = Base_To_ECEF( &gKalmanFilter.Position_N[0], &gAlgorithm.rGPS0_E[0], &R_NinE[0][0] );    //
-            double r_E[NUM_AXIS];
-            float pointOfInterestN[3];
-            pointOfInterestN[0] = gKalmanFilter.R_BinN[0][0] * gAlgorithm.pointOfInterestB[0] +
-                gKalmanFilter.R_BinN[0][1] * gAlgorithm.pointOfInterestB[1] +
-                gKalmanFilter.R_BinN[0][2] * gAlgorithm.pointOfInterestB[2];
-            pointOfInterestN[1] = gKalmanFilter.R_BinN[1][0] * gAlgorithm.pointOfInterestB[0] +
-                gKalmanFilter.R_BinN[1][1] * gAlgorithm.pointOfInterestB[1] +
-                gKalmanFilter.R_BinN[1][2] * gAlgorithm.pointOfInterestB[2];
-            pointOfInterestN[2] = gKalmanFilter.R_BinN[2][0] * gAlgorithm.pointOfInterestB[0] +
-                gKalmanFilter.R_BinN[2][1] * gAlgorithm.pointOfInterestB[1] +
-                gKalmanFilter.R_BinN[2][2] * gAlgorithm.pointOfInterestB[2];
-            pointOfInterestN[0] += gKalmanFilter.Position_N[0];
-            pointOfInterestN[1] += gKalmanFilter.Position_N[1];
-            pointOfInterestN[2] += gKalmanFilter.Position_N[2];
-            PosNED_To_PosECEF(pointOfInterestN, &gAlgorithm.rGPS0_E[0], &gAlgorithm.R_NinE[0][0], &r_E[0] );
-            //                 100 Hz           generated once          1 Hz                      100 Hz
-
-            //gKalmanFilter.llaDeg[LAT_IDX] = ECEF2LLA( r_E );   // output variable (ned used for anything else); this is in [ deg, deg, m ]
-            ECEF_To_LLA(&gKalmanFilter.llaDeg[LAT], &r_E[X_AXIS]);
-            //          100 Hz                    100 Hz
+            // handle P when PPS is available
+            if (gAlgoStatus.bit.ppsAvailable)
+            {
+                ApplyGpsDealyCorrForStateCov();
+                gAlgoStatus.bit.ppsAvailable = FALSE;
+            }
         }
     }
 }
@@ -179,9 +240,18 @@ void EKF_UpdateStage(void)
 void ComputeSystemInnovation_Pos(void)
 {
     // Position error
-    gKalmanFilter.nu[STATE_RX] = gAlgorithm.rGPS_N[X_AXIS] - gKalmanFilter.Position_N[X_AXIS];
-    gKalmanFilter.nu[STATE_RY] = gAlgorithm.rGPS_N[Y_AXIS] - gKalmanFilter.Position_N[Y_AXIS];
-    gKalmanFilter.nu[STATE_RZ] = gAlgorithm.rGPS_N[Z_AXIS] - gKalmanFilter.Position_N[Z_AXIS];
+    if (gAlgoStatus.bit.ppsAvailable)
+    {
+        gKalmanFilter.nu[STATE_RX] = gKalmanFilter.rGPS_N[X_AXIS] - gKalmanFilter.ppsPosition_N[X_AXIS];
+        gKalmanFilter.nu[STATE_RY] = gKalmanFilter.rGPS_N[Y_AXIS] - gKalmanFilter.ppsPosition_N[Y_AXIS];
+        gKalmanFilter.nu[STATE_RZ] = gKalmanFilter.rGPS_N[Z_AXIS] - gKalmanFilter.ppsPosition_N[Z_AXIS];
+    }
+    else
+    {
+        gKalmanFilter.nu[STATE_RX] = gKalmanFilter.rGPS_N[X_AXIS] - gKalmanFilter.Position_N[X_AXIS];
+        gKalmanFilter.nu[STATE_RY] = gKalmanFilter.rGPS_N[Y_AXIS] - gKalmanFilter.Position_N[Y_AXIS];
+        gKalmanFilter.nu[STATE_RZ] = gKalmanFilter.rGPS_N[Z_AXIS] - gKalmanFilter.Position_N[Z_AXIS];
+    }
 
     gKalmanFilter.nu[STATE_RX] = _LimitValue(gKalmanFilter.nu[STATE_RX], gAlgorithm.Limit.Innov.positionError);
     gKalmanFilter.nu[STATE_RY] = _LimitValue(gKalmanFilter.nu[STATE_RY], gAlgorithm.Limit.Innov.positionError);
@@ -193,9 +263,18 @@ void ComputeSystemInnovation_Pos(void)
 void ComputeSystemInnovation_Vel(void)
 {
     // Velocity error
-    gKalmanFilter.nu[STATE_VX] = (real)gEKFInputData.vNed[X_AXIS] - gKalmanFilter.Velocity_N[X_AXIS];
-    gKalmanFilter.nu[STATE_VY] = (real)gEKFInputData.vNed[Y_AXIS] - gKalmanFilter.Velocity_N[Y_AXIS];
-    gKalmanFilter.nu[STATE_VZ] = (real)gEKFInputData.vNed[Z_AXIS] - gKalmanFilter.Velocity_N[Z_AXIS];
+    if (gAlgoStatus.bit.ppsAvailable)
+    {
+        gKalmanFilter.nu[STATE_VX] = (real)gEKFInput.vNed[X_AXIS] - gKalmanFilter.ppsVelocity_N[X_AXIS];
+        gKalmanFilter.nu[STATE_VY] = (real)gEKFInput.vNed[Y_AXIS] - gKalmanFilter.ppsVelocity_N[Y_AXIS];
+        gKalmanFilter.nu[STATE_VZ] = (real)gEKFInput.vNed[Z_AXIS] - gKalmanFilter.ppsVelocity_N[Z_AXIS];
+    }
+    else
+    {
+        gKalmanFilter.nu[STATE_VX] = (real)gEKFInput.vNed[X_AXIS] - gKalmanFilter.Velocity_N[X_AXIS];
+        gKalmanFilter.nu[STATE_VY] = (real)gEKFInput.vNed[Y_AXIS] - gKalmanFilter.Velocity_N[Y_AXIS];
+        gKalmanFilter.nu[STATE_VZ] = (real)gEKFInput.vNed[Z_AXIS] - gKalmanFilter.Velocity_N[Z_AXIS];
+    }
 
     gKalmanFilter.nu[STATE_VX] = _LimitValue(gKalmanFilter.nu[STATE_VX], gAlgorithm.Limit.Innov.velocityError);
     gKalmanFilter.nu[STATE_VY] = _LimitValue(gKalmanFilter.nu[STATE_VY], gAlgorithm.Limit.Innov.velocityError);
@@ -224,8 +303,24 @@ void ComputeSystemInnovation_Att(void)
     // CHANGED TO SWITCH BETWEEN GPS AND MAG UPDATES
     if ( useGpsHeading )
     {
-        gKalmanFilter.nu[STATE_YAW] = (real)gEKFInputData.trueCourse * (real)DEG_TO_RAD -
-                                          gKalmanFilter.eulerAngles[YAW];
+        if (gAlgorithm.headingIni >= HEADING_GNSS_LOW)   // heading already initialized with GNSS heading
+        {
+            if (gAlgoStatus.bit.ppsAvailable)
+            {
+                gKalmanFilter.nu[STATE_YAW] = gEKFInput.trueCourse * (real)DEG_TO_RAD -
+                                              gKalmanFilter.ppsEulerAngles[YAW];
+            }
+            else
+            {
+                gKalmanFilter.nu[STATE_YAW] = gEKFInput.trueCourse * (real)DEG_TO_RAD -
+                                              gKalmanFilter.eulerAngles[YAW];
+            }
+        }
+        else
+        {
+            gKalmanFilter.nu[STATE_YAW] = 0.0;
+        }
+        
     }
     else if ( magUsedInAlgorithm() && gAlgorithm.state <= LOW_GAIN_AHRS )
     {
@@ -368,7 +463,6 @@ uint8_t _GenerateObservationJacobian_AHRS(void)
 // 
 void _GenerateObservationCovariance_AHRS(void)
 {
-    //
     static real Rnom;
 
     // Only need to compute certain elements of R once
@@ -382,48 +476,12 @@ void _GenerateObservationCovariance_AHRS(void)
          */
         memset(gKalmanFilter.R, 0, sizeof(gKalmanFilter.R));
 
-#ifdef INS_OFFLINE
-        /* This value is set based on the version string specified in the 
-         * simulation configuration file, ekfSim.cfg
+        /* Calculate accel var when static from IMU specs.
+         * This accel var is the min accel var. If real-time accel var is below this value,
+         * the min accel var is used.
+         * Accel var is further converted to Euler angels measurement var.
          */
-        uint8_t sysRange = gSimulation.sysRange;
-#else
-        /* This value is set based on the version string loaded into the unit
-         *   via the system configuration load
-         */
-        uint8_t sysRange = platformGetSysRange(); // from system config
-#endif
-
-        /* Set the matrix, R, based on whether the system is operating in high
-         * or low-gain (is the acceleration above or below the acceleration threshold)
-         *
-         * R-values are based on the variance of the roll and pitch angles
-         * generated from the sensor noise passed through the measurement
-         * model.  The values are multiplied by dt^2 as well as vary with the
-         * angle.  The value can be made large enough to work with all angles
-         * but it may slow the response.
-         *
-         * These values are found by passing the accelerometer VRW values
-         * (determined from a very limited data set) through a Matlab
-         * script which generates the roll and pitch noise based on the
-         * sensor noise.  The value below is the 1-sigma value at 0
-         * degrees.  The quadratic correction below is meant to increase
-         * R as the angle increases (due to the geometry and
-         * mathematical function used to compute the angle).
-         *
-         * Matlab script: R_Versus_Theta.m
-         */
-        switch (sysRange) 
-        {
-            case _200_DPS_RANGE:
-                // -200 VRW value (average x/y/z): 7.2e-4 [(m/sec)/rt-sec]
-                Rnom = (real)9.82e-07;  // (9.91e-4)^2
-                break;
-            case _400_DPS_RANGE:
-                    // -400 VRW value (average x/y/z): 8.8e-4 [(m/sec)/rt-sec]
-                Rnom = (real)1.54e-06;  // (1.24e-3)^2
-                break;
-        }
+        Rnom = gAlgorithm.imuSpec.sigmaA * gAlgorithm.imuSpec.sigmaA;
     }
 
     /* Dynamically tune measurement covariance matrix R to get proper Kalman filter
@@ -433,13 +491,13 @@ void _GenerateObservationCovariance_AHRS(void)
      */
 
     // Rnom, accel var and accel error
-    real totalAccelVar[3];
+    real totalAccelVar[3];  // [m/s/s]^2
     for (int i = 0; i < 3; i++)
     {
         // replace sensor noise var with vibration var
-        if (gAccelStats.accelVar[i] > Rnom)
+        if (gImuStats.accelVar[i] > Rnom)
         {
-            totalAccelVar[i] = gAccelStats.accelVar[i];
+            totalAccelVar[i] = gImuStats.accelVar[i];
         }
         else
         {
@@ -447,7 +505,7 @@ void _GenerateObservationCovariance_AHRS(void)
         }
         // linear accel? (including noise and vibration)
         real errSqr;
-        errSqr = gAccelStats.accelErr[i] * gAccelStats.accelErr[i];
+        errSqr = gImuStats.accelErr[i] * gImuStats.accelErr[i];
         if (errSqr > totalAccelVar[i])
         {
             totalAccelVar[i] = errSqr;
@@ -458,13 +516,13 @@ void _GenerateObservationCovariance_AHRS(void)
      * Notice: totalAccelVarSum just approximates accel norm var
      */
     real totalAccelVarSum = totalAccelVar[X_AXIS] + totalAccelVar[Y_AXIS] + totalAccelVar[Z_AXIS];
-    real diff = gAccelStats.accelNorm - 1.0f;
+    real diff = gImuStats.accelNorm - GRAVITY;
     diff *= diff;
     real additionalR = 0.0;
     /* if diff is larger than estimated accel err and the estimated accel err does
      * not reach limit, diff will be used as additional measurement noise var.
      */
-    if (diff > 4.0*totalAccelVarSum && gAccelStats.accelErrLimit == false)
+    if (diff > 4.0*totalAccelVarSum && gImuStats.accelErrLimit == false)
     {
         // the magnitude of diff is too big, there is linear acceleration
         additionalR = diff;
@@ -481,9 +539,9 @@ void _GenerateObservationCovariance_AHRS(void)
      *  Notice: var(kx) = k*k*var(x)
      */
     // Get ax^2, ay^2 and az^2 of normalized accel
-    real axSqr = gAccelStats.lpfAccel[0] * gAccelStats.lpfAccel[0];
-    real aySqr = gAccelStats.lpfAccel[1] * gAccelStats.lpfAccel[1];
-    real azSqr = gAccelStats.lpfAccel[2] * gAccelStats.lpfAccel[2];
+    real axSqr = gImuStats.lpfAccel[0] * gImuStats.lpfAccel[0];
+    real aySqr = gImuStats.lpfAccel[1] * gImuStats.lpfAccel[1];
+    real azSqr = gImuStats.lpfAccel[2] * gImuStats.lpfAccel[2];
     real sumSqr = axSqr + aySqr + azSqr;
     axSqr /= sumSqr;
     aySqr /= sumSqr;
@@ -505,7 +563,20 @@ void _GenerateObservationCovariance_AHRS(void)
     gKalmanFilter.R[STATE_ROLL] += additionalR;
     gKalmanFilter.R[STATE_PITCH] += additionalR;
 
-    // limit R
+    /* We are indeed using var of multiple accel samples to estimate the var of Euler
+     * angles. From the formula above, accel var should be var of normalized accel.
+     * However, we choose GRAVITY instead of real accel norm to normalize the accel.
+     * Besides, accel var is only an estimate of Euler angles var, and Euler angels
+     * var is indeed not Gaussian.
+     */
+    gKalmanFilter.R[STATE_ROLL] /= GRAVITY * GRAVITY;
+    gKalmanFilter.R[STATE_PITCH] /= GRAVITY * GRAVITY;
+    
+    /* limit R
+     * In previous version, Rnom is in untis of [g]^2, and maxR = 40000.0f*Rnom.
+     * After accel in the algorithm is changed to [m/s/s],
+     * 40000*Rnom(g^2) = 40000*Rnom([m/s/s]^2)/gravity/gravity = 400*Rnom([m/s/s]^2)
+     */
     real maxR = 400.0f * Rnom;
     if (gKalmanFilter.R[STATE_ROLL] > maxR)
     {
@@ -550,7 +621,7 @@ void _GenerateObservationCovariance_AHRS(void)
      */
     if ( useGpsHeading )
     {
-        float temp = (float)atan( 0.05 / gEKFInputData.rawGroundSpeed );
+        float temp = (float)atan( 0.05 / gEKFInput.rawGroundSpeed );
         gKalmanFilter.R[STATE_YAW] = temp * temp;
         if (gAlgoStatus.bit.turnSwitch)
         {
@@ -583,7 +654,7 @@ void _GenerateObservationCovariance_AHRS(void)
     }
     else
     {
-        gKalmanFilter.R[STATE_YAW] = (real)0.1;
+        gKalmanFilter.R[STATE_YAW] = (real)1.0;
     }
 }
 
@@ -608,15 +679,15 @@ void _GenerateObservationCovariance_INS(void)
     /* Use the GPS-provided horizontal and vertical accuracy values to populate
      * the covariance values.
      */
-    gKalmanFilter.R[STATE_RX] = gEKFInputData.GPSHorizAcc * gEKFInputData.GPSHorizAcc;
+    gKalmanFilter.R[STATE_RX] = gEKFInput.GPSHorizAcc * gEKFInput.GPSHorizAcc;
     gKalmanFilter.R[STATE_RY] = gKalmanFilter.R[STATE_RX];
-    gKalmanFilter.R[STATE_RZ] = gEKFInputData.GPSVertAcc * gEKFInputData.GPSVertAcc;
+    gKalmanFilter.R[STATE_RZ] = gEKFInput.GPSVertAcc * gEKFInput.GPSVertAcc;
 
     /* Scale the best velocity error by HDOP then multiply by the z-axis angular
      * rate PLUS one (to prevent the number from being zero) so the velocity
      * update during high-rate turns is reduced.
      */
-    float temp = (real)0.0625 * gEKFInputData.HDOP;  // 0.0625 = 0.05 / 0.8
+    float temp = (real)0.0625 * gEKFInput.HDOP;  // 0.0625 = 0.05 / 0.8
     real absFilteredYawRate = (real)fabs(gAlgorithm.filteredYawRate);
     if (absFilteredYawRate > TEN_DEGREES_IN_RAD)
     {
@@ -625,6 +696,14 @@ void _GenerateObservationCovariance_INS(void)
     gKalmanFilter.R[STATE_VX] = temp;// *((real)1.0 + fabs(gAlgorithm.filteredYawRate) * (real)RAD_TO_DEG);
     gKalmanFilter.R[STATE_VX] = gKalmanFilter.R[STATE_VX] * gKalmanFilter.R[STATE_VX];
     gKalmanFilter.R[STATE_VY] = gKalmanFilter.R[STATE_VX];
+    if (gAlgorithm.headingIni == HEADING_UNINITIALIZED)
+    {
+        /* When heading is not initialized, velocity measurement is not able to correct 
+         * attitude/rate bias/accel bias, the larger the velocity, the more uncertain it is.
+         */
+        gKalmanFilter.R[STATE_VX] += SQUARE(gEKFInput.vNed[0]) + SQUARE(gEKFInput.vNed[1]);
+        gKalmanFilter.R[STATE_VY] += gKalmanFilter.R[STATE_VX];
+    }
 
     // z-axis velocity isn't really a function of yaw-rate and hdop
     gKalmanFilter.R[STATE_VZ] = (float)(0.1 * 0.1);
@@ -637,10 +716,10 @@ uint8_t rowNum, colNum, multIndex;
 real S_3x3[3][3], SInverse_3x3[3][3];
 real PxHTranspose[ROWS_IN_P][ROWS_IN_H];
 real KxH[NUMBER_OF_EKF_STATES][COLS_IN_H] = {{ 0.0 }};
-real deltaP_tmp[ROWS_IN_P][COLS_IN_P];
 
 void Update_Att(void)
 {
+    static real lastYaw = 7.0;  // a values larger than 2pi means this yaw is invalid
     // which state is updated in Update_Att()
     uint8_t updatedStatesAtt[16] = { 1, 1, 1,           // Positions are not updated
                                      1, 1, 1,           // Velocities are not updated
@@ -653,14 +732,67 @@ void Update_Att(void)
      */
     _GenerateObservationJacobian_AHRS();     // gKF.H: 3x16
     _GenerateObservationCovariance_AHRS();   // gKF.R: 3x3
-    // If neither mag or GPS headig is available, update measuremnt matrix H to 2x16
-    if (gKalmanFilter.R[STATE_YAW] > 0.9)
+
+    // In INS mode, do not do pitch and roll update while heading update is kept.
+    if (gAlgorithm.state == INS_SOLUTION)
     {
+        // reset this state.
+        gAlgoStatus.bit.stationaryYawLock = FALSE;
+
+        /* Heading measurement is invalid, check if static yaw lock should take effect.
+         * Even if IMU static detection fails and the vehicle runs at a certain speed,
+         * static yaw lock should not take effect. This is guaranteed by R[STATE_YAW], which
+         * is set to 1.0 when vehicle speed is below a certian threshold.
+         * The risk is that the mechnism fails when the vehicle is below the threshold but not
+         * static.
+         */
+        if (gKalmanFilter.R[STATE_YAW] > 0.9)
+        {
+            if (!gImuStats.bStaticIMU)
+            {
+                /* Heading measurement is invaid and IMU is not static, yaw lock should not
+                 * take effect. That is, there is no heading update
+                 */
+                for (colNum = 0; colNum < COLS_IN_H; colNum++)
+                {
+                    gKalmanFilter.H[2][colNum] = 0.0;
+                }
+                lastYaw = 7.0;
+            }
+            else if (gAlgorithm.Behavior.bit.enableStationaryLockYaw)
+            {
+                /* IMU is static and static yaw lock is enabled. The first time when the algo runs here,
+                 * the staic yaw is acquired. And yaw will be locked to this value.
+                 */
+                if (lastYaw > TWO_PI)
+                {
+                    lastYaw = gKalmanFilter.eulerAngles[YAW];
+                }
+                else
+                {
+                    real diff = lastYaw - gKalmanFilter.eulerAngles[YAW];
+                    // if angle change exceeds max bias, it is not static
+                    if (fabs(diff) > gAlgorithm.imuSpec.maxBiasW)
+                    {
+                        lastYaw = 7.0;
+                    }
+                    else
+                    {
+                        gKalmanFilter.nu[STATE_YAW] = diff;
+                        gKalmanFilter.R[STATE_YAW] = 1e-8;
+                        gAlgoStatus.bit.stationaryYawLock = TRUE;
+                    }
+                }
+            }
+        }
+        // Do not perform roll and pitch update
         for (colNum = 0; colNum < COLS_IN_H; colNum++)
         {
-            gKalmanFilter.H[2][colNum] = 0.0;
+            gKalmanFilter.H[0][colNum] = 0.0;
+            gKalmanFilter.H[1][colNum] = 0.0;
         }
     }
+
     /* This solution consists of an integrated roll/pitch/yaw solution
      * S = H*P*HTrans + R (However the matrix math can be simplified since
      *                     H is very sparse!  P is fully populated)
@@ -751,9 +883,6 @@ void Update_Att(void)
     /* Update covariance: P = P + DP = P - K*H*P
      * KxH = gKF.K * gKF.H;
      */
-    /* 2) Use gKalmanFilter.P as a temporary variable to hold FxPxFTranspose
-     * to reduce the number of "large" variables on the heap
-     */
     memset(KxH, 0, sizeof(KxH));
     for (rowNum = 0; rowNum < ROWS_IN_K; rowNum++) 
     {
@@ -768,7 +897,7 @@ void Update_Att(void)
     }
 
     // deltaP = KxH * gKF.P;
-    memset(deltaP_tmp, 0, sizeof(deltaP_tmp));
+    memset(&gKalmanFilter.deltaP_tmp[0][0], 0, sizeof(gKalmanFilter.deltaP_tmp));
     /* deltaP is symmetric so only need to multiply one half and reflect the values
      * across the diagonal
      */
@@ -779,10 +908,10 @@ void Update_Att(void)
         {
             for (multIndex = RLE_KxH[rowNum][0]; multIndex <= RLE_KxH[rowNum][1]; multIndex++)
             {
-                deltaP_tmp[rowNum][colNum] = deltaP_tmp[rowNum][colNum] +
+                gKalmanFilter.deltaP_tmp[rowNum][colNum] = gKalmanFilter.deltaP_tmp[rowNum][colNum] +
                     KxH[rowNum][multIndex] * gKalmanFilter.P[multIndex][colNum];
             }
-            deltaP_tmp[colNum][rowNum] = deltaP_tmp[rowNum][colNum];
+            gKalmanFilter.deltaP_tmp[colNum][rowNum] = gKalmanFilter.deltaP_tmp[rowNum][colNum];
         }
     }
 #else
@@ -804,10 +933,10 @@ void Update_Att(void)
                 {
                     continue;
                 }
-                deltaP_tmp[rowNum][colNum] = deltaP_tmp[rowNum][colNum] +
+                gKalmanFilter.deltaP_tmp[rowNum][colNum] = gKalmanFilter.deltaP_tmp[rowNum][colNum] +
                     KxH[rowNum][multIndex] * gKalmanFilter.P[multIndex][colNum];
             }
-            deltaP_tmp[colNum][rowNum] = deltaP_tmp[rowNum][colNum];
+            gKalmanFilter.deltaP_tmp[colNum][rowNum] = gKalmanFilter.deltaP_tmp[rowNum][colNum];
         }
     }
 #endif
@@ -819,7 +948,7 @@ void Update_Att(void)
         for (colNum = rowNum; colNum < COLS_IN_P; colNum++) 
         {
             gKalmanFilter.P[rowNum][colNum] = gKalmanFilter.P[rowNum][colNum] -
-                                              deltaP_tmp[rowNum][colNum];
+                                              gKalmanFilter.deltaP_tmp[rowNum][colNum];
             gKalmanFilter.P[colNum][rowNum] = gKalmanFilter.P[rowNum][colNum];
         }
     }
@@ -831,7 +960,7 @@ void Update_Att(void)
  */
 void Update_Pos(void)
 {
-    // which state is updated in Update_Att()
+    // which state is updated in Update_Pos()
     uint8_t updatedStatesPos[16] = { 1, 1, 1,           // Positions are updated
                                      1, 1, 1,           // Velocities are updated
                                      1, 1, 1, 1,        // Quaternions are NOT updated
@@ -891,7 +1020,7 @@ void Update_Pos(void)
     // Compute the intermediate state update, stateUpdate
     AxB(&gKalmanFilter.K[0][0], &gKalmanFilter.nu[STATE_RX], NUMBER_OF_EKF_STATES, 3, 1, &gKalmanFilter.stateUpdate[0]);
 
-    memset(deltaP_tmp, 0, sizeof(deltaP_tmp));
+    memset(&gKalmanFilter.deltaP_tmp[0][0], 0, sizeof(gKalmanFilter.deltaP_tmp));
     // Update the intermediate covariance estimate
     for (rowNum = 0; rowNum < NUMBER_OF_EKF_STATES; rowNum++) 
     {
@@ -914,14 +1043,15 @@ void Update_Pos(void)
                 {
                     continue;
                 }
-                deltaP_tmp[rowNum][colNum] = deltaP_tmp[rowNum][colNum] +
+                gKalmanFilter.deltaP_tmp[rowNum][colNum] = gKalmanFilter.deltaP_tmp[rowNum][colNum] +
                     gKalmanFilter.K[rowNum][multIndex] * gKalmanFilter.P[multIndex][colNum];
             }
-            deltaP_tmp[colNum][rowNum] = deltaP_tmp[rowNum][colNum];
+            gKalmanFilter.deltaP_tmp[colNum][rowNum] = gKalmanFilter.deltaP_tmp[rowNum][colNum];
         }
     }
 
-    AMinusB(&gKalmanFilter.P[0][0], &deltaP_tmp[0][0], NUMBER_OF_EKF_STATES, NUMBER_OF_EKF_STATES, &gKalmanFilter.P[0][0]);
+    AMinusB(&gKalmanFilter.P[0][0], &gKalmanFilter.deltaP_tmp[0][0], 
+            NUMBER_OF_EKF_STATES, NUMBER_OF_EKF_STATES, &gKalmanFilter.P[0][0]);
 
     // Update states
     gKalmanFilter.Position_N[X_AXIS] = gKalmanFilter.Position_N[X_AXIS] + gKalmanFilter.stateUpdate[STATE_RX];
@@ -932,21 +1062,21 @@ void Update_Pos(void)
     gKalmanFilter.Velocity_N[Y_AXIS] = gKalmanFilter.Velocity_N[Y_AXIS] + gKalmanFilter.stateUpdate[STATE_VY];
     gKalmanFilter.Velocity_N[Z_AXIS] = gKalmanFilter.Velocity_N[Z_AXIS] + gKalmanFilter.stateUpdate[STATE_VZ];
 
-    //gKalmanFilter.quaternion[Q0] = gKalmanFilter.quaternion[Q0] + gKalmanFilter.stateUpdate[STATE_Q0];
-    //gKalmanFilter.quaternion[Q1] = gKalmanFilter.quaternion[Q1] + gKalmanFilter.stateUpdate[STATE_Q1];
-    //gKalmanFilter.quaternion[Q2] = gKalmanFilter.quaternion[Q2] + gKalmanFilter.stateUpdate[STATE_Q2];
-    //gKalmanFilter.quaternion[Q3] = gKalmanFilter.quaternion[Q3] + gKalmanFilter.stateUpdate[STATE_Q3];
-    //
-    //// Normalize quaternion and force q0 to be positive
-    //QuatNormalize(gKalmanFilter.quaternion);
-    //
-    //gKalmanFilter.rateBias_B[X_AXIS] = gKalmanFilter.rateBias_B[X_AXIS] + gKalmanFilter.stateUpdate[STATE_WBX];
-    //gKalmanFilter.rateBias_B[Y_AXIS] = gKalmanFilter.rateBias_B[Y_AXIS] + gKalmanFilter.stateUpdate[STATE_WBY];
-    //gKalmanFilter.rateBias_B[Z_AXIS] = gKalmanFilter.rateBias_B[Z_AXIS] + gKalmanFilter.stateUpdate[STATE_WBZ];
-    //
-    //gKalmanFilter.accelBias_B[X_AXIS] = gKalmanFilter.accelBias_B[X_AXIS] + gKalmanFilter.stateUpdate[STATE_ABX];
-    //gKalmanFilter.accelBias_B[Y_AXIS] = gKalmanFilter.accelBias_B[Y_AXIS] + gKalmanFilter.stateUpdate[STATE_ABY];
-    //gKalmanFilter.accelBias_B[Z_AXIS] = gKalmanFilter.accelBias_B[Z_AXIS] + gKalmanFilter.stateUpdate[STATE_ABZ];
+    gKalmanFilter.quaternion[Q0] = gKalmanFilter.quaternion[Q0] + gKalmanFilter.stateUpdate[STATE_Q0];
+    gKalmanFilter.quaternion[Q1] = gKalmanFilter.quaternion[Q1] + gKalmanFilter.stateUpdate[STATE_Q1];
+    gKalmanFilter.quaternion[Q2] = gKalmanFilter.quaternion[Q2] + gKalmanFilter.stateUpdate[STATE_Q2];
+    gKalmanFilter.quaternion[Q3] = gKalmanFilter.quaternion[Q3] + gKalmanFilter.stateUpdate[STATE_Q3];
+    
+    // Normalize quaternion and force q0 to be positive
+    QuatNormalize(gKalmanFilter.quaternion);
+    
+    gKalmanFilter.rateBias_B[X_AXIS] = gKalmanFilter.rateBias_B[X_AXIS] + gKalmanFilter.stateUpdate[STATE_WBX];
+    gKalmanFilter.rateBias_B[Y_AXIS] = gKalmanFilter.rateBias_B[Y_AXIS] + gKalmanFilter.stateUpdate[STATE_WBY];
+    gKalmanFilter.rateBias_B[Z_AXIS] = gKalmanFilter.rateBias_B[Z_AXIS] + gKalmanFilter.stateUpdate[STATE_WBZ];
+    
+    gKalmanFilter.accelBias_B[X_AXIS] = gKalmanFilter.accelBias_B[X_AXIS] + gKalmanFilter.stateUpdate[STATE_ABX];
+    gKalmanFilter.accelBias_B[Y_AXIS] = gKalmanFilter.accelBias_B[Y_AXIS] + gKalmanFilter.stateUpdate[STATE_ABY];
+    gKalmanFilter.accelBias_B[Z_AXIS] = gKalmanFilter.accelBias_B[Z_AXIS] + gKalmanFilter.stateUpdate[STATE_ABZ];
 }
 
 
@@ -955,7 +1085,7 @@ void Update_Pos(void)
  */
 void Update_Vel(void)
 {
-    // which state is updated in Update_Att()
+    // which state is updated in Update_Vel()
     uint8_t updatedStatesVel[16] = { 1, 1, 1,           // Positions are NOT updated
                                      1, 1, 1,           // Velocities are updated
                                      1, 1, 1, 1,        // Quaternions are updated
@@ -1015,7 +1145,7 @@ void Update_Vel(void)
     // Compute the intermediate state update
     AxB(&gKalmanFilter.K[0][0], &gKalmanFilter.nu[STATE_VX], NUMBER_OF_EKF_STATES, 3, 1, &gKalmanFilter.stateUpdate[0]);
 
-    memset(deltaP_tmp, 0, sizeof(deltaP_tmp));
+    memset(&gKalmanFilter.deltaP_tmp[0][0], 0, sizeof(gKalmanFilter.deltaP_tmp));
     // Update the intermediate covariance estimate
     for (rowNum = 0; rowNum < NUMBER_OF_EKF_STATES; rowNum++) 
     {
@@ -1034,18 +1164,241 @@ void Update_Vel(void)
              */
             for (multIndex = STATE_VX; multIndex <= STATE_VZ; multIndex++) 
             {
-                deltaP_tmp[rowNum][colNum] = deltaP_tmp[rowNum][colNum] +
+                gKalmanFilter.deltaP_tmp[rowNum][colNum] = gKalmanFilter.deltaP_tmp[rowNum][colNum] +
                     gKalmanFilter.K[rowNum][multIndex - STATE_VX] * gKalmanFilter.P[multIndex][colNum];
             }
-            deltaP_tmp[colNum][rowNum] = deltaP_tmp[rowNum][colNum];
+            gKalmanFilter.deltaP_tmp[colNum][rowNum] = gKalmanFilter.deltaP_tmp[rowNum][colNum];
         }
     }
 
     // P2 = P2 - KxHxP2
-    AMinusB(&gKalmanFilter.P[0][0], &deltaP_tmp[0][0], NUMBER_OF_EKF_STATES, NUMBER_OF_EKF_STATES, &gKalmanFilter.P[0][0]);
+    AMinusB(&gKalmanFilter.P[0][0], &gKalmanFilter.deltaP_tmp[0][0], NUMBER_OF_EKF_STATES, NUMBER_OF_EKF_STATES, &gKalmanFilter.P[0][0]);
     // ++++++++++++++++++++++ END OF VELOCITY ++++++++++++++++++++++
 
     // Update states
+    gKalmanFilter.Position_N[X_AXIS] = gKalmanFilter.Position_N[X_AXIS] + gKalmanFilter.stateUpdate[STATE_RX];
+    gKalmanFilter.Position_N[Y_AXIS] = gKalmanFilter.Position_N[Y_AXIS] + gKalmanFilter.stateUpdate[STATE_RY];
+    gKalmanFilter.Position_N[Z_AXIS] = gKalmanFilter.Position_N[Z_AXIS] + gKalmanFilter.stateUpdate[STATE_RZ];
+
+    gKalmanFilter.Velocity_N[X_AXIS] = gKalmanFilter.Velocity_N[X_AXIS] + gKalmanFilter.stateUpdate[STATE_VX];
+    gKalmanFilter.Velocity_N[Y_AXIS] = gKalmanFilter.Velocity_N[Y_AXIS] + gKalmanFilter.stateUpdate[STATE_VY];
+    gKalmanFilter.Velocity_N[Z_AXIS] = gKalmanFilter.Velocity_N[Z_AXIS] + gKalmanFilter.stateUpdate[STATE_VZ];
+
+    gKalmanFilter.quaternion[Q0] = gKalmanFilter.quaternion[Q0] + gKalmanFilter.stateUpdate[STATE_Q0];
+    gKalmanFilter.quaternion[Q1] = gKalmanFilter.quaternion[Q1] + gKalmanFilter.stateUpdate[STATE_Q1];
+    gKalmanFilter.quaternion[Q2] = gKalmanFilter.quaternion[Q2] + gKalmanFilter.stateUpdate[STATE_Q2];
+    gKalmanFilter.quaternion[Q3] = gKalmanFilter.quaternion[Q3] + gKalmanFilter.stateUpdate[STATE_Q3];
+
+    // Normalize quaternion and force q0 to be positive
+    QuatNormalize(gKalmanFilter.quaternion);
+
+    gKalmanFilter.rateBias_B[X_AXIS] = gKalmanFilter.rateBias_B[X_AXIS] + gKalmanFilter.stateUpdate[STATE_WBX];
+    gKalmanFilter.rateBias_B[Y_AXIS] = gKalmanFilter.rateBias_B[Y_AXIS] + gKalmanFilter.stateUpdate[STATE_WBY];
+    gKalmanFilter.rateBias_B[Z_AXIS] = gKalmanFilter.rateBias_B[Z_AXIS] + gKalmanFilter.stateUpdate[STATE_WBZ];
+    
+    gKalmanFilter.accelBias_B[X_AXIS] += gKalmanFilter.stateUpdate[STATE_ABX];
+    gKalmanFilter.accelBias_B[Y_AXIS] += gKalmanFilter.stateUpdate[STATE_ABY];
+    gKalmanFilter.accelBias_B[Z_AXIS] += gKalmanFilter.stateUpdate[STATE_ABZ];
+}
+
+static void Update_GPS(void)
+{  
+    // Calculate the R-values for the INS measurements
+    _GenerateObservationCovariance_INS();
+
+    /* This Sequential-Filter (three-stage approach) is nearly as
+     * good as the full implementation -- we also can split it
+     * across multiple iterations to not exceed 10 ms execution on
+     * the embedded 380
+     */
+     /* Compute the system error: z = meas, h = pred = q, nu - z - h
+      * Do this at the same time even if the update is spread across time-steps
+      */
+    if (gAlgoStatus.bit.ppsAvailable)
+    {
+        // use P saved when PPS is detected if PPS is available.
+        memcpy(&gKalmanFilter.P[0][0], &gKalmanFilter.ppsP[0][0], sizeof(gKalmanFilter.P));
+    }
+    ComputeSystemInnovation_Pos();
+    Update_Pos();
+    ComputeSystemInnovation_Vel();
+    Update_Vel();
+    ComputeSystemInnovation_Att();
+
+    // Initialize heading. If getting initial heading at this step, do not update att
+    if (gAlgorithm.headingIni < HEADING_GNSS_HIGH)
+    {
+        if (InitializeHeadingFromGnss())
+        {
+            // Heading is initialized. Related elements in the EKF also need intializing.
+            InitializeEkfHeading();
+
+            /* This heading measurement is used to initialize heading, and should not be
+             * used to update heading.
+             */
+            useGpsHeading = FALSE;
+        }
+    }
+}
+
+static void Update_PseudoMeasurement(void)
+{
+    // which state is updated in Update_Vel()
+    uint8_t updatedStatesPseudo[16] = { 1, 1, 1,           // Positions are NOT updated
+                                        1, 1, 1,           // Velocities are updated
+                                        1, 1, 1, 1,        // Quaternions are updated
+                                        1, 1, 1,           // Gyro biases are updated
+                                        1, 1, 1 };         // Accel biases are upated
+    
+    /* Get current rb2n.
+     * gKalmanFilter.R_BinN is updated every time the algo enters _PredictStateEstimate
+     * After prediction and GPS update, this matrix needs updated.
+     */
+    real rb2n[3][3];
+    QuaternionToR321(gKalmanFilter.quaternion, &rb2n[0][0]);
+
+    // detect zero velocity using GNSS vNED
+    BOOL staticGnss = DetectStaticGnssVelocity(gEKFInput.vNed, 
+                                               gAlgorithm.staticDetectParam.staticGnssVel,
+                                               gEKFInput.gpsFixType);
+
+    // measurement cov
+    real r[3] = { 1.0e-4f, 1.0e-4f, 1.0e-4f };
+    if (!gImuStats.bStaticIMU)
+    {
+        /* If zero velocity is not detected by IMU, the covariance for the lateral and
+         * vertical velocity measurement should be increased.
+         */
+        GenPseudoMeasCov(r);
+        r[1] = 1.0e-1;
+        r[2] = 1.0e-1;
+    }
+
+    /* Compute innovation (measured - estimated) of velocity expressed in the body frame:
+     * innovation = [odo/0.0, 0.0, 0.0] - Rn2b * v_ned
+     * When odometer is available, front velocity measurement is given by odometer.
+     * When zero velocity detected, front velocity measurement is 0.
+     * Zero velocity detection result has a higher priority to determine the front velocity because
+     * odometer is also used for zero velocity detection when odometer is available.
+     */
+    BOOL frontVelMeaValid = FALSE;
+    real frontVelMea = 0.0;
+    /* Front velocity is first determined by odometer. If odometer is not available, zero velocity
+     * detection results are used to determine if front velocity is zero. If neither odometer is
+     * available nor zero velocity detected, front velocity measurement is not valid.
+     */
+    if (odoUsedInAlgorithm())
+    {
+        frontVelMeaValid = TRUE;
+        frontVelMea = gEKFInput.odoVelocity;
+        r[0] = 1.0e-4;      // variance of front velocity measurement should be from odo spec
+    }
+    else if (gImuStats.bStaticIMU)
+    {
+        /* Only when GNSS is invalid or zero velocity is also detected by GNSS, zero velocity
+         * detected by IMU (and GNSS) can be used to determine the along-track velocity.
+         * When front velocity measurement is not available, it is not necessary to readjust
+         * its variance since it will not be used.
+         */
+        if ((!gEKFInput.gpsFixType) || staticGnss)
+        {
+            frontVelMeaValid = TRUE;
+            frontVelMea = 0.0;
+        }
+    }
+    // front vel error
+    gKalmanFilter.nu[STATE_VX] = frontVelMea
+        -rb2n[0][0] * gKalmanFilter.Velocity_N[0]
+        -rb2n[1][0] * gKalmanFilter.Velocity_N[1]
+        -rb2n[2][0] * gKalmanFilter.Velocity_N[2];
+    // lateral (right) vel error
+    gKalmanFilter.nu[STATE_VY] = 
+        -rb2n[0][1] * gKalmanFilter.Velocity_N[0]
+        -rb2n[1][1] * gKalmanFilter.Velocity_N[1]
+        -rb2n[2][1] * gKalmanFilter.Velocity_N[2];
+    // vertical (downwards) vel erro
+    gKalmanFilter.nu[STATE_VZ] =
+        -rb2n[0][2] * gKalmanFilter.Velocity_N[0]
+        -rb2n[1][2] * gKalmanFilter.Velocity_N[1]
+        -rb2n[2][2] * gKalmanFilter.Velocity_N[2];
+    gKalmanFilter.nu[STATE_VY] = _LimitValue(gKalmanFilter.nu[STATE_VY], gAlgorithm.Limit.Innov.velocityError);
+    gKalmanFilter.nu[STATE_VZ] = _LimitValue(gKalmanFilter.nu[STATE_VZ], gAlgorithm.Limit.Innov.velocityError);
+
+    // p*H'. PxHTranspose is 16x3, only the last two columns are used when only lateral and vertical measurements
+    memset(PxHTranspose, 0, sizeof(PxHTranspose));
+    for (rowNum = 0; rowNum < NUMBER_OF_EKF_STATES; rowNum++)
+    {
+        for (colNum = 0; colNum < 3; colNum++)
+        {
+            PxHTranspose[rowNum][colNum] =
+                gKalmanFilter.P[rowNum][3] * rb2n[0][colNum] +
+                gKalmanFilter.P[rowNum][4] * rb2n[1][colNum] +
+                gKalmanFilter.P[rowNum][5] * rb2n[2][colNum];
+        }
+    }
+    
+    // s = H*P*H' + R
+    for (rowNum = 0; rowNum < 3; rowNum++)
+    {
+        for (colNum = rowNum; colNum < 3; colNum++)
+        {
+            S_3x3[rowNum][colNum] = rb2n[0][rowNum] * PxHTranspose[3][colNum] +
+                                    rb2n[1][rowNum] * PxHTranspose[4][colNum] +
+                                    rb2n[2][rowNum] * PxHTranspose[5][colNum];
+            S_3x3[colNum][rowNum] = S_3x3[rowNum][colNum];
+        }
+        S_3x3[rowNum][rowNum] += r[rowNum];
+    }
+
+    // Calculate inv(H*P*H'+R) according to if front velocity measurement is available
+    if (frontVelMeaValid)
+    {
+        matrixInverse_3x3(&S_3x3[0][0], &SInverse_3x3[0][0]);
+    }
+    else
+    {
+        S_3x3[0][0] = 1.0;
+        S_3x3[0][1] = 0.0;
+        S_3x3[0][2] = 0.0;
+        S_3x3[1][0] = 0.0;
+        S_3x3[2][0] = 0.0;
+        matrixInverse_3x3(&S_3x3[0][0], &SInverse_3x3[0][0]);
+        SInverse_3x3[0][0] = 0.0;
+    }
+
+    // K = P*H' * inv(H*P*H' + R). gKalmanFilter.K is 16x3, only the last two columns are used.
+    for (rowNum = 0; rowNum < NUMBER_OF_EKF_STATES; rowNum++)
+    {
+        for (colNum = 0; colNum < 3; colNum++)
+        {
+            gKalmanFilter.K[rowNum][colNum] = 
+                PxHTranspose[rowNum][0] * SInverse_3x3[0][colNum] +
+                PxHTranspose[rowNum][1] * SInverse_3x3[1][colNum] +
+                PxHTranspose[rowNum][2] * SInverse_3x3[2][colNum];
+        }
+    }
+    // force uncorrected terms in K to be 0
+    for (rowNum = STATE_RX; rowNum <= STATE_ABZ; rowNum++)
+    {
+        if (!updatedStatesPseudo[rowNum])
+        {
+            for (colNum = 0; colNum < 3; colNum++)
+            {
+                gKalmanFilter.K[rowNum][colNum] = 0.0;
+            }
+        }
+    }
+
+    // dx = k * nu
+    for (rowNum = 0; rowNum < NUMBER_OF_EKF_STATES; rowNum++)
+    {
+        gKalmanFilter.stateUpdate[rowNum] = 
+            gKalmanFilter.K[rowNum][0] * gKalmanFilter.nu[STATE_VX] +
+            gKalmanFilter.K[rowNum][1] * gKalmanFilter.nu[STATE_VY] +
+            gKalmanFilter.K[rowNum][2] * gKalmanFilter.nu[STATE_VZ];
+    }
+    
+    // update state
     //gKalmanFilter.Position_N[X_AXIS] = gKalmanFilter.Position_N[X_AXIS] + gKalmanFilter.stateUpdate[STATE_RX];
     //gKalmanFilter.Position_N[Y_AXIS] = gKalmanFilter.Position_N[Y_AXIS] + gKalmanFilter.stateUpdate[STATE_RY];
     //gKalmanFilter.Position_N[Z_AXIS] = gKalmanFilter.Position_N[Z_AXIS] + gKalmanFilter.stateUpdate[STATE_RZ];
@@ -1062,90 +1415,93 @@ void Update_Vel(void)
     // Normalize quaternion and force q0 to be positive
     QuatNormalize(gKalmanFilter.quaternion);
 
-    //gKalmanFilter.rateBias_B[X_AXIS] = gKalmanFilter.rateBias_B[X_AXIS] + gKalmanFilter.stateUpdate[STATE_WBX];
-    //gKalmanFilter.rateBias_B[Y_AXIS] = gKalmanFilter.rateBias_B[Y_AXIS] + gKalmanFilter.stateUpdate[STATE_WBY];
-    //gKalmanFilter.rateBias_B[Z_AXIS] = gKalmanFilter.rateBias_B[Z_AXIS] + gKalmanFilter.stateUpdate[STATE_WBZ];
+    gKalmanFilter.rateBias_B[X_AXIS] = gKalmanFilter.rateBias_B[X_AXIS] + gKalmanFilter.stateUpdate[STATE_WBX];
+    gKalmanFilter.rateBias_B[Y_AXIS] = gKalmanFilter.rateBias_B[Y_AXIS] + gKalmanFilter.stateUpdate[STATE_WBY];
+    gKalmanFilter.rateBias_B[Z_AXIS] = gKalmanFilter.rateBias_B[Z_AXIS] + gKalmanFilter.stateUpdate[STATE_WBZ];
 
-    gKalmanFilter.accelBias_B[X_AXIS] = gKalmanFilter.accelBias_B[X_AXIS] + gKalmanFilter.stateUpdate[STATE_ABX];
-    gKalmanFilter.accelBias_B[Y_AXIS] = gKalmanFilter.accelBias_B[Y_AXIS] + gKalmanFilter.stateUpdate[STATE_ABY];
-    gKalmanFilter.accelBias_B[Z_AXIS] = gKalmanFilter.accelBias_B[Z_AXIS] + gKalmanFilter.stateUpdate[STATE_ABZ];
-}
+    gKalmanFilter.accelBias_B[X_AXIS] += gKalmanFilter.stateUpdate[STATE_ABX];
+    gKalmanFilter.accelBias_B[Y_AXIS] += gKalmanFilter.stateUpdate[STATE_ABY];
+    gKalmanFilter.accelBias_B[Z_AXIS] += gKalmanFilter.stateUpdate[STATE_ABZ];
 
-static void Update_GPS(void)
-{
-    // Sync the algorithm itow to the GPS value
-    gAlgorithm.itow = gEKFInputData.itow;
-
-    // Resync timer
-    timer.tenHertzCntr = 0;
-    timer.subFrameCntr = 0;
-
-    // Debugging counter: updateCntr[0] should be about 9x less than updateCntr[1]
-    updateCntr[0] = updateCntr[0] + 1;
-
-    // reset the "last good reading" time
-    gAlgorithm.timeOfLastGoodGPSReading = gEKFInputData.itow;
-
-    // GPS heading valid?
-    useGpsHeading = (gEKFInputData.rawGroundSpeed >= LIMIT_MIN_GPS_VELOCITY_HEADING);
-
-    /* Extract what's common between the following function and the
-     * routines below so we aren't repeating calculations
-     */
-    LLA_To_Base(&gEKFInputData.llaRad[0],
-        &gAlgorithm.rGPS0_E[0],
-        &gAlgorithm.rGPS_N[0],
-        &gAlgorithm.R_NinE[0][0],
-        &gAlgorithm.rGPS_E[0]);
-
-    /* Lever-arm is antenna position w.r.t to IMU in body. rGPS_N is antenna positive
-     * w.r.t to initial point in NED. IMU positive w.r.t initial point is
-     * rGPS_N - R_b_to_N * lever-arm
-     */
-    float leverArmN[3];
-    leverArmN[0] = gKalmanFilter.R_BinN[0][0] * gAlgorithm.leverArmB[0] +
-        gKalmanFilter.R_BinN[0][1] * gAlgorithm.leverArmB[1] +
-        gKalmanFilter.R_BinN[0][2] * gAlgorithm.leverArmB[2];
-    leverArmN[1] = gKalmanFilter.R_BinN[1][0] * gAlgorithm.leverArmB[0] +
-        gKalmanFilter.R_BinN[1][1] * gAlgorithm.leverArmB[1] +
-        gKalmanFilter.R_BinN[1][2] * gAlgorithm.leverArmB[2];
-    leverArmN[2] = gKalmanFilter.R_BinN[2][0] * gAlgorithm.leverArmB[0] +
-        gKalmanFilter.R_BinN[2][1] * gAlgorithm.leverArmB[1] +
-        gKalmanFilter.R_BinN[2][2] * gAlgorithm.leverArmB[2];
-    gAlgorithm.rGPS_N[0] -= leverArmN[0];
-    gAlgorithm.rGPS_N[1] -= leverArmN[1];
-    gAlgorithm.rGPS_N[2] -= leverArmN[2];
-    /* This Sequential-Filter (three-stage approach) is nearly as
-     * good as the full implementation -- we also can split it
-     * across multiple iterations to not exceed 10 ms execution on
-     * the embedded 380
-     */
-     /* Compute the system error: z = meas, h = pred = q, nu - z - h
-      * Do this at the same time even if the update is spread across time-steps
-      */
-    ComputeSystemInnovation_Pos();
-    ComputeSystemInnovation_Vel();
-    ComputeSystemInnovation_Att();
-
-    // Calculate the R-values for the INS measurements
-    _GenerateObservationCovariance_INS();
-
-    Update_Pos();
-
-    Update_Vel();
-
-    // Initialize heading. If getting initial heading at this step, do not update att
-    if (gAlgorithm.gnssHeadingFirstTime)
+    // Update covariance: P = P + DP = P - K*H*P
+    // Use transpose(PxHTranspose) to hold H*P (3x16). 
+    // Only the last two columns are used when only lateral and vertical measurements
+    for (colNum = 0; colNum < NUMBER_OF_EKF_STATES; colNum++)
     {
-        if (InitializeGnssHeading())
+        for (rowNum = 0; rowNum < 3; rowNum++)
         {
-            /* This heading measurement is used to initialize heading, and should not be
-             * used to update heading.
-             */
-            useGpsHeading = FALSE;
+            PxHTranspose[colNum][rowNum] = rb2n[0][rowNum] * gKalmanFilter.P[3][colNum] +
+                                           rb2n[1][rowNum] * gKalmanFilter.P[4][colNum] +
+                                           rb2n[2][rowNum] * gKalmanFilter.P[5][colNum];
+        }
+    }
+
+    // deltaP = KxH * gKF.P;
+    memset(&gKalmanFilter.deltaP_tmp[0][0], 0, sizeof(gKalmanFilter.deltaP_tmp));
+    /* deltaP is symmetric so only need to multiply one half and reflect the values
+     * across the diagonal
+     */
+    for (rowNum = 0; rowNum <= STATE_ABZ; rowNum++)
+    {
+        if (!updatedStatesPseudo[rowNum])
+        {
+            continue;
+        }
+        for (colNum = rowNum; colNum <= STATE_ABZ; colNum++)
+        {
+            if (!updatedStatesPseudo[colNum])
+            {
+                continue;
+            }
+            gKalmanFilter.deltaP_tmp[rowNum][colNum] = gKalmanFilter.K[rowNum][0] * PxHTranspose[colNum][0] +
+                                                       gKalmanFilter.K[rowNum][1] * PxHTranspose[colNum][1] +
+                                                       gKalmanFilter.K[rowNum][2] * PxHTranspose[colNum][2];
+            gKalmanFilter.deltaP_tmp[colNum][rowNum] = gKalmanFilter.deltaP_tmp[rowNum][colNum];
+        }
+    }
+
+    /* P is symmetric so only need to multiply one half and reflect the values
+     * across the diagonal
+     */
+    for (rowNum = 0; rowNum < ROWS_IN_P; rowNum++)
+    {
+        for (colNum = rowNum; colNum < COLS_IN_P; colNum++)
+        {
+            gKalmanFilter.P[rowNum][colNum] = gKalmanFilter.P[rowNum][colNum] -
+                                              gKalmanFilter.deltaP_tmp[rowNum][colNum];
+            gKalmanFilter.P[colNum][rowNum] = gKalmanFilter.P[rowNum][colNum];
         }
     }
 }
+
+static void GenPseudoMeasCov(real *r)
+{
+    real absYawRate = (real)fabs(gEKFInput.angRate_B[2]);
+    r[1] = absYawRate;
+    r[2] = absYawRate;
+    
+    real minVar = 1e-4;
+    real maxVar = 1e-2;
+    if (r[1] < minVar)
+    {
+        r[1] = minVar;
+    }
+    if (r[1] > maxVar)
+    {
+        r[1] = maxVar;
+    }
+
+    if (r[2] < minVar)
+    {
+        r[2] = minVar;
+    }
+    if (r[2] > maxVar)
+    {
+        r[2] = maxVar;
+    }
+    //printf("rr: %f,%f\n", r[1], r[2]);
+}
+
 
 /* Conversion from turn-rate threshold (values loaded into gConfiguration) to
  * decimal value in [rad/sec]:
@@ -1185,7 +1541,6 @@ static void _TurnSwitch(void)
     if ((gAlgorithm.state > HIGH_GAIN_AHRS) && (absYawRate > minSwitch))
     {
         gAlgoStatus.bit.turnSwitch = TRUE;
-        //        std::cout << "TurnSwitch (INS): Activated\n";
 
         /* When the rate is below the maximum rate defined by turnSwitchThreshold,
          * then generate a scale-factor that is between ( 1.0 - G ) and 0.0 (based on absYawRate).
@@ -1252,7 +1607,7 @@ static BOOL _CheckForUpdateTrigger(uint8_t updateRate)
 {
     //
     uint8_t oneHundredHzCntr;
-    uint8_t gpsUpdate = 0;
+    uint8_t updateFlag = 0;
 
     //
     switch( updateRate )
@@ -1261,7 +1616,7 @@ static BOOL _CheckForUpdateTrigger(uint8_t updateRate)
         case 10:
             if( timer.subFrameCntr == 0 ) 
             {
-                gpsUpdate = 1;
+                updateFlag = 1;
             }
             break;
 
@@ -1269,7 +1624,7 @@ static BOOL _CheckForUpdateTrigger(uint8_t updateRate)
         case 20:
             if( timer.subFrameCntr == 0 || timer.subFrameCntr == 5 )
             {
-                gpsUpdate = 1;
+                updateFlag = 1;
             }
             break;
 
@@ -1304,7 +1659,7 @@ static BOOL _CheckForUpdateTrigger(uint8_t updateRate)
                 oneHundredHzCntr == 92 ||
                 oneHundredHzCntr == 96 )
             {
-                gpsUpdate = 1;
+                updateFlag = 1;
             }
             break;
 
@@ -1316,142 +1671,323 @@ static BOOL _CheckForUpdateTrigger(uint8_t updateRate)
                 timer.subFrameCntr == 6 ||
                 timer.subFrameCntr == 8 )
             {
-                gpsUpdate = 1;
+                updateFlag = 1;
             }
             break;
 
         // fifty-hertz update
         case 100:
-            gpsUpdate = 1;
+            updateFlag = 1;
             break;
     }
 
-    return gpsUpdate;
+    return updateFlag;
 }
 
-
-static int InitializeGnssHeading()
+static int InitializeHeadingFromGnss()
 {
     /* enable declination correction, but the corrected magnetic yaw will not
      * be used if GPS is available.
      */
     gAlgorithm.applyDeclFlag = TRUE;
 
-    if (useGpsHeading)// && gEKFInputData.rawGroundSpeed>1.0)
+    /* backward drive detection for heading initialization using GNSS heading.
+     * Detection happends every second. Velocity increment is relatively reliable
+     * if it is accumulated for 1sec.
+     */
+    static real lastVelBxGnss = 0;
+    static uint8_t forwardDriveConfidence = 0;
+    static uint32_t lastTOW = 0;
+    uint32_t timeSinceLastDetection = gAlgorithm.itow - lastTOW;
+    if (timeSinceLastDetection < 0)
     {
-        // Heading is initialized with GNSS
-        gAlgorithm.gnssHeadingFirstTime = FALSE;
+        timeSinceLastDetection = timeSinceLastDetection + MAX_ITOW;
+    }
+    if (timeSinceLastDetection > 950)   // 950ms is set as the threshold for 1sec
+    {
+        lastTOW = gAlgorithm.itow;
+        /* assume velocity is always along the body x axis. otherwise, GNSS heading
+         * cannot be used to initialize fusion heading
+         */
+        real velBx = sqrtf(SQUARE(gEKFInput.vNed[0]) + SQUARE(gEKFInput.vNed[1]) + SQUARE(gEKFInput.vNed[2]));
+        velBx = fabs(velBx);
+        real dv = velBx - lastVelBxGnss;
+        if ((dv * gKalmanFilter.linearAccel_B[X_AXIS]) > 0.0 && fabs(gKalmanFilter.linearAccel_B[X_AXIS]) > 0.2)
+        {
+            if (forwardDriveConfidence < 255)
+            {
+                forwardDriveConfidence++;
+            }
+        }
+        else
+        {
+            forwardDriveConfidence = 0;
+        }
+        // record this velocity along body x axis for next run
+        lastVelBxGnss = velBx;
+        // reset accumulated x body axis velocity change.
+        gKalmanFilter.linearAccel_B[X_AXIS] = 0.0;
+    }
+
+    // detect if GNSS heading is reliable
+    static uint8_t gnssHeadingGoodCntr = 0;
+    static float lastGnssHeading = 0.0;
+    static float lastFusionHeading = 0.0;
+    BOOL gnssHeadingGood = 0;
+    float angleDiff = 0.0;
+    if (useGpsHeading)
+    {
+        float calculatedGnssHeading  = (float)(atan2(gEKFInput.vNed[1], gEKFInput.vNed[0]) * R2D);
+        float diffHeading = AngleErrDeg(gEKFInput.trueCourse - calculatedGnssHeading);
+        // input GNSS heading matches heading calculated from vNED
+        if (fabs(diffHeading) < 5.0)
+        {
+            // GNSS heading change matches fusion yaw angle
+            float gnssHeadingChange = gEKFInput.trueCourse - lastGnssHeading;
+            float fusionHeadingChange = gKalmanFilter.eulerAngles[2] * (float)R2D - lastFusionHeading;
+            angleDiff = (float)fabs( AngleErrDeg(gnssHeadingChange - fusionHeadingChange) );
+            if (angleDiff < 5.0)
+            {
+                gnssHeadingGood = TRUE;
+            }
+        }
+        lastGnssHeading = gEKFInput.trueCourse;
+        lastFusionHeading = gKalmanFilter.eulerAngles[2] * (float)R2D;
+    }
+    if (gnssHeadingGood)
+    {
+        gnssHeadingGoodCntr++;
+    }
+    else
+    {    
+        gnssHeadingGoodCntr = 0;
+    }
+    
+    // Heading initialization when drive forward and GNSS heading is reliable
+    BOOL thisHeadingUsedForIni = FALSE;
+    if (gAlgorithm.headingIni < HEADING_GNSS_LOW)   // heading is immediately but maybe unreliably initialized
+    {
+        if (gnssHeadingGoodCntr >= 1 && forwardDriveConfidence >= 1)   // Only one sample is checked, so heading may be unreliable
+        {
+            gnssHeadingGoodCntr = 0;
+            // Heading is initialized with GNSS
+            gAlgorithm.headingIni = HEADING_GNSS_LOW;
 
 #ifdef INS_OFFLINE
-        printf("gps heading: %f\n", gEKFInputData.trueCourse);
+            printf("quick gps heading: %f\n", gEKFInput.trueCourse);
 #else
 #ifdef DISPLAY_DIAGNOSTIC_MSG
-        DebugPrintString("gps heading");
-        DebugPrintFloat(": ", gEKFInputData.trueCourse, 9);
-        DebugPrintEndline();
+            DebugPrintString("quick gps heading");
+            DebugPrintFloat(": ", gEKFInput.trueCourse, 9);
+            DebugPrintEndline();
 #endif
 #endif
-        // initialize yaw angle with GPS heading
-        gKalmanFilter.eulerAngles[YAW] = (real)(gEKFInputData.trueCourse * D2R);
-        if (gKalmanFilter.eulerAngles[YAW] > PI)
-        {
-            gKalmanFilter.eulerAngles[YAW] -= (real)TWO_PI;
+            thisHeadingUsedForIni = TRUE;
         }
-        EulerAnglesToQuaternion(gKalmanFilter.eulerAngles, gKalmanFilter.quaternion);
-        
-        // reinitialize NED velocity
-        gKalmanFilter.Velocity_N[X_AXIS] = (real)gEKFInputData.vNed[X_AXIS];
-        gKalmanFilter.Velocity_N[Y_AXIS] = (real)gEKFInputData.vNed[Y_AXIS];
-        gKalmanFilter.Velocity_N[Z_AXIS] = (real)gEKFInputData.vNed[Z_AXIS];
-        
-#if 1   // mod, DXG
-        // reset quaternion and velocity terms in the P matrix
-        int i, j;
-        // vel row
-        for (i = STATE_VX; i < STATE_VZ; i++)
-        {
-            for (j = 0; j < NUMBER_OF_EKF_STATES; j++)
-            {
-                if (i != j)
-                {
-                    gKalmanFilter.P[i][j] = 0;
-                    gKalmanFilter.P[j][i] = 0;
-                }
-            }
-        }
-        // q0 row
-        for (i = 0; i < NUMBER_OF_EKF_STATES; i++)
-        {
-            if (i != STATE_Q0)
-            {
-                gKalmanFilter.P[STATE_Q0][i] = 0;
-                gKalmanFilter.P[i][STATE_Q0] = 0;
-            }
-        }
-        // q3 row
-        for (i = 0; i < NUMBER_OF_EKF_STATES; i++)
-        {
-            if (i != STATE_Q3)
-            {
-                gKalmanFilter.P[STATE_Q3][i] = 0;
-                gKalmanFilter.P[i][STATE_Q3] = 0;
-            }
-        }
-
-        // the initial covariance of the quaternion is estimated from ground speed.
-        float temp = (float)atan(0.05 / gEKFInputData.rawGroundSpeed);
-        temp *= temp;   // heading var
-        if (gAlgoStatus.bit.turnSwitch)
-        {
-            temp *= 10.0;   // when rotating, heading var increases
-        }
-        temp /= 4.0;        // sin(heading/2) or cos(heading/2)
-        float sinYawSqr = (real)sin(gKalmanFilter.eulerAngles[YAW] / 2.0f);
-        sinYawSqr *= sinYawSqr;
-        //  Assume roll and pitch are close to 0deg
-        gKalmanFilter.P[STATE_Q0][STATE_Q0] = temp * sinYawSqr;
-        gKalmanFilter.P[STATE_Q3][STATE_Q3] = temp * (1.0f - sinYawSqr);
-
-        gKalmanFilter.P[STATE_VX][STATE_VX] = gKalmanFilter.R[STATE_VX];
-        gKalmanFilter.P[STATE_VY][STATE_VY] = gKalmanFilter.R[STATE_VY];
-        gKalmanFilter.P[STATE_VZ][STATE_VZ] = gKalmanFilter.R[STATE_VZ];
-
-#if 0
-        // reset velocity and quaternion terms in the P matrix
-        real v2 = gEKFInputData.rawGroundSpeed * gEKFInputData.rawGroundSpeed;
-        real v3by4 = 4.0 * v2 * gEKFInputData.rawGroundSpeed;
-        real vn2 = gEKFInputData.vNed[0] * gEKFInputData.vNed[0];
-        real q0q0 = gKalmanFilter.quaternion[0] * gKalmanFilter.quaternion[0];
-        real q3q3 = gKalmanFilter.quaternion[3] * gKalmanFilter.quaternion[3];
-        if (q0q0 < 1.0e-3)
-        {
-            q0q0 = 1.0e-3;
-        }
-        if (q3q3 < 1.0e-3)
-        {
-            q3q3 = 1.0e-3;
-        }
-        real multiplerQVn = (v2 - vn2) / v3by4;
-        multiplerQVn *= multiplerQVn;
-        real multiplerQVe = (gEKFInputData.vNed[0] * gEKFInputData.vNed[1]) / v3by4;
-        multiplerQVe *= multiplerQVe;
-        gKalmanFilter.P[STATE_VX][STATE_Q0] = multiplerQVn / q0q0 * gKalmanFilter.R[STATE_VX][STATE_VX];
-        gKalmanFilter.P[STATE_VX][STATE_Q3] = multiplerQVn / q3q3 * gKalmanFilter.R[STATE_VX][STATE_VX];
-        gKalmanFilter.P[STATE_VY][STATE_Q0] = multiplerQVe / q0q0 * gKalmanFilter.R[STATE_VY][STATE_VY];
-        gKalmanFilter.P[STATE_VY][STATE_Q3] = multiplerQVe / q3q3 * gKalmanFilter.R[STATE_VY][STATE_VY];
-
-
-        gKalmanFilter.P[STATE_Q0][STATE_VX] = gKalmanFilter.P[STATE_VX][STATE_Q0];
-        gKalmanFilter.P[STATE_Q3][STATE_VX] = gKalmanFilter.P[STATE_VX][STATE_Q3];
-        gKalmanFilter.P[STATE_Q0][STATE_VY] = gKalmanFilter.P[STATE_VY][STATE_Q0];
-        gKalmanFilter.P[STATE_Q3][STATE_VY] = gKalmanFilter.P[STATE_VY][STATE_Q3];
-#endif
-
-#endif
-        return 1;
     }
     else
     {
-        return 0;
+        /* Three points are checked, and the latest ground speed is above a certian threshold.
+         * The latest GNSS heading should be reliable.
+         */
+        if (gnssHeadingGoodCntr >= 3 && 
+            forwardDriveConfidence >= 5 && 
+            gEKFInput.rawGroundSpeed > RELIABLE_GPS_VELOCITY_HEADING)
+        {
+            gnssHeadingGoodCntr = 0;
+            forwardDriveConfidence = 0;
+            gAlgorithm.headingIni = HEADING_GNSS_HIGH;
+#ifdef INS_OFFLINE
+            printf("reliable gps heading: %f\n", gEKFInput.trueCourse);
+#else
+#ifdef DISPLAY_DIAGNOSTIC_MSG
+            DebugPrintString("reliable gps heading");
+            DebugPrintFloat(": ", gEKFInput.trueCourse, 9);
+            DebugPrintEndline();
+#endif
+#endif
+            thisHeadingUsedForIni = TRUE;
+        }
+    }
+
+    return thisHeadingUsedForIni;
+}
+
+static void InitializeEkfHeading()
+{
+    /* Compare the reliable heading with Kalamn filter heading. If the difference exceeds
+     * a certain threshold, this means the immediate heading initialization is unreliable,
+     * and the Kalman filter needs reinitialized with the reliable one.
+     */
+    float angleDiff = (float)fabs(AngleErrDeg(gEKFInput.trueCourse - 
+                                              gKalmanFilter.eulerAngles[2] * (float)R2D));
+    if (angleDiff <= 2.0)
+    {
+        return;
+    }
+
+#ifdef INS_OFFLINE
+        printf("Reinitialize KF: %f\n", angleDiff);
+#else
+#ifdef DISPLAY_DIAGNOSTIC_MSG
+        DebugPrintString("Reinitialize KF: ");
+        DebugPrintFloat("", angleDiff, 9);
+        DebugPrintEndline();
+#endif
+#endif
+
+    // initialize yaw angle with GPS heading
+    gKalmanFilter.eulerAngles[YAW] = (gEKFInput.trueCourse * D2R);
+    if (gKalmanFilter.eulerAngles[YAW] > PI)
+    {
+        gKalmanFilter.eulerAngles[YAW] -= (real)TWO_PI;
+    }
+    EulerAnglesToQuaternion(gKalmanFilter.eulerAngles, gKalmanFilter.quaternion);
+
+    // reinitialize NED position
+    gKalmanFilter.Position_N[0] = (real)gKalmanFilter.rGPS_N[0];
+    gKalmanFilter.Position_N[1] = (real)gKalmanFilter.rGPS_N[1];
+    gKalmanFilter.Position_N[2] = (real)gKalmanFilter.rGPS_N[2];
+
+    // reinitialize NED velocity
+    gKalmanFilter.Velocity_N[X_AXIS] = (real)gEKFInput.vNed[X_AXIS];
+    gKalmanFilter.Velocity_N[Y_AXIS] = (real)gEKFInput.vNed[Y_AXIS];
+    gKalmanFilter.Velocity_N[Z_AXIS] = (real)gEKFInput.vNed[Z_AXIS];
+
+#if 1   // mod, DXG
+    // reset quaternion and velocity terms in the P matrix
+    int i, j;
+    // pos row
+    gKalmanFilter.P[STATE_RX][STATE_RX] = gKalmanFilter.R[STATE_RX];
+    gKalmanFilter.P[STATE_RY][STATE_RY] = gKalmanFilter.R[STATE_RY];
+    gKalmanFilter.P[STATE_RZ][STATE_RZ] = gKalmanFilter.R[STATE_RZ];
+    for (i = STATE_RX; i < STATE_RZ; i++)
+    {
+        for (j = 0; j < NUMBER_OF_EKF_STATES; j++)
+        {
+            if (i != j)
+            {
+                gKalmanFilter.P[i][j] = 0;
+                gKalmanFilter.P[j][i] = 0;
+            }
+        }
+    }
+    // vel row
+    gKalmanFilter.P[STATE_VX][STATE_VX] = gKalmanFilter.R[STATE_VX];
+    gKalmanFilter.P[STATE_VY][STATE_VY] = gKalmanFilter.R[STATE_VY];
+    gKalmanFilter.P[STATE_VZ][STATE_VZ] = gKalmanFilter.R[STATE_VZ];
+    for (i = STATE_VX; i < STATE_VZ; i++)
+    {
+        for (j = 0; j < NUMBER_OF_EKF_STATES; j++)
+        {
+            if (i != j)
+            {
+                gKalmanFilter.P[i][j] = 0;
+                gKalmanFilter.P[j][i] = 0;
+            }
+        }
+    }
+    // q0 row
+    for (i = 0; i < NUMBER_OF_EKF_STATES; i++)
+    {
+        if (i != STATE_Q0)
+        {
+            gKalmanFilter.P[STATE_Q0][i] = 0;
+            gKalmanFilter.P[i][STATE_Q0] = 0;
+        }
+    }
+    // q3 row
+    for (i = 0; i < NUMBER_OF_EKF_STATES; i++)
+    {
+        if (i != STATE_Q3)
+        {
+            gKalmanFilter.P[STATE_Q3][i] = 0;
+            gKalmanFilter.P[i][STATE_Q3] = 0;
+        }
+    }
+
+    // the initial covariance of the quaternion is estimated from ground speed.
+    float temp = (float)atan(0.05 / gEKFInput.rawGroundSpeed);
+    temp *= temp;   // heading var
+    if (gAlgoStatus.bit.turnSwitch)
+    {
+        temp *= 10.0;   // when rotating, heading var increases
+    }
+    temp /= 4.0;        // sin(heading/2) or cos(heading/2)
+    float sinYawSqr = (real)sin(gKalmanFilter.eulerAngles[YAW] / 2.0f);
+    sinYawSqr *= sinYawSqr;
+    //  Assume roll and pitch are close to 0deg
+    gKalmanFilter.P[STATE_Q0][STATE_Q0] = temp * sinYawSqr;
+    gKalmanFilter.P[STATE_Q3][STATE_Q3] = temp * (1.0f - sinYawSqr);
+
+    gKalmanFilter.P[STATE_VX][STATE_VX] = gKalmanFilter.R[STATE_VX];
+    gKalmanFilter.P[STATE_VY][STATE_VY] = gKalmanFilter.R[STATE_VY];
+    gKalmanFilter.P[STATE_VZ][STATE_VZ] = gKalmanFilter.R[STATE_VZ];
+
+#if 0
+    // reset velocity and quaternion terms in the P matrix
+    real v2 = gEKFInput.rawGroundSpeed * gEKFInput.rawGroundSpeed;
+    real v3by4 = 4.0 * v2 * gEKFInput.rawGroundSpeed;
+    real vn2 = gEKFInput.vNed[0] * gEKFInput.vNed[0];
+    real q0q0 = gKalmanFilter.quaternion[0] * gKalmanFilter.quaternion[0];
+    real q3q3 = gKalmanFilter.quaternion[3] * gKalmanFilter.quaternion[3];
+    if (q0q0 < 1.0e-3)
+    {
+        q0q0 = 1.0e-3;
+    }
+    if (q3q3 < 1.0e-3)
+    {
+        q3q3 = 1.0e-3;
+    }
+    real multiplerQVn = (v2 - vn2) / v3by4;
+    multiplerQVn *= multiplerQVn;
+    real multiplerQVe = (gEKFInput.vNed[0] * gEKFInput.vNed[1]) / v3by4;
+    multiplerQVe *= multiplerQVe;
+    gKalmanFilter.P[STATE_VX][STATE_Q0] = multiplerQVn / q0q0 * gKalmanFilter.R[STATE_VX][STATE_VX];
+    gKalmanFilter.P[STATE_VX][STATE_Q3] = multiplerQVn / q3q3 * gKalmanFilter.R[STATE_VX][STATE_VX];
+    gKalmanFilter.P[STATE_VY][STATE_Q0] = multiplerQVe / q0q0 * gKalmanFilter.R[STATE_VY][STATE_VY];
+    gKalmanFilter.P[STATE_VY][STATE_Q3] = multiplerQVe / q3q3 * gKalmanFilter.R[STATE_VY][STATE_VY];
+
+
+    gKalmanFilter.P[STATE_Q0][STATE_VX] = gKalmanFilter.P[STATE_VX][STATE_Q0];
+    gKalmanFilter.P[STATE_Q3][STATE_VX] = gKalmanFilter.P[STATE_VX][STATE_Q3];
+    gKalmanFilter.P[STATE_Q0][STATE_VY] = gKalmanFilter.P[STATE_VY][STATE_Q0];
+    gKalmanFilter.P[STATE_Q3][STATE_VY] = gKalmanFilter.P[STATE_VY][STATE_Q3];
+#endif
+
+#endif
+}
+
+static void ApplyGpsDealyCorrForStateCov()
+{
+    uint8_t i, j, k;
+
+    // P = phi * P * phi' + dQ
+    // 1) use deltaP_tmp to hold phi * p
+    AxB(&gKalmanFilter.phi[0][0], &gKalmanFilter.P[0][0], NUMBER_OF_EKF_STATES, NUMBER_OF_EKF_STATES,
+        NUMBER_OF_EKF_STATES, &gKalmanFilter.deltaP_tmp[0][0]);
+
+    // 2) phi * p * phi' = deltaP_tmp * phi'
+    for (i = 0; i < NUMBER_OF_EKF_STATES; i++)
+    {
+        for (j = i; j < NUMBER_OF_EKF_STATES; j++)
+        {
+            gKalmanFilter.P[i][j] = 0;
+            for (k = 0; k < NUMBER_OF_EKF_STATES; k++)
+            {
+                gKalmanFilter.P[i][j] += gKalmanFilter.deltaP_tmp[i][k] * gKalmanFilter.phi[j][k];
+            }
+            gKalmanFilter.P[j][i] = gKalmanFilter.P[i][j];
+        }
+    }
+
+    // 3) add dQ
+    for (i = 0; i < NUMBER_OF_EKF_STATES; i++)
+    {
+        for (j = i; j < NUMBER_OF_EKF_STATES; j++)
+        {
+            gKalmanFilter.P[i][j] += gKalmanFilter.dQ[i][j];
+            gKalmanFilter.P[j][i] = gKalmanFilter.P[i][j];
+        }
     }
 }

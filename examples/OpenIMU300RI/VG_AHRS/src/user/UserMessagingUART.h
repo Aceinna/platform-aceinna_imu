@@ -151,5 +151,6 @@ extern BOOL      UpdateAllUserParams(allUserParamsPayload*  pld, uint8_t *payloa
 extern BOOL      GetUserConfig(userConfigPayload*  pld, uint8_t *payloadLen);
 extern BOOL      GetUserParam(userParamPayload*  pld, uint8_t *payloadLen);
 extern BOOL      GetAllUserParams(allUserParamsPayload*  pld, uint8_t *payloadLen);
+extern void      UserInitConfigureUart();
 
 #endif /* USER_CONFIGURATION_H */

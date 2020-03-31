@@ -26,7 +26,7 @@ limitations under the License.
 #ifndef _IMU_APP_VERSION_H
 #define _IMU_APP_VERSION_H
 
-#define  APP_VERSION_STRING  "IMU_J1939 1.0.1"
+#define  APP_VERSION_STRING  "IMU_J1939 1.1.3"
 
 
 #endif

@@ -157,7 +157,7 @@ void TaskWorldMagneticModel(void const *argument)
     while(1) {
         OS_Delay( 5000 );
 #ifdef GPS
-        if( gGpsDataPtr->gpsValid )
+        if( gGpsDataPtr->gpsFixType )
         {
             // caution - safety checks on the dates are fine, but we don't want
             // to rely on these hard-coded dates in operation
@@ -204,7 +204,7 @@ void TaskWorldMagneticModel(void const *argument)
 //    /*
 //    % WorldMagneticModel.m
 //
-//    if( gGpsDataPtr.GPSValid ),
+//    if( gGpsDataPtr.gpsFixType ),
 //    % WMM here
 //    declinationAngle_rad = ( 13 + 36 / 60 + 43/3600 ) * CONV.DEG_TO_RAD;
 //
@@ -216,7 +216,7 @@ void TaskWorldMagneticModel(void const *argument)
 //    */
 //
 //    // VERY SIMPLE WMM (declination near San Jose only)
-////    if (gGpsDataPtr->gpsValid) {
+////    if (gGpsDataPtr->gpsFixType) {
 ////        gWorldMagModel.decl_rad = (real)( (13.0 + 40.0 / 60.0 + 29.0 / 3600.0) * D2R );
 ////    } else {
 ////        gWorldMagModel.decl_rad = (real)0.0;
