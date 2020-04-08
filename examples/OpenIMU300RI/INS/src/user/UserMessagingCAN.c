@@ -161,7 +161,7 @@ void ProcessRequest(void *dsc)
         aceinna_j1939_send_digital_filter(gEcuConfigPtr->accel_cut_off, gEcuConfigPtr->rate_cut_off);
       }
       // orientation settings request 
-      else if ((req_ps_val == gEcuConfigPtr->orien_bits)) {
+      else if ((req_ps_val == gEcuConfigPtr->orientation_ps)) {
         uint8_t bytes[2];
         bytes[0] = (gEcuConfigPtr->orien_bits >> 8) & 0xff;
         bytes[1] = (gEcuConfigPtr->orien_bits) & 0xff;

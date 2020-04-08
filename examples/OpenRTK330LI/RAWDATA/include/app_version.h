@@ -26,7 +26,7 @@ limitations under the License.
 #ifndef _APP_VERSION_H
 #define _APP_VERSION_H
 
-#define  APP_VERSION_STRING  "OpenRTK330L RAWDATA App 0.1.1"   
+#define  APP_VERSION_STRING  "OpenRTK330L RAWDATA App 1.1.1"   
 
 #define  PRODUCT_NAME_STRING "OpenRTK330L"
 

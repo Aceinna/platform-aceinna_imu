@@ -1,5 +1,5 @@
 /*****************************************************************************
- * @file appVersion.h
+ * @file app_version.h
  *
  * THIS CODE AND INFORMATION ARE PROVIDED "AS IS" WITHOUT WARRANTY OF ANY
  * KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
@@ -9,7 +9,7 @@
  * @brief Version definition based on UCB serial protocol.
  ******************************************************************************/
 /*******************************************************************************
-Copyright 2018 ACEINNA, INC
+Copyright 2020 ACEINNA, INC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,10 +23,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 *******************************************************************************/
-#ifndef _IMU_APP_VERSION_H
-#define _IMU_APP_VERSION_H
+#ifndef _APP_VERSION_H
+#define _APP_VERSION_H
 
-#define  APP_VERSION_STRING  "IMU_J1939 1.1.4"
+#define  APP_VERSION_STRING  "OpenRTK330L RAWDATA App 0.1.1"   
 
+#define  PRODUCT_NAME_STRING "OpenRTK330L"
 
 #endif

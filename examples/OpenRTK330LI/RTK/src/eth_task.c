@@ -1,15 +1,14 @@
 /*****************************************************************************
- * @file appVersion.h
+ * @file   eth_task.c
  *
  * THIS CODE AND INFORMATION ARE PROVIDED "AS IS" WITHOUT WARRANTY OF ANY
  * KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
  * PARTICULAR PURPOSE.
  *
- * @brief Version definition based on UCB serial protocol.
  ******************************************************************************/
 /*******************************************************************************
-Copyright 2018 ACEINNA, INC
+Copyright 2020 ACEINNA, INC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,10 +22,28 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 *******************************************************************************/
-#ifndef _IMU_APP_VERSION_H
-#define _IMU_APP_VERSION_H
+#include <string.h>
 
-#define  APP_VERSION_STRING  "IMU_J1939 1.1.4"
+#include "FreeRTOS.h"
+#include "lwip_comm.h"
+#include "ntrip_client.h"
 
 
-#endif
+/** ***************************************************************************
+ * @name EthTask()
+ * @brief Embedded server,sending and receiving data from Internet
+ * @param N/A
+ * @retval N/A
+ ******************************************************************************/
+void EthTask(void const *argument)
+{
+	fifo_init(&ntrip_tx_fifo, ntripTxBuf, NTRIP_TX_BUFSIZE);
+	fifo_init(&ntrip_rx_fifo, ntripRxBuf, NTRIP_RX_BUFSIZE);
+
+	ethernet_init(); // init ethnernet
+	
+	while (1)
+	{
+        NTRIP_interface();
+	}
+}
