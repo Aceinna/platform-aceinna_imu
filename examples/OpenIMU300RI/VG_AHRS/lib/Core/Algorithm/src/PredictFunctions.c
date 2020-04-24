@@ -22,18 +22,19 @@
 #include "algorithm.h"
 #include "algorithmAPI.h"
 #include "SensorNoiseParameters.h"
+#include "MotionStatus.h"
 #include "EKF_Algorithm.h"
 #include "PredictFunctions.h"
 #include "AlgorithmLimits.h"
 #include "WorldMagneticModel.h"
 
-#ifdef INS_OFFLINE
-#include "SimulationParameters.h"
-#else
+#ifndef INS_OFFLINE
 #ifdef DISPLAY_DIAGNOSTIC_MSG
 #include "debug.h"
 #endif
 #endif
+
+extern ImuStatsStruct gImuStats;
 
 /* F is sparse and has elements in the following locations...
  * There may be some more efficient ways of implementing this as this method
@@ -77,7 +78,7 @@ uint8_t RLE_Q[ROWS_IN_F][2] = { {  STATE_RX, STATE_RX  },
 // Local functions
 static void _PredictStateEstimate(void);
 static void _PredictCovarianceEstimate(void);
-
+static void StateCovarianceChange();
 static void _UpdateProcessJacobian(void);
 static void _UpdateProcessCovariance(void);
 
@@ -100,6 +101,19 @@ void EKF_PredictionStage(real *filteredAccel)
     _PredictStateEstimate();        // x(k+1) = x(k) + f(x(k), u(k))
     _PredictCovarianceEstimate();   // P = F*P*FTrans + Q
 
+    /* calculate state transition matrix and state covarariance increment
+     *P(k) = F(k)*( F(k-1) * P(k-1) * F(k-1)' )*F(k)' + Q(k)
+     *     = F(k)...F(1)*P(1)*F(1)'...F(k)' + F(k)...F(2)*Q1*F(2)'...F(k)' + ... + F(k)*Q(k-1)*F(k)' + Q(k)
+     *     = phi(k)*P(1)*phi(k)' + dQ(k)
+     * phi(k) = F(k)*phi(k-1), phi(1) = eye(N)
+     * dQ(k) = F(k)*dQ(k-1)*F(k)' + Q(k), dQ(1) = zeros(N)
+     */
+    if (gAlgoStatus.bit.ppsAvailable)
+    {
+        // This is done only when pps is detected.
+        StateCovarianceChange();
+    }
+
     // Extract the predicted Euler angles from the predicted quaternion
     QuaternionToEulerAngles( gKalmanFilter.eulerAngles,
                              gKalmanFilter.quaternion );
@@ -117,9 +131,9 @@ void EKF_PredictionStage(real *filteredAccel)
      */
     if(magUsedInAlgorithm())
     {
-        magFieldVector[X_AXIS] = (real)gEKFInputData.magField_B[X_AXIS];
-        magFieldVector[Y_AXIS] = (real)gEKFInputData.magField_B[Y_AXIS];
-        magFieldVector[Z_AXIS] = (real)gEKFInputData.magField_B[Z_AXIS];
+        magFieldVector[X_AXIS] = (real)gEKFInput.magField_B[X_AXIS];
+        magFieldVector[Y_AXIS] = (real)gEKFInput.magField_B[Y_AXIS];
+        magFieldVector[Z_AXIS] = (real)gEKFInput.magField_B[Z_AXIS];
     }
     else
     {
@@ -184,10 +198,6 @@ static void _PredictStateEstimate(void)
 {
     real aCorr_N[3];
     real deltaQuaternion[4];
-    /* Generate the transformation matrix (R_BinN) based on the past value of
-     * the attitude quaternion (prior to prediction at the new time-step)
-     */
-    QuaternionToR321(gKalmanFilter.quaternion, &gKalmanFilter.R_BinN[0][0]);
 
     if( gAlgorithm.state > LOW_GAIN_AHRS ) 
     {
@@ -202,34 +212,45 @@ static void _PredictStateEstimate(void)
 
         // ================= NED Velocity (v_N) =================
         // aCorr_B = aMeas_B - aBias_B
-        // gEKFInputData.accel_B in g's, convert to m/s^2 for integration
-        gKalmanFilter.correctedAccel_B[X_AXIS] = (real)(gEKFInputData.accel_B[X_AXIS] * GRAVITY) -
+        // gEKFInput.accel_B in g's, convert to m/s^2 for integration
+        gKalmanFilter.correctedAccel_B[X_AXIS] = gEKFInput.accel_B[X_AXIS] -
                                                  gKalmanFilter.accelBias_B[X_AXIS];
-        gKalmanFilter.correctedAccel_B[Y_AXIS] = (real)(gEKFInputData.accel_B[Y_AXIS] * GRAVITY) -
+        gKalmanFilter.correctedAccel_B[Y_AXIS] = gEKFInput.accel_B[Y_AXIS] -
                                                  gKalmanFilter.accelBias_B[Y_AXIS];
-        gKalmanFilter.correctedAccel_B[Z_AXIS] = (real)(gEKFInputData.accel_B[Z_AXIS] * GRAVITY) -
+        gKalmanFilter.correctedAccel_B[Z_AXIS] = gEKFInput.accel_B[Z_AXIS] -
                                                  gKalmanFilter.accelBias_B[Z_AXIS];
 
-        // Transform the corrected acceleration vector from the body to the NED-frame
-        // a_N = R_BinN * a_B
-        aCorr_N[X_AXIS] = gKalmanFilter.R_BinN[X_AXIS][X_AXIS] * gKalmanFilter.correctedAccel_B[X_AXIS] +
-                          gKalmanFilter.R_BinN[X_AXIS][Y_AXIS] * gKalmanFilter.correctedAccel_B[Y_AXIS] +
-                          gKalmanFilter.R_BinN[X_AXIS][Z_AXIS] * gKalmanFilter.correctedAccel_B[Z_AXIS];
-        aCorr_N[Y_AXIS] = gKalmanFilter.R_BinN[Y_AXIS][X_AXIS] * gKalmanFilter.correctedAccel_B[X_AXIS] +
-                          gKalmanFilter.R_BinN[Y_AXIS][Y_AXIS] * gKalmanFilter.correctedAccel_B[Y_AXIS] +
-                          gKalmanFilter.R_BinN[Y_AXIS][Z_AXIS] * gKalmanFilter.correctedAccel_B[Z_AXIS];
-        aCorr_N[Z_AXIS] = gKalmanFilter.R_BinN[Z_AXIS][X_AXIS] * gKalmanFilter.correctedAccel_B[X_AXIS] +
-                          gKalmanFilter.R_BinN[Z_AXIS][Y_AXIS] * gKalmanFilter.correctedAccel_B[Y_AXIS] +
-                          gKalmanFilter.R_BinN[Z_AXIS][Z_AXIS] * gKalmanFilter.correctedAccel_B[Z_AXIS];
+        /* Transform the corrected acceleration vector from the body to the NED-frame and remove gravity
+         * a_N = R_BinN * a_B
+         */
+        aCorr_N[X_AXIS] =
+                gKalmanFilter.R_BinN[X_AXIS][X_AXIS] * gKalmanFilter.correctedAccel_B[X_AXIS] +
+                gKalmanFilter.R_BinN[X_AXIS][Y_AXIS] * gKalmanFilter.correctedAccel_B[Y_AXIS] +
+                gKalmanFilter.R_BinN[X_AXIS][Z_AXIS] * gKalmanFilter.correctedAccel_B[Z_AXIS];
+        aCorr_N[Y_AXIS] =
+                gKalmanFilter.R_BinN[Y_AXIS][X_AXIS] * gKalmanFilter.correctedAccel_B[X_AXIS] +
+                gKalmanFilter.R_BinN[Y_AXIS][Y_AXIS] * gKalmanFilter.correctedAccel_B[Y_AXIS] +
+                gKalmanFilter.R_BinN[Y_AXIS][Z_AXIS] * gKalmanFilter.correctedAccel_B[Z_AXIS];
+        aCorr_N[Z_AXIS] =
+                gKalmanFilter.R_BinN[Z_AXIS][X_AXIS] * gKalmanFilter.correctedAccel_B[X_AXIS] +
+                gKalmanFilter.R_BinN[Z_AXIS][Y_AXIS] * gKalmanFilter.correctedAccel_B[Y_AXIS] +
+                gKalmanFilter.R_BinN[Z_AXIS][Z_AXIS] * gKalmanFilter.correctedAccel_B[Z_AXIS] +
+                (real)GRAVITY;
 
-        // Determine the acceleration of the system by removing the gravity vector
-        // v_N(k+1) = v_N(k) + dV = v_N(k) + aMotion_N*DT = v_N(k) + ( a_N - g_N )*DT
-        gKalmanFilter.Velocity_N[X_AXIS] = gKalmanFilter.Velocity_N[X_AXIS] +
-                                           ( aCorr_N[X_AXIS] ) * gAlgorithm.dt;
-        gKalmanFilter.Velocity_N[Y_AXIS] = gKalmanFilter.Velocity_N[Y_AXIS] +
-                                           ( aCorr_N[Y_AXIS] ) * gAlgorithm.dt;
-        gKalmanFilter.Velocity_N[Z_AXIS] = gKalmanFilter.Velocity_N[Z_AXIS] +
-                                           ( aCorr_N[Z_AXIS] + (real)GRAVITY ) * gAlgorithm.dt;
+        /* Determine the acceleration of the system by removing the gravity vector
+         * v_N(k+1) = v_N(k) + dV = v_N(k) + aMotion_N*DT = v_N(k) + ( a_N - g_N )*DT
+         */
+        gKalmanFilter.Velocity_N[X_AXIS] = gKalmanFilter.Velocity_N[X_AXIS] + aCorr_N[X_AXIS] * gAlgorithm.dt;
+        gKalmanFilter.Velocity_N[Y_AXIS] = gKalmanFilter.Velocity_N[Y_AXIS] + aCorr_N[Y_AXIS] * gAlgorithm.dt;
+        gKalmanFilter.Velocity_N[Z_AXIS] = gKalmanFilter.Velocity_N[Z_AXIS] + aCorr_N[Z_AXIS] * gAlgorithm.dt;
+        
+        // Calculate linear acceleration in the body frame.
+        gKalmanFilter.linearAccel_B[X_AXIS] += (gKalmanFilter.correctedAccel_B[X_AXIS] +
+                                              gKalmanFilter.R_BinN[Z_AXIS][X_AXIS] * (real)GRAVITY)*gAlgorithm.dt;
+        gKalmanFilter.linearAccel_B[Y_AXIS] = gKalmanFilter.correctedAccel_B[Y_AXIS] +
+                                              gKalmanFilter.R_BinN[Z_AXIS][Y_AXIS] * (real)GRAVITY;
+        gKalmanFilter.linearAccel_B[Z_AXIS] = gKalmanFilter.correctedAccel_B[Z_AXIS] +
+                                              gKalmanFilter.R_BinN[Z_AXIS][Z_AXIS] * (real)GRAVITY;
     }
     else
     {
@@ -243,18 +264,18 @@ static void _PredictStateEstimate(void)
         gKalmanFilter.Velocity_N[Z_AXIS] = (real)0.0;
 
         // what should this be???
-        gKalmanFilter.correctedAccel_B[XACCEL] = (real)gEKFInputData.accel_B[X_AXIS] * (real)GRAVITY;
-        gKalmanFilter.correctedAccel_B[YACCEL] = (real)gEKFInputData.accel_B[Y_AXIS] * (real)GRAVITY;
-        gKalmanFilter.correctedAccel_B[ZACCEL] = (real)gEKFInputData.accel_B[Z_AXIS] * (real)GRAVITY;
+        gKalmanFilter.correctedAccel_B[XACCEL] = gEKFInput.accel_B[X_AXIS];
+        gKalmanFilter.correctedAccel_B[YACCEL] = gEKFInput.accel_B[Y_AXIS];
+        gKalmanFilter.correctedAccel_B[ZACCEL] = gEKFInput.accel_B[Z_AXIS];
     }
 
     // ================= Attitude quaternion =================
     // Find the 'true' angular rate (wTrue_B = wCorr_B = wMeas_B - wBias_B)
-    gKalmanFilter.correctedRate_B[X_AXIS] = gEKFInputData.angRate_B[X_AXIS] -
+    gKalmanFilter.correctedRate_B[X_AXIS] = gEKFInput.angRate_B[X_AXIS] -
                                             gKalmanFilter.rateBias_B[X_AXIS];
-    gKalmanFilter.correctedRate_B[Y_AXIS] = gEKFInputData.angRate_B[Y_AXIS] -
+    gKalmanFilter.correctedRate_B[Y_AXIS] = gEKFInput.angRate_B[Y_AXIS] -
                                             gKalmanFilter.rateBias_B[Y_AXIS];
-    gKalmanFilter.correctedRate_B[Z_AXIS] = gEKFInputData.angRate_B[Z_AXIS] -
+    gKalmanFilter.correctedRate_B[Z_AXIS] = gEKFInput.angRate_B[Z_AXIS] -
                                             gKalmanFilter.rateBias_B[Z_AXIS];
 
     // Placed in gKalmanFilter as wTrueTimesDtOverTwo is used to compute the Jacobian (F)
@@ -637,7 +658,7 @@ static void _UpdateProcessJacobian(void)
 static void _UpdateProcessCovariance(void)
 {
     // Variables used to initially populate the Q-matrix
-    real arw, biSq[3] = {(real)1.0e-10, (real)1.0e-10, (real)1.0e-10};
+    real biSq[3] = {(real)1.0e-10, (real)1.0e-10, (real)1.0e-10};
     real sigDriftDot;
 
     // Variables used to populate the Q-matrix each time-step
@@ -651,83 +672,16 @@ static void _UpdateProcessCovariance(void)
     {
         initQ_HG = FALSE;
 
-#ifdef INS_OFFLINE
-        /* This value is set based on the version string specified in the 
-         * simulation configuration file, ekfSim.cfg
-         */
-        uint8_t sysRange = gSimulation.sysRange;
-        uint8_t rsType   = gSimulation.rsType;
-#else
-        // This value is set based on the version string loaded into the unit
-        //   via the system configuration load
-        uint8_t sysRange = platformGetSysRange(); // from system config
-        uint8_t rsType = BMI_RS;
-#endif
-
-        /* Set the matrix, Q, based on whether the system is a -200 or -400
-         * Q-values are based on the rate-sensor's ARW (noise) and BI values
-         * passed through the process model.
-         */
-        switch (sysRange) 
-        {
-            case _200_DPS_RANGE: // same as default
-                // Bias-stability value for the rate-sensors
-                if (rsType == BMI_RS) 
-                {
-                    // BMI: 1.508e-3 [deg/sec] = 2.63e-5 [rad/sec]
-                    biSq[X_AXIS] = (real)(6.92e-10);  // (2.63e-5)^2
-                    biSq[Y_AXIS] = biSq[X_AXIS];
-                    biSq[Z_AXIS] = biSq[X_AXIS];
-                }
-                else
-                {
-                    // Maxim x/y: 1.85e-3 [deg/sec] = 3.24E-05 [rad/sec]
-                    // Maxim z:   7.25e-4 [deg/sec] = 1.27E-05 [rad/sec]
-                    biSq[X_AXIS] = (real)(1.05e-9);  // (3.25e-5)^2
-                    biSq[Y_AXIS] = biSq[X_AXIS];
-                    biSq[Z_AXIS] = (real)(1.61e-10);  // (1.27e-5)^2
-                }
-                break;
-
-            // -400 values
-            case _400_DPS_RANGE:
-                // bi in [rad]
-                if (rsType == BMI_RS)
-                {
-                    // BMI: 6 [deg/hr] = 1.7e-3 [deg/sec] = 2.91e-5 [rad/sec]
-                    biSq[X_AXIS] = (real)(8.46e-10);  // (2.91e-5)^2
-                    biSq[Y_AXIS] = biSq[X_AXIS];
-                    biSq[Z_AXIS] = biSq[X_AXIS];
-                }
-                else
-                {
-                    // Maxim x/y: 2.16e-3 [deg/sec] = 3.24E-05 [rad/sec]
-                    // Maxim z:   1.07e-3 [deg/sec] = 1.86E-05 [rad/sec]
-                    biSq[X_AXIS] = (real)(1.41e-09);  // (3.24e-5)^2
-                    biSq[Y_AXIS] = biSq[X_AXIS];
-                    biSq[Z_AXIS] = (real)(3.46e-10);  // (1.86e-5)^2
-                }
-                break;
-        }
-
-        // ARW is unaffected by range setting, 200/400 (or it seems).  Value is in
-        //   units of [rad/rt-sec]
-        if (rsType == BMI_RS)
-        {
-            // BMI: 4.39e-3 [deg/rt-sec] = 7.66e-5 [rad/rt-sec]
-            arw = (real)7.66e-5;
-        }
-        else
-        {
-            // Maxim: 5.63e-3 [deg/rt-sec] = 9.82E-05 [rad/rt-sec]
-            arw = (real)9.82e-5;
-        }
+        // squated gyro bias instability
+        biSq[X_AXIS] = gAlgorithm.imuSpec.biW * gAlgorithm.imuSpec.biW;
+        biSq[Y_AXIS] = biSq[X_AXIS];
+        biSq[Z_AXIS] = biSq[X_AXIS];
 
         /* Rate-bias terms (computed once as it does not change with attitude). 
          *   sigDriftDot = (2*pi/ln(2)) * BI^2 / ARW
          *   2*pi/ln(2) = 9.064720283654388
          */
-        sigDriftDot = (real)9.064720283654388 / arw;
+        sigDriftDot = (real)9.064720283654388 / gAlgorithm.imuSpec.arw;
 
         // Rate-bias terms (Q is ultimately the squared value, which is done in the second line of the assignment)
         gKalmanFilter.Q[STATE_WBX] = sigDriftDot * biSq[X_AXIS] * gAlgorithm.dt;
@@ -738,9 +692,16 @@ static void _UpdateProcessCovariance(void)
         gKalmanFilter.Q[STATE_WBZ] = sigDriftDot * biSq[Z_AXIS] * gAlgorithm.dt;
         gKalmanFilter.Q[STATE_WBZ] = gKalmanFilter.Q[STATE_WBZ] * gKalmanFilter.Q[STATE_WBZ];
 
-        gKalmanFilter.Q[STATE_ABX] = (real)6.839373353251920e-10;
-        gKalmanFilter.Q[STATE_ABY] = (real)6.839373353251920e-10;
-        gKalmanFilter.Q[STATE_ABZ] = (real)6.839373353251920e-10;
+        // Accel bias
+        biSq[X_AXIS] = gAlgorithm.imuSpec.biA * gAlgorithm.imuSpec.biA;
+        biSq[Y_AXIS] = biSq[X_AXIS];
+        biSq[Z_AXIS] = biSq[X_AXIS];
+        sigDriftDot = (real)9.064720283654388 / gAlgorithm.imuSpec.vrw;
+        gKalmanFilter.Q[STATE_ABX] = sigDriftDot * biSq[X_AXIS] * gAlgorithm.dt;
+        gKalmanFilter.Q[STATE_ABX] = gKalmanFilter.Q[STATE_ABX] * gKalmanFilter.Q[STATE_ABX];
+        //gKalmanFilter.Q[STATE_ABX] = (real)1.0e-12;
+        gKalmanFilter.Q[STATE_ABY] = gKalmanFilter.Q[STATE_ABX];
+        gKalmanFilter.Q[STATE_ABZ] = gKalmanFilter.Q[STATE_ABX];
 
         /* Precalculate the multiplier applied to the Q terms associated with
          * attitude.  sigRate = ARW / sqrt( dt )
@@ -748,7 +709,7 @@ static void _UpdateProcessCovariance(void)
          *      = 0.5 * sqrt(dt) * sqrt(dt) * ( ARW / sqrt(dt) )
          *      = 0.5 * sqrt(dt) * ARW
          */
-        multiplier_Q = (real)(0.5) * gAlgorithm.sqrtDt * arw;
+        multiplier_Q = (real)(0.5) * gAlgorithm.sqrtDt * gAlgorithm.imuSpec.arw;
         multiplier_Q_Sq = multiplier_Q * multiplier_Q;
     }
 
@@ -771,9 +732,9 @@ static void _UpdateProcessCovariance(void)
              * drive-test).  Note: this is only called upon the first-entry
              * into low-gain mode.
              */
-            gKalmanFilter.Q[STATE_WBX] = (real)1.0e-3 * gKalmanFilter.Q[STATE_WBX];
+            /*gKalmanFilter.Q[STATE_WBX] = (real)1.0e-3 * gKalmanFilter.Q[STATE_WBX];
             gKalmanFilter.Q[STATE_WBY] = (real)1.0e-3 * gKalmanFilter.Q[STATE_WBY];
-            gKalmanFilter.Q[STATE_WBZ] = (real)1.0e-3 * gKalmanFilter.Q[STATE_WBZ];
+            gKalmanFilter.Q[STATE_WBZ] = (real)1.0e-3 * gKalmanFilter.Q[STATE_WBZ];*/
         }
     }
 
@@ -782,6 +743,17 @@ static void _UpdateProcessCovariance(void)
      * block of the Q-matrix).  The rest of the elements in the matrix are set
      * during the transition into and between EKF states (high-gain, low-gain,
      * etc) or above (upon first entry into this function).
+     * The process cov matrix of quaternion is
+     *          [1-q0*q0    -q0*q1      -q0*q2      -q0*q3;
+     *          -q0*q1      1-q1*q1     -q1*q2      -q1*q3;
+     *          -q0*q2      -q1*q2      1-q2*q2     -q2*q3;
+     *          -q0*q3      -q1*q3      -q2*q3      1-q3*q3] * (0.5*dt*sigma_gyro)^2
+     * The eigenvalue of the matrix is [1 1 1 1-q0^2-q1^2-q2^2-q3^2], which means it
+     * is not positive defintie when quaternion norm is above or equal to 1. Quaternion
+     * norm can be above 1 due to numerical accuray. A scale factor 0.99 is added here to
+     * make sure the positive definiteness of the covariance matrix. The eigenvalues now
+     * are [1 1 1 1-0.99*(q0^2+q1^2+q2^2+q3^2)]. Even if there is numerical accuracy issue,
+     * the cov matrix is still positive definite.
      */
     real q0q0 = gKalmanFilter.quaternion_Past[Q0] * gKalmanFilter.quaternion_Past[Q0] * 0.99f;
     real q0q1 = gKalmanFilter.quaternion_Past[Q0] * gKalmanFilter.quaternion_Past[Q1] * 0.99f;
@@ -799,9 +771,13 @@ static void _UpdateProcessCovariance(void)
 
     // Note: this block of the covariance matrix is symmetric
     real tmpQMultiplier = multiplier_Q_Sq;
-    if ( gAlgorithm.state == INS_SOLUTION )
+    /* Only considering gyro noise can underestimate the cov of the quaternion.
+     * A scale factor 100 is added here. This is mainly for faster convergence
+     * of the heading angle in the INS solution.
+     */
+    if (gAlgorithm.state == INS_SOLUTION)
     {
-        tmpQMultiplier = 100.0 * multiplier_Q_Sq;
+        tmpQMultiplier = 1.0f * multiplier_Q_Sq;
     }
     gKalmanFilter.Q[STATE_Q0] = ((real)1.0 - q0q0) * tmpQMultiplier;
     gKalmanFilter.Qq[0] = (-q0q1) * tmpQMultiplier;
@@ -831,7 +807,7 @@ void GenerateProcessCovariance(void)
      */
 
     // Acceleration based values
-    real dtSigAccelSq = (real)(gAlgorithm.dt * SENSOR_NOISE_ACCEL_STD_DEV);
+    real dtSigAccelSq = (real)(gAlgorithm.dt * gAlgorithm.imuSpec.sigmaA);
     dtSigAccelSq = dtSigAccelSq * dtSigAccelSq;
 
     // Position
@@ -839,17 +815,99 @@ void GenerateProcessCovariance(void)
     gKalmanFilter.Q[STATE_RY] = gAlgorithm.dtSquared * dtSigAccelSq;
     gKalmanFilter.Q[STATE_RZ] = gAlgorithm.dtSquared * dtSigAccelSq;
 
-    // Velocity
+    /* Velocity, todo. 100 is to take under-estimated accel bias, gyro bias and
+     * attitude error since none of them is Gaussian. Non-Gaussian error produces
+     * velocity drift. High-freq vibration can also be handled by this.
+     */
     gKalmanFilter.Q[STATE_VX] = 100 * dtSigAccelSq;//(real)1e-10;
     gKalmanFilter.Q[STATE_VY] = 100 * dtSigAccelSq;
     gKalmanFilter.Q[STATE_VZ] = 100 * dtSigAccelSq;
-
-    // Acceleration - bias
-    gKalmanFilter.Q[STATE_ABX] = (real)5e-11; //(real)1e-10; // dtSigAccelSq; //%1e-8 %sigmaAccelBiasSq;
-    gKalmanFilter.Q[STATE_ABY] = (real)5e-11; //(real)1e-10; //dtSigAccelSq; //%sigmaAccelBiasSq;
-    gKalmanFilter.Q[STATE_ABZ] = (real)5e-11; //(real)1e-10; //dtSigAccelSq; //%sigmaAccelBiasSq;
 }
 
+static void StateCovarianceChange()
+{
+    uint8_t rowNum, colNum, multIndex;
+    // 1) phi(k) = F(k)*phi(k-1)
+    // deltaP_tmp is used to hold F(k)*phi(k-1)
+    memset(&gKalmanFilter.deltaP_tmp[0][0], 0, sizeof(gKalmanFilter.deltaP_tmp));
+    for (rowNum = 0; rowNum < 16; rowNum++)
+    {
+        for (colNum = 0; colNum < 16; colNum++)
+        {
+            for (multIndex = RLE_F[rowNum][0]; multIndex <= RLE_F[rowNum][1]; multIndex++)
+            {
+                gKalmanFilter.deltaP_tmp[rowNum][colNum] += 
+                    gKalmanFilter.F[rowNum][multIndex] * gKalmanFilter.phi[multIndex][colNum];
+            }
+        }
+    }
+    memcpy(&gKalmanFilter.phi[0][0], &gKalmanFilter.deltaP_tmp[0][0], sizeof(gKalmanFilter.phi));
+
+    // 2) dQ(k) = F(k)*dQ(k-1)*F(k)' + Q(k)
+    // 2.1) deltaP_tmp is used to hold F(k)*dQ(k-1)
+    memset(&gKalmanFilter.deltaP_tmp[0][0], 0, sizeof(gKalmanFilter.deltaP_tmp));
+    for (rowNum = 0; rowNum < 16; rowNum++)
+    {
+        for (colNum = 0; colNum < 16; colNum++)
+        {
+            for (multIndex = RLE_F[rowNum][0]; multIndex <= RLE_F[rowNum][1]; multIndex++)
+            {
+                gKalmanFilter.deltaP_tmp[rowNum][colNum] +=
+                    gKalmanFilter.F[rowNum][multIndex] * gKalmanFilter.dQ[multIndex][colNum];
+            }
+        }
+    }
+    // 2.2) Calculate F(k)*dQ(k-1)*F(k)' = deltaP_tmp*F(k)'
+    memset(&gKalmanFilter.dQ[0][0], 0, sizeof(gKalmanFilter.dQ));
+    for (rowNum = 0; rowNum < ROWS_IN_F; rowNum++)
+    {
+        for (colNum = rowNum; colNum < ROWS_IN_F; colNum++)
+        {
+            for (multIndex = RLE_F[colNum][0]; multIndex <= RLE_F[colNum][1]; multIndex++)
+            {
+                gKalmanFilter.dQ[rowNum][colNum] = gKalmanFilter.dQ[rowNum][colNum] +
+                    gKalmanFilter.deltaP_tmp[rowNum][multIndex] * gKalmanFilter.F[colNum][multIndex];
+            }
+            gKalmanFilter.dQ[colNum][rowNum] = gKalmanFilter.dQ[rowNum][colNum];
+        }
+    }
+    // 2.3) Calculate F(k)*dQ(k-1)*F(k)' + Q(k)
+    gKalmanFilter.dQ[STATE_RX][STATE_RX] += gKalmanFilter.Q[STATE_RX];
+    gKalmanFilter.dQ[STATE_RY][STATE_RY] += gKalmanFilter.Q[STATE_RY];
+    gKalmanFilter.dQ[STATE_RZ][STATE_RZ] += gKalmanFilter.Q[STATE_RZ];
+
+    gKalmanFilter.dQ[STATE_VX][STATE_VX] += gKalmanFilter.Q[STATE_VX];
+    gKalmanFilter.dQ[STATE_VY][STATE_VY] += gKalmanFilter.Q[STATE_VY];
+    gKalmanFilter.dQ[STATE_VZ][STATE_VZ] += gKalmanFilter.Q[STATE_VZ];
+
+    gKalmanFilter.dQ[STATE_Q0][STATE_Q0] += gKalmanFilter.Q[STATE_Q0];
+    gKalmanFilter.dQ[STATE_Q0][STATE_Q1] += gKalmanFilter.Qq[0];
+    gKalmanFilter.dQ[STATE_Q0][STATE_Q2] += gKalmanFilter.Qq[1];
+    gKalmanFilter.dQ[STATE_Q0][STATE_Q3] += gKalmanFilter.Qq[2];
+
+    gKalmanFilter.dQ[STATE_Q1][STATE_Q0] = gKalmanFilter.dQ[STATE_Q0][STATE_Q1];
+    gKalmanFilter.dQ[STATE_Q1][STATE_Q1] += gKalmanFilter.Q[STATE_Q1];
+    gKalmanFilter.dQ[STATE_Q1][STATE_Q2] += gKalmanFilter.Qq[3];
+    gKalmanFilter.dQ[STATE_Q1][STATE_Q3] += gKalmanFilter.Qq[4];
+
+    gKalmanFilter.dQ[STATE_Q2][STATE_Q0] = gKalmanFilter.dQ[STATE_Q0][STATE_Q2];
+    gKalmanFilter.dQ[STATE_Q2][STATE_Q1] = gKalmanFilter.dQ[STATE_Q1][STATE_Q2];
+    gKalmanFilter.dQ[STATE_Q2][STATE_Q2] += gKalmanFilter.Q[STATE_Q2];
+    gKalmanFilter.dQ[STATE_Q2][STATE_Q3] += gKalmanFilter.Qq[5];
+
+    gKalmanFilter.dQ[STATE_Q3][STATE_Q0] = gKalmanFilter.dQ[STATE_Q0][STATE_Q3];
+    gKalmanFilter.dQ[STATE_Q3][STATE_Q1] = gKalmanFilter.dQ[STATE_Q1][STATE_Q3];
+    gKalmanFilter.dQ[STATE_Q3][STATE_Q2] = gKalmanFilter.dQ[STATE_Q2][STATE_Q3];
+    gKalmanFilter.dQ[STATE_Q3][STATE_Q3] += gKalmanFilter.Q[STATE_Q3];
+
+    gKalmanFilter.dQ[STATE_WBX][STATE_WBX] += gKalmanFilter.Q[STATE_WBX];
+    gKalmanFilter.dQ[STATE_WBY][STATE_WBY] += gKalmanFilter.Q[STATE_WBY];
+    gKalmanFilter.dQ[STATE_WBZ][STATE_WBZ] += gKalmanFilter.Q[STATE_WBZ];
+
+    gKalmanFilter.dQ[STATE_ABX][STATE_ABX] += gKalmanFilter.Q[STATE_ABX];
+    gKalmanFilter.dQ[STATE_ABY][STATE_ABY] += gKalmanFilter.Q[STATE_ABY];
+    gKalmanFilter.dQ[STATE_ABZ][STATE_ABZ] += gKalmanFilter.Q[STATE_ABZ];
+}
 
 /** ****************************************************************************
  * @name: firstOrderLowPass_float  implements a low pass yaw axis filter

@@ -40,6 +40,7 @@ limitations under the License.
 #include "BITStatus.h"
 #include "sensorsAPI.h"
 #include "sae_j1939.h"
+#include "math.h"
 
 // for EKFOutputDataStruct
 #include "EKF_Algorithm.h"
@@ -275,6 +276,25 @@ void EnqeuePeriodicDataPackets(int latency, int sendPeriodicPackets)
 
      aceinna_j1939_send_angular_rate(&angle_data);
    }
+
+   if (packets_to_send & ACEINNA_SAE_J1939_PACKET_HEADING) {
+       VEHICLE_DIR_SPEED ds_data;
+        real velocity[3];
+        double tmp;
+        EKF_GetEstimatedVelocity(velocity); // m/s
+        ds_data.altitude = 2500 * 8;      // 0 m
+        tmp = gKalmanFilter.eulerAngles[YAW]   * 57.296;
+        tmp = tmp < 0 ? 360.0 + tmp : tmp;
+        tmp = tmp * 128 + 0.5;
+        ds_data.bearing  = (uint16_t)(tmp);
+        ds_data.pitch    = (uint16_t)((gKalmanFilter.eulerAngles[PITCH] * 57.296 + 200.00) * 128 + 0.5);
+        tmp = sqrtf(powf(velocity[0],2) + powf(velocity[1],2));
+        tmp = (tmp*3.6); // km/h 
+        ds_data.speed    = (uint16_t)tmp*256;
+
+        aceinna_j1939_send_veh_dir_speed(&ds_data);
+   }
+
 
   forced_packets = 0;
 

@@ -19,9 +19,6 @@ limitations under the License.
 
 
 #include "TimingVars.h"
-#ifdef INS_OFFLINE
-#include "SimulationParameters.h"
-#endif
 
 TimingVars           timer;   // for InitTimingVars
 
@@ -161,14 +158,11 @@ void Initialize_Timing(void)
     // toggles between 0 and 1 at 200 Hz (currently used in firmware)
     timer.oneHundredHertzFlag = 0;
 
-#ifdef INS_OFFLINE
-    // This value is set based on the version string specified in the 
-    //   simulation configuration file, ekfSim.cfg
-    // IMU: 0/1, VG: 2, AHRS: 3, Aided-VG: 4, Aided-AHRS: 5, INS: 6
-    uint8_t sysType = gSimulation.sysType;
-#endif
-
     // Override execution rate of taskDataAcquisition() based on the configuration
     timer.dacqFrequency = DACQ_200_HZ;     // default
 }
 
+void TimingVars_dacqFrequency(int freq)
+{
+    timer.dacqFrequency = freq;
+}

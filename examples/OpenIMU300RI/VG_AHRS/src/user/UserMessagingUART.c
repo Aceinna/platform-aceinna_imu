@@ -39,13 +39,6 @@ limitations under the License.
 #include "Indices.h"   // For X_AXIS, etc
 #include "CommonMessages.h"
 
-// Declare the IMU data structure
-IMUDataStruct gIMU;
-
-// Version string
-//char userVersionString[] = "IMU 1.0.0";
-
-
 
 
 
@@ -332,9 +325,8 @@ BOOL HandleUserOutputPacket(uint8_t *payload, uint8_t *payloadLen)
                 pld->c  = 'A';
                 pld->s  = 1234;
                 pld->i  = -5;
-                if(platformGetPpsFlag()){
+                if(platformGetPpsFlag(FALSE)){
                     ppsTstamp = platformGetPpsTimeStamp();
-                    platformSetPpsFlag(FALSE);
                 }
 //                pld->ll = platformGetDacqTimeStamp();     // in microseconds;
                 pld->ll = ppsTstamp;                        // time stamp of last PPS edge in microseconds from system start
