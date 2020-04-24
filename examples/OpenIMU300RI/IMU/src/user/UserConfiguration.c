@@ -50,7 +50,7 @@ const UserConfigurationStruct gDefaultUserConfig = {
     .ecuPacketRate = 1,         // 100Hz
     .ecuFilterFreqAccel = 25,
     .ecuFilterFreqRate  = 25,
-    .ecuPacketType = ( ACEINNA_SAE_J1939_PACKET_SLOPE_SENSOR |
+    .ecuPacketType = ( 
                        ACEINNA_SAE_J1939_PACKET_ANGULAR_RATE |
                        ACEINNA_SAE_J1939_PACKET_ACCELERATION |
                        ACEINNA_SAE_J1939_PACKET_MAG 

@@ -24,16 +24,26 @@ See the License for the specific language governing permissions and
 limitations under the License.
 *******************************************************************************/
 
+#include "BITStatus.h"
+
 #include "userAPI.h"
 #include "sensorsAPI.h"
 #include "gpsAPI.h"
-#include "UserMessagingCAN.h"
+#include "UserAlgorithm.h"
+#include "algorithm.h"
+#include "algorithmAPI.h"
+#include "platformAPI.h"
 
 #include "Indices.h"   // For X_AXIS and Z_AXIS
 #include "debug.h"     // For debug commands
 
-// Declare the IMU data structure
-IMUDataStruct gIMU;
+BOOL            fAlgorithmSynced;
+
+// Local-function prototypes
+static void _IncrementIMUTimer(uint16_t dacqRate);
+static void _GenerateDebugMessage(uint16_t dacqRate, uint16_t debugOutputFreq);
+static void _IMUDebugMessage(void);
+//static void _GPSDebugMessage(void);
 
 /*                                    *
                         ****************** 
@@ -58,6 +68,8 @@ Data * Built-in    * Raw Data  *            *   Data     * User Filter s*   * Al
 void initUserDataProcessingEngine()
 {
     InitUserAlgorithm();         // default implementation located in file user_algorithm.c
+//  init PPS sync engine 
+    platformEnableGpsPps(TRUE);
 }
 
 
@@ -67,71 +79,219 @@ void initUserDataProcessingEngine()
 // 2) 'DataAcquisitionTask' calls this function after retrieving samples of current
 //    sensors data and applying corresponding calibration 
 // 3) 'dacqRate' is rate with which new set of sensors data arrives 
-int algorithmInitFlag = 0;
-
 void inertialAndPositionDataProcessing(uint16_t dacqRate)
 {  
+    // 
+    void *results;
 
-    // Initialization variable
-    static int initFlag  = 1;
+    // Increment the IMU timer by the calling rate of the data-acquisition task
+    _IncrementIMUTimer(dacqRate);
 
-    // Variables that control the output frequency of the debug statement
-    static int debugFlag = 0;
-    static uint8_t debugOutputCntr, debugOutputCntrLimit;
+    static uint8_t initAlgo = 1;
+    static uint8_t algoCntr = 0, algoCntrLimit = 0;
+    static BOOL firstTimeSync = TRUE;
 
-    if(algorithmInitFlag){
-        InitUserAlgorithm();         // default implementation located in file user_algorithm.c
+    if (initAlgo) 
+    {
+        // Reset 'initAlgo' so this is not executed more than once.  This
+        //   prevents the algorithm from being switched during run-time.
+        initAlgo = 0;
+
+        // Set the variables that control the algorithm execution rate
+        algoCntrLimit = (uint8_t)((float)dacqRate / (float)gAlgorithm.callingFreq + 0.5);
+        if (algoCntrLimit < 1) 
+        {
+            // If this logic is reached, also need to adjust the algorithm
+            //   parameters to match the modified calling freq (or stop the
+            //   program to indicate that the user must adjust the program)
+            algoCntrLimit = 1;
+        }
+        algoCntr = algoCntrLimit;
     }
 
+    // call the algorithm
+    algoCntr++;
+    // syn the calling of the algorithm with PPS. This is done only once.
+    if(firstTimeSync)
+    {
+        if (platformGetPpsFlag(FALSE))  // do not reset pps detection state
+        {
+            firstTimeSync = FALSE;
+            fAlgorithmSynced = TRUE;
+            algoCntr = algoCntrLimit;
+        }
+    }
+    if (algoCntr >= algoCntrLimit) 
+    {
+        // Reset counter
+        algoCntr = 0;
+
+        // Obtain accelerometer data [g]
+        GetAccelData_g(gIMU.accel_g); 
+
+        // Obtain rate-sensor data [rad/sec]
+        GetRateData_radPerSec(gIMU.rate_radPerSec);
+        GetRateData_degPerSec(gIMU.rate_degPerSec);
+
+        // Obtain magnetometer data [G]
+        GetMagData_G(gIMU.mag_G);
+
+        // Obtain board temperature data [degC]
+        GetBoardTempData(&gIMU.temp_C);
+
+        // Obtain GPS data (lat/lon: deg, alt: meters, vel: m/s, ITOW: msec, )
+#ifdef GPS
+        GetGPSData(&gGPS);
+#endif
+
+        // check if pps is detected right before this excution of the task.
+        BOOL ppsDetected = platformGetPpsFlag(TRUE);
+
+        // Execute user algorithm (default implementation located in file user_algorithm.c)
+        results = RunUserNavAlgorithm(gIMU.accel_g, gIMU.rate_radPerSec, gIMU.mag_G, &gGPS, &gOdo, ppsDetected);
+
+        // Get algorithm status, and set the state in system status
+        AlgoStatus algoStatus;
+        GetAlgoStatus(&algoStatus);
+        gBitStatus.swStatus.all = algoStatus.all;
+        gBitStatus.swAlgBIT.bit.initialization = algoStatus.bit.algorithmInit;
+
+        // add current result to output queue for subsequent sending out as continuous packet                                                                                                                                                     // returns pointer to user-defined results structure
+        WriteResultsIntoOutputStream(results);   // default implementation located in file file UserMessaging.c
+    }
+
+    // Generate a debug message that provide sensor data in order to verify the
+    //   algorithm input data is as expected.
+    _GenerateDebugMessage(dacqRate, ZERO_HZ);
+}
+
+
+//
+static void _IncrementIMUTimer(uint16_t dacqRate)
+{
     // Initialize timer variables (used to control the output of the debug
     //   messages and the IMU timer value)
+    static int initFlag = 1;
     if(initFlag) {
         // Reset 'initFlag' so this section is not executed more than once.
         initFlag = 0;
-
-        // Set the variables that control the debug-message output-rate (based on
-        //   the desired calling frequency of the debug output)
-        debugOutputCntr = 0;
-
-        uint16_t debugOutputFreq = 4;  // [Hz]
-        debugOutputCntrLimit = dacqRate / debugOutputFreq;
 
         // Set the IMU output delta-counter value
         gIMU.dTimerCntr = (uint32_t)( 1000.0 / (float)(dacqRate) + 0.5 );
     }
 
-    // Increment the timer-counter by the sampling period equivalent to the rate at which
-    //   inertialAndPositionDataProcessing is called
+    // Increment the timer-counter by the sampling period equivalent to the
+    //   rate at which inertialAndPositionDataProcessing is called
     gIMU.timerCntr = gIMU.timerCntr + gIMU.dTimerCntr;
+}
 
-    // Obtain accelerometer data [g]
-    GetAccelData_g(gIMU.accel_g);
+//
+static void _GenerateDebugMessage(uint16_t dacqRate, uint16_t debugOutputFreq)
+{
+    // Variables that control the output frequency of the debug statement
+    static uint8_t debugOutputCntr, debugOutputCntrLimit;
 
-    // Obtain rate-sensor data [rad/sec]
-    GetRateData_radPerSec(gIMU.rate_radPerSec);
+    // Check debug flag.  If set then generate the debug message to verify
+    //   the loading of the GPS data into the GPS data structure
+    if( debugOutputFreq > ZERO_HZ ) {
+        // Initialize variables used to control the output of the debug messages
+        static int initFlag = 1;
+        if(initFlag) {
+            // Reset 'initFlag' so this section is not executed more than once.
+            initFlag = 0;
 
-    // Obtain magnetometer data [G]
-    GetMagData_G(gIMU.mag_G);
+            // Set the variables that control the debug-message output-rate (based on
+            //   the desired calling frequency of the debug output)
+            debugOutputCntrLimit = (uint8_t)( (float)dacqRate / (float)debugOutputFreq + 0.5 );
+            debugOutputCntr      = debugOutputCntrLimit;
+        }
 
-    // Obtain board temperature data [degC]
-    GetBoardTempData(&gIMU.temp_C);
-
-    // Generate the debug output to test the loading of the sensor data
-    //   into the IMU data structure
-    if( debugFlag ) {
         debugOutputCntr++;
         if(debugOutputCntr >= debugOutputCntrLimit) {
             debugOutputCntr = 0;
-            DebugPrintFloat("Time: ", 0.001 * (real)gIMU.timerCntr, 3);
-            DebugPrintFloat(", AccelZ: ", gIMU.accel_g[Z_AXIS], 3);
-            DebugPrintFloat(", RateZ: ", gIMU.rate_radPerSec[Z_AXIS] * RAD_TO_DEG, 3);
-            DebugPrintFloat(", MagX: ", gIMU.mag_G[X_AXIS], 3);
-            DebugPrintFloat(", Temp: ", gIMU.temp_C,2);
-            DebugPrintEndline();
+
+            // Reset 'new GPS data' flag (this should be done in UpdateFunctions
+            //   to ensure the EKF can use the data)
+            //gGPS.updateFlag = 0;  <-- This would make a difference as the input 
+            //                          to the algorithm isn't set yet.
+
+            // Create message here
+            static uint8_t msgType = 1;
+            switch( msgType )
+            {
+                case 0:
+                    // None
+                    break;
+                    
+                case 1:
+                    // IMU data
+                    _IMUDebugMessage();
+                    break;
+                    
+#ifdef GPS
+                case 2:
+                    // GPS data
+                    _GPSDebugMessage();
+                    break;
+#endif
         }
     }
-
-    // Execute user algorithm (default implementation located in file user_algorithm.c)
-    RunUserNavAlgorithm(gIMU.accel_g, gIMU.rate_radPerSec, gIMU.mag_G, NULL, dacqRate);
-
+    }
 }
+
+
+static void _IMUDebugMessage(void)
+{
+            // IMU Data
+            DebugPrintFloat("Time: ", 0.001 * (real)gIMU.timerCntr, 3);
+            DebugPrintFloat(",   a: [ ", (float)gIMU.accel_g[X_AXIS], 3);
+            DebugPrintFloat("   ", (float)gIMU.accel_g[Y_AXIS], 3);
+            DebugPrintFloat("   ", (float)gIMU.accel_g[Z_AXIS], 3);
+            DebugPrintFloat(" ],   w: [ ", (float)gIMU.rate_radPerSec[X_AXIS] * RAD_TO_DEG, 3);
+            DebugPrintFloat("   ", (float)gIMU.rate_radPerSec[Y_AXIS] * RAD_TO_DEG, 3);
+            DebugPrintFloat("   ", (float)gIMU.rate_radPerSec[Z_AXIS] * RAD_TO_DEG, 3);
+            DebugPrintFloat(" ],   m: [ ", (float)gIMU.mag_G[X_AXIS], 3);
+            DebugPrintFloat("   ", (float)gIMU.mag_G[Y_AXIS], 3);
+            DebugPrintFloat("   ", (float)gIMU.mag_G[Z_AXIS], 3);
+            DebugPrintString(" ]");
+            DebugPrintEndline();
+}
+
+#ifdef GPS
+
+static void _GPSDebugMessage(void)
+{
+#if 1
+            // GPS Data
+            DebugPrintFloat("Time: ", 0.001 * (real)gIMU.timerCntr, 3);
+            DebugPrintFloat(", Lat: ", (float)gGPS.latitude, 8);
+            DebugPrintFloat(", Lon: ", (float)gGPS.longitude, 8);
+            DebugPrintFloat(", Alt: ", (float)gGPS.altitude, 5);
+            DebugPrintLongInt(", ITOW: ", gGPS.itow );
+            DebugPrintLongInt(", EstITOW: ", platformGetEstimatedITOW() );
+            DebugPrintLongInt(", SolutionTstamp: ", (uint64_t)platformGetSolutionTstampAsDouble());
+#else
+            //
+            DebugPrintFloat("Time: ", 0.001 * (real)gIMU.timerCntr, 3);
+            DebugPrintLongInt(", ITOW: ", gGPS.itow );
+    
+            // LLA
+            DebugPrintFloat(", valid: ", (float)gGPS.gpsValid, 1);
+            // LLA
+            DebugPrintFloat(", Lat: ", (float)gGPS.latitude, 8);
+            DebugPrintFloat(", Lon: ", (float)gGPS.longitude, 8);
+            DebugPrintFloat(", Alt: ", (float)gGPS.altitude, 5);
+            // Velocity
+            //DebugPrintFloat(", vN: ", (float)gGPS.vNed[X_AXIS], 5);
+            //DebugPrintFloat(", vE: ", (float)gGPS.vNed[Y_AXIS], 5);
+            //DebugPrintFloat(", vD: ", (float)gGPS.vNed[Z_AXIS], 5);
+            // v^2
+            //double vSquared = gGPS.vNed[X_AXIS] * gGPS.vNed[X_AXIS] + 
+            //                  gGPS.vNed[Y_AXIS] * gGPS.vNed[Y_AXIS];
+            //DebugPrintFloat(", vSq: ", (float)vSquared, 5);
+            //DebugPrintFloat(", vSq: ", (float)gGPS.rawGroundSpeed * (float)gGPS.rawGroundSpeed, 5);
+            // Newline
+#endif
+            DebugPrintEndline();
+}
+#endif

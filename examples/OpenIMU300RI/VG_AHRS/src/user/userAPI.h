@@ -41,30 +41,17 @@ limitations under the License.
 
 #include <stdint.h>
 #include "gpsAPI.h"
+#include "odoAPI.h"
 
 void  inertialAndPositionDataProcessing(uint16_t dacqRate);
 
-void *RunUserNavAlgorithm(double *accels, double *rates, double* mags, gpsDataStruct_t *gps, uint16_t dacqRate);
+void *RunUserNavAlgorithm(double *accels, double *rates, double *mags,
+                          gpsDataStruct_t *gps, odoDataStruct_t *odo, BOOL ppsDetected);
 void  WriteResultsIntoOutputStream(void *results) ;
 void  InitUserDataStructures();
 void  InitUserFilters();       
 void  InitUserAlgorithm();     
 void  initUserDataProcessingEngine();
 void  userInitConfigureUnit();
-void  userInitConfigureUart();
-// IMU data structure
-typedef struct {
-    // Timer output counter
-    uint32_t timerCntr, dTimerCntr;
-
-    // Algorithm states
-    double accel_g[3];
-    double rate_radPerSec[3];
-    double rate_degPerSec[3];
-    double mag_G[3];
-    double temp_C;
-} IMUDataStruct;
-
-extern IMUDataStruct gIMU;
 
 #endif

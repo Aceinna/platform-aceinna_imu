@@ -138,7 +138,7 @@ int main(void)
 
     // initializa debug interface if desired
     // Messages will be output from user serial port
-    DebugInterfaceInit();
+//    DebugInterfaceInit();
 
     // Apply factory configuration
     platformInitConfigureUnit(); 

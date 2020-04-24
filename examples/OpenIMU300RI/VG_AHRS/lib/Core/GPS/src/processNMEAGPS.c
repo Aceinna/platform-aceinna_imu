@@ -33,6 +33,7 @@ limitations under the License.
 #include <stdio.h>
 #include <stdint.h>
 
+#include "gpsAPI.h"
 #include "driverGPS.h"
 #include "BITStatus.h"
 
@@ -42,6 +43,9 @@ char _parseRMC(char *msgBody, GpsData_t* GPSData);
 void _handleNMEAmsg(char *msgID, char *msgBody,GpsData_t* GPSData);
 void _NMEA2UbloxAndLLA(NmeaLatLonSTRUCT* NmeaData, GpsData_t* GPSData);
 void _smoothVerticalData(GpsData_t* GPSData);
+
+int dayofweek(int day, int month, int year);
+
 int crcError  = 0;
 int starError = 0;
 /** ****************************************************************************
@@ -181,6 +185,9 @@ void _handleNMEAmsg(char          *msgID,
 		GPSData->totalVTG++;
 		_parseVTG(msgBody, GPSData);
     }
+    if( strncmp(ptr, "RMC", 3) == 0 ) {
+		_parseRMC(msgBody, GPSData);
+    }
 }
 
 /** ****************************************************************************
@@ -244,6 +251,8 @@ char extractNMEAfield(char *msgBody,
 			break;
 		}
 	}
+    outField[outIndex] = '\x0';
+
     // Leave the currentField as the one returned so the next search passes
     // the currrent doesn't match requested test
     // Back up one so the next search picks up the end ','
@@ -252,7 +261,7 @@ char extractNMEAfield(char *msgBody,
 }
 
 /** ****************************************************************************
- * @name: _parseGPGGA LOCAL parse GPGGA message. Tiem, position, fix data
+ * @name: _parseGPGGA LOCAL parse GPGGA message. Time, position, fix data
  * @author  Dong An
  * @param [in] msgBody - data to parse
  * @param [in] GPSData - data structure to parst he data into
@@ -285,6 +294,7 @@ char extractNMEAfield(char *msgBody,
  *          decimal
  * 02/16/15 dkh move convert to after check for flag
  ******************************************************************************/
+#include "debug.h"
 char _parseGPGGA(char          *msgBody,
                  GpsData_t *GPSData)
 {
@@ -292,8 +302,6 @@ char _parseGPGGA(char          *msgBody,
 	char   status = 0;
     int    parseReset = true;
     NmeaLatLonSTRUCT nmeaLatLon;
-    // this is the local using the NMEA convention
-    char   GPSFix = 0; // no fix
 
     memset(&nmeaLatLon, 0, sizeof(nmeaLatLon) );
 	/// Time - convert from ascii digits to decimal '0' = 48d
@@ -344,7 +352,17 @@ char _parseGPGGA(char          *msgBody,
 
 	/// GPS quality
 	if( extractNMEAfield(msgBody, field, 5, parseReset) )	{
-        GPSFix = field[0] - '0'; // convert ascii digit to decimal
+        GPSData->gpsFixType = field[0] - '0'; // convert ascii digit to decimal
+        if (GPSData->gpsFixType >= DEAD_REC)  // DR, manual and simulation is considered invalid
+        {
+            GPSData->gpsFixType = INVALID;
+        }
+	} else
+        status = 1;
+
+    // Number of satellites
+    if( extractNMEAfield(msgBody, field, 6, parseReset) )	{
+        GPSData->numSatellites = atoi((char *)field);
 	} else
         status = 1;
 
@@ -354,32 +372,37 @@ char _parseGPGGA(char          *msgBody,
 	} else
         status = 1;
 
-    if(GPSFix >= 1) {
-        convertItow(GPSData); // create pseudo ITOW
-        gBitStatus.hwStatus.bit.unlockedInternalGPS = 0; // locked
-        gBitStatus.swStatus.bit.noGPSTrackReference = 0; // GPS track
-    } else {
-        gBitStatus.hwStatus.bit.unlockedInternalGPS = 1; // no signal lock
-        gBitStatus.swStatus.bit.noGPSTrackReference = 1; // no GPS track
-    }
-
-
 	/// Altitude
 	if( extractNMEAfield(msgBody, field, 8, parseReset) )	{
-		GPSData->alt = atof((char *)field);
+		GPSData->alt = atof((char *)field); // altitude above MSL
+	} else{
+        status = 1;
+	}
+    if( extractNMEAfield(msgBody, field, 10, parseReset) )	{
+		GPSData->geoidAboveEllipsoid = atof((char *)field);
 	} else{
         status = 1;
 	}
 
-    if(GPSFix >= 1) {
+    // if fixed, convert data
+    if(GPSData->gpsFixType > INVALID) 
+    {
+        // Convert deg/min/sec to xxx.xxx deg
         _NMEA2UbloxAndLLA(&nmeaLatLon, GPSData);
+        // convert geiod height to ellipsoid height
+        GPSData->alt += GPSData->geoidAboveEllipsoid;
+        // create pseudo ITOW
+        convertItow(GPSData); 
+
+        gBitStatus.hwStatus.bit.unlockedInternalGPS = 0; // locked
+        gBitStatus.swStatus.bit.noGPSTrackReference = 0; // GPS track
     }
-    // flip the sense from the NMEA convention to match the propiatery binary messages
-    if (GPSData->HDOP < 20) { // the threshold may get set lower in algorithm.c
-        GPSData->GPSFix = 0; // fix
-    } else {
-        GPSData->GPSFix = 1; // no fix
+    else
+    {
+        gBitStatus.hwStatus.bit.unlockedInternalGPS = 1; // no signal lock
+        gBitStatus.swStatus.bit.noGPSTrackReference = 1; // no GPS track
     }
+    
 	if( status == 0) {
 		GPSData->updateFlagForEachCall |= 1 << GOT_GGA_MSG;
 		GPSData->LLHCounter++;
@@ -422,6 +445,7 @@ char _parseVTG(char          *msgBody,
 	/// speed over ground [km/hr]
 	if( extractNMEAfield(msgBody, field, 6, parseReset) )	{
 		GPSData->rawGroundSpeed = atof((char *)field); // double [kph]
+        GPSData->rawGroundSpeed *= 0.2777777777778;    // convert km/hr to m/s
         // the heading of the VTG of some receiver is empty when velocity is low.
         //  a default zero will be set to the heading value.
         if ( status == 1 ) {
@@ -474,7 +498,6 @@ char _parseRMC(char          *msgBody,
 		GPSData->GPSyear  = ( (field[4] - '0') * 10) + field[5] - '0'; /// year
 	} else
         status = 1;
-
 	return status;
 
 }
@@ -553,10 +576,8 @@ void _NMEA2UbloxAndLLA(NmeaLatLonSTRUCT *NmeaData,
  ******************************************************************************/
 void convertNorhEastVelocity(GpsData_t* GPSData)
 {
-	GPSData->vNed[0] = (GPSData->rawGroundSpeed * 0.2777777777778) *
-					    cos(D2R * GPSData->trueCourse); // 0.277 = 1000/3600 kph -> m/s
-	GPSData->vNed[1] = (GPSData->rawGroundSpeed * 0.2777777777778) *
-						sin(D2R * GPSData->trueCourse);
+	GPSData->vNed[0] = GPSData->rawGroundSpeed * cos(D2R * GPSData->trueCourse);
+	GPSData->vNed[1] = GPSData->rawGroundSpeed * sin(D2R * GPSData->trueCourse);
 
 	_smoothVerticalData(GPSData); // synthesize and filter down velocity
 }
@@ -603,7 +624,6 @@ void _smoothVerticalData(GpsData_t* GPSData)
         }
 		if ( OutAltCounter >= 5 ) {
 			firstFlag            = 0;  // reset
-			GPSData->filteredAlt = filteredAlt ;
 			GPSData->vNed[2]     = filteredVd ;
 			return;
 		}
@@ -623,7 +643,6 @@ void _smoothVerticalData(GpsData_t* GPSData)
 				CurrentVd = -(tmpDouble / delta_T); ///down is positive
 			} else { /// may be NMEA is lost
 				firstFlag            = 0;  /// reset
-				GPSData->filteredAlt = filteredAlt ;
 				GPSData->vNed[2]     = filteredVd ;
 				return;
 			}
@@ -643,7 +662,6 @@ void _smoothVerticalData(GpsData_t* GPSData)
 
 			if (OutVelCounter >= 5) {
 				firstFlag            = 0;  /// reset
-				GPSData->filteredAlt = filteredAlt ;
 				GPSData->vNed[2]     = filteredVd ;
 				return;
 			}
@@ -655,8 +673,7 @@ void _smoothVerticalData(GpsData_t* GPSData)
     // save the current time local to calc delta T next time
     LastTotalTime = TotalTime;
 
-	/// output the filtered alt and vel values
-	GPSData->filteredAlt = filteredAlt;
+	/// output the vel
 	GPSData->vNed[2]     = filteredVd;
 }
 
@@ -668,14 +685,30 @@ void _smoothVerticalData(GpsData_t* GPSData)
  ******************************************************************************/
 void convertItow(GpsData_t* GPSData)
 {
-	long double tmp;
-
-	tmp = ((long double)GPSData->GPSHour) * 3600.0 + ((long double)GPSData->GPSMinute) * 60.0;
-	tmp += (long double)GPSData->GPSSecond + (long double)GPSData->GPSSecondFraction;
+	double tmp;
+    // calculate day of week
+    int tow  = dayofweek(GPSData->GPSday, GPSData->GPSmonth, GPSData->GPSyear+2000);
+    // calculate second of week
+    tmp = (double)tow * 86400.0;
+	tmp += ((double)GPSData->GPSHour) * 3600.0 + ((double)GPSData->GPSMinute) * 60.0;
+	tmp += (double)GPSData->GPSSecond + (double)GPSData->GPSSecondFraction;
 
     /// converting UTC to GPS time is impossible without GPS satellite
     /// Navigation message. using UTC time directly by scaling to ms.
 	GPSData->itow = (unsigned long) (tmp * 1000);
+}
+
+int dayofweek(int day, int month, int year) 
+{
+
+	int adjustment, mm, yy;
+ 
+	adjustment = (14 - month) / 12;
+	mm = month + 12 * adjustment - 2;
+	yy = year - adjustment;
+
+	return (day + (13 * mm - 1) / 5 +
+		yy + yy / 4 - yy / 100 + yy / 400) % 7;
 }
 
 #endif // GPS

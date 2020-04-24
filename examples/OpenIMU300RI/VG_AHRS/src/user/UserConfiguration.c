@@ -32,6 +32,7 @@ limitations under the License.
 #include "userAPI.h"
 
 #include "UserConfiguration.h"
+#include "UserMessagingUart.h"
 #include "eepromAPI.h"
 #include "Indices.h"
 #include "sae_j1939.h"
@@ -365,10 +366,12 @@ void  ApplySystemParameters(void *pConfig)
     platformSelectLPFilter(RATE_SENSOR,  pEcuConfig->rate_cut_off, TRUE);
     platformSelectLPFilter(ACCEL_SENSOR, pEcuConfig->accel_cut_off, TRUE);
     platformApplyOrientation(pEcuConfig->orien_bits);
+    
     if(UseMags()){
         platformForceMagUsage();
     }
-    userInitConfigureUart();
+    
+    UserInitConfigureUart();
 
 }
 
