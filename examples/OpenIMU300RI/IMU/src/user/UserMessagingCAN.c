@@ -149,14 +149,14 @@ void ProcessRequest(void *dsc)
       }
       // pasket type request 
       else if ((req_ps_val == gEcuConfigPtr->packet_type_ps)) {
-        aceinna_j1939_send_packet_rate(gEcuConfigPtr->packet_type);
+        aceinna_j1939_send_packet_type(gEcuConfigPtr->packet_type);
       }
       // filter settings request 
       else if ((req_ps_val == gEcuConfigPtr->digital_filter_ps)) {
         aceinna_j1939_send_digital_filter(gEcuConfigPtr->accel_cut_off, gEcuConfigPtr->rate_cut_off);
       }
       // orientation settings request 
-      else if ((req_ps_val == gEcuConfigPtr->orien_bits)) {
+      else if ((req_ps_val == gEcuConfigPtr->orientation_ps)) {
         uint8_t bytes[2];
         bytes[0] = (gEcuConfigPtr->orien_bits >> 8) & 0xff;
         bytes[1] = (gEcuConfigPtr->orien_bits) & 0xff;

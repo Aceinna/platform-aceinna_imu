@@ -161,7 +161,7 @@ void ProcessRequest(void *dsc)
         aceinna_j1939_send_digital_filter(gEcuConfigPtr->accel_cut_off, gEcuConfigPtr->rate_cut_off);
       }
       // orientation settings request 
-      else if ((req_ps_val == gEcuConfigPtr->orien_bits)) {
+      else if ((req_ps_val == gEcuConfigPtr->orientation_ps)) {
         uint8_t bytes[2];
         bytes[0] = (gEcuConfigPtr->orien_bits >> 8) & 0xff;
         bytes[1] = (gEcuConfigPtr->orien_bits) & 0xff;
@@ -183,11 +183,11 @@ void ProcessRequest(void *dsc)
 void ProcessVehiclePosition(struct sae_j1939_rx_desc   *desc)
 {
 	GPS_DATA *posData = (GPS_DATA*)desc->rx_buffer.Data; 
-	canInputNavParams.latitude  = (double)posData->latitude*0.000001 - 210;	// degrees
-	canInputNavParams.longitude = (double)posData->longitude*0.000001 - 210;	// degrees
+	canInputNavParams.latitude  = (double)posData->latitude*0.0000001 - 210;	// degrees
+	canInputNavParams.longitude = (double)posData->longitude*0.0000001 - 210;	// degrees
 	canInputNavParams.status   |= J1939_GPS_POSITION_DATA_UPDATED;
-    gCanGps.latitude            = (double)posData->latitude*0.000001 - 210;	// degrees
-	gCanGps.longitude           = (double)posData->longitude*0.000001 - 210;	// degrees
+    gCanGps.latitude            = (double)posData->latitude*0.0000001 - 210;	// degrees
+	gCanGps.longitude           = (double)posData->longitude*0.0000001 - 210;	// degrees
 }
 
 void ProcessWheelSpeed(struct sae_j1939_rx_desc   *desc)
@@ -360,6 +360,7 @@ void EnqeuePeriodicDataPackets(int latency, int sendPeriodicPackets)
   }
 
   // ss2 packets supported by 9DOF 
+#ifndef GPS_OVER_CAN
   if (packets_to_send & ACEINNA_SAE_J1939_PACKET_LATLONG) {
       GPS_DATA  gpsData;
       
@@ -375,7 +376,7 @@ void EnqeuePeriodicDataPackets(int latency, int sendPeriodicPackets)
 
        aceinna_j1939_send_GPS(&gpsData);
   }
-
+#endif
 
    // acceleration packets
    if (packets_to_send & ACEINNA_SAE_J1939_PACKET_ACCELERATION) {
