@@ -2,9 +2,7 @@
   "name": "aceinna_imu",
   "title": "Aceinna IMU",
   "description": "Open-source, embedded development platform for Aceinna IMU hardware. Run custom algorithms and navigation code on Aceinna IMU/INS hardware.",
-  "url": "https://www.aceinna.com",
-  "homepage": "https://github.com/aceinna/platform-aceinna_imu",
-  "docs": "https://github.com/aceinna/platform-aceinna_imu",
+  "homepage": "https://www.aceinna.com",
   "license": "Apache-2.0",
   "engines": {
     "platformio": "<5"
