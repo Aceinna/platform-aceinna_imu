@@ -3,6 +3,15 @@
   "title": "Aceinna IMU",
   "description": "Open-source, embedded development platform for Aceinna IMU hardware. Run custom algorithms and navigation code on Aceinna IMU/INS hardware.",
   "homepage": "https://www.aceinna.com",
+  "keywords": [
+    "dev-platform",
+    "navigation",
+    "ACEINNA",
+    "Inertial Measurement Units",
+    "Inertial Navigation Systems",
+    "IMU",
+    "INS"
+  ],
   "license": "Apache-2.0",
   "engines": {
     "platformio": "<5"
