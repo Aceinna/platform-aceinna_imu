@@ -28,16 +28,19 @@
   "packages": {
     "toolchain-gccarmnoneeabi": {
       "type": "toolchain",
+      "owner": "platformio",
       "version": ">=1.60301.0,<1.80000.0"
     },
     "tool-openocd": {
       "type": "uploader",
       "optional": true,
+      "owner": "platformio",
       "version": "~2.1000.0"
     },
     "tool-jlink": {
       "type": "uploader",
       "optional": true,
+      "owner": "platformio",
       "version": "^1.63208.0"
     }
   },
