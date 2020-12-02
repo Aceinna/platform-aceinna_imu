@@ -1,12 +1,11 @@
 /*****************************************************************************
- * @file app_version.h
+ * @file   eth_task.c
  *
  * THIS CODE AND INFORMATION ARE PROVIDED "AS IS" WITHOUT WARRANTY OF ANY
  * KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
  * PARTICULAR PURPOSE.
  *
- * @brief Version definition based on UCB serial protocol.
  ******************************************************************************/
 /*******************************************************************************
 Copyright 2020 ACEINNA, INC
@@ -23,11 +22,52 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 *******************************************************************************/
-#ifndef _APP_VERSION_H
-#define _APP_VERSION_H
+#include <string.h>
 
-#define  APP_VERSION_STRING  "OpenRTK330L RAWDATA App 0.1.1"   
+#include "cmsis_os.h"
+#include "osapi.h"
+#include "FreeRTOS.h"
+#include "station_tcp.h"
+#include "aceinna_client_api.h"
+#include "tcp_driver.h"
+#include "calibrationAPI.h"
 
-#define  PRODUCT_NAME_STRING "OpenRTK330L"
+/** ***************************************************************************
+ * @name EthTask()
+ * @brief Embedded server,sending and receiving data from Internet
+ * @param N/A
+ * @retval N/A
+ ******************************************************************************/
+void EthTask(void const *argument)
+{
+	ethernet_init(); // init ethernet, maybe delay util spp
 
+    aceinna_client_init(GetUnitSerialNum());
+
+    while (g_ptr_gnss_sol->gnss_fix_type != 1)
+    {
+        OS_Delay(1000);
+    }
+	
+	while (1)
+	{
+#ifdef  USE_TCP_DRIVER
+        driver_interface();
 #endif
+        station_tcp_interface();
+	}
+}
+
+
+void TcpDriverTask(void const *argument)
+{
+    tcp_driver_fifo_init();
+    tcp_driver_data_fifo_init();	
+	while (1)
+	{
+#ifdef  USE_TCP_DRIVER
+        driver_interface();
+        driver_output_data_interface();
+#endif
+	}
+}

@@ -52,6 +52,7 @@ limitations under the License.
 
 #include "cmsis_os.h"
 #include "portmacro.h"
+#include "utils.h"
 #ifdef __cplusplus
 extern "C"
 {
@@ -65,11 +66,21 @@ void TaskDataAcquisition(void const *argument);
 void GnssDataAcqTask(void const *argument);
 void EthTask(void const *argument);
 void RTKTask(void const *argument);
+void TcpDriverTask(void const *argument);
 
 extern osSemaphoreId g_sem_imu_data_acq;
 extern osSemaphoreId g_sem_rtk_start;
 extern osSemaphoreId g_sem_rtk_finish;
+extern osSemaphoreId g_sem_can_data;
 
+extern char gga_buff[120];
+extern char gsa_buff[500];
+extern char rmc_buff[200];
+extern char zda_buff[50];
+char nema_update_flag;
+
+fifo_type fifo_user_uart;
+uint8_t fifo_user_uart_buf[2000];
 
 #ifdef __cplusplus
 }

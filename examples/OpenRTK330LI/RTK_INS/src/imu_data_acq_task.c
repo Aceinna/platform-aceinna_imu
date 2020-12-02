@@ -6,7 +6,7 @@
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
  * PARTICULAR PURPOSE.
  *
- * sensor data acquisition task runs at 50Hz, gets the data for each sensor
+ * sensor data acquisition task runs at 100Hz, gets the data for each sensor
  * and applies available calibration
  ******************************************************************************/
 /*******************************************************************************
@@ -24,6 +24,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 *******************************************************************************/
+#include <string.h>
 
 #include "sensorsAPI.h"
 #include "calibrationAPI.h"
@@ -32,8 +33,11 @@ limitations under the License.
 #include "uart.h"
 #include "bsp.h"
 #include "timer.h"
+#include "user_message.h"
+#include "car_data.h"
+#include "gnss_data_api.h"
+#include "ins_interface_API.h"
 
-mcu_time_base_t imu_time;
 
 /** ***************************************************************************
  * @name TaskDataAcquisition()
@@ -49,42 +53,39 @@ void TaskDataAcquisition(void const *argument)
 
     res = InitSensors();
     InitSensorsData();
+    memset(&g_status,0,sizeof(status_t));
+    g_status.status_bit.power = 1;
+    g_status.status_bit.MCU_status = 1;
 
-    while (1)
-    {
-        //UBaseType_t uxHighWaterMark;
-        //uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
+    while (1) {
 
         res = osSemaphoreWait(g_sem_imu_data_acq, 1000);
         if (res != osOK)
         {
-            continue;
             // Wait timeout expired. Something wrong wit the data acq system
             // Process timeout here
         }
-        imu_time = g_MCU_time;
 
-        NSS_Toggle();
+
+        DRDY_OFF();
+        
+        ins_gnss_time_update();
         SampleSensorsData();
         ApplyFactoryCalibration();
 
-        /*
-            Add the INS algorithm here
-                double   accels[3];
-                GetAccelData_g_AsDouble(accels);
-                double rates[3];
-                GetRateData_radPerSec_AsDouble(rates);
-                imu_time:imu time
+        /* GNSS/INS fusion */
+        ins_fusion();
 
-                INS_Algorithm();
-        */
-        
         ProcessUserCommands();
 
-        SendContinuousPacket();
+        debug_com_process();
 
-        //uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
-        //printf("uxhigh=%d\r\n",TASK_IMU_DATA_ACQ_STACK-uxHighWaterMark);
+        /* solution packets output from UART*/
+        send_continuous_packet();
+
+        /* solution packets output from bluetooth*/
+        send_ins_to_bt();
+
     }
 }
 

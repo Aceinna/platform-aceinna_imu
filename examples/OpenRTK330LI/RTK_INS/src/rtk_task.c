@@ -21,26 +21,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.*/
 
-#include <string.h>
 
+#include "main.h"
 #include "gnss_data_api.h"
-#include "uart.h"
-#include "led.h"
-#include "ntrip_client.h"
-#include "utils.h"
 #include "rtk_api.h"
-
-gnss_solution_t g_gnss_sol = {0};
-gnss_solution_t *g_ptr_gnss_sol = &g_gnss_sol;
-
-extern gnss_raw_data_t *g_ptr_gnss_data;
-
 
 
 /** ***************************************************************************
  * @name RTKTask()
- * @brief  RTK Algorithm task
- * @param  N/A
+ * @brief RTK Algorithm task
+ * @param N/A
  * @retval N/A
  ******************************************************************************/
 void RTKTask(void const *argument)
@@ -60,9 +50,9 @@ void RTKTask(void const *argument)
             /* Wait timeout expired. Something wrong wit the dacq system
             Process timeout here */
         }
-        LED1_Toggle();
+        // LED1_Toggle();
 
-        rtk_algorithm();
+        // rtk_algorithm();
 
         // use rover obs to make gga and pull base rtcm data
         // print_pos_gga_util(ptr_rover_obs->time, ptr_rover_obs->pos, ptr_rover_obs->n, 1, 1.0, 0.0, gga_buff);
@@ -75,8 +65,5 @@ void RTKTask(void const *argument)
 
         osSemaphoreRelease(g_sem_rtk_finish);
 
-        // uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
-        // printf("uxhigh=%d\r\n",TASKRTD_STACK-uxHighWaterMark); 
     }
 }
-

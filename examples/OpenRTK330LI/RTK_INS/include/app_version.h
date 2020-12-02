@@ -1,11 +1,12 @@
 /*****************************************************************************
- * @file   eth_task.c
+ * @file app_version.h
  *
  * THIS CODE AND INFORMATION ARE PROVIDED "AS IS" WITHOUT WARRANTY OF ANY
  * KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
  * PARTICULAR PURPOSE.
  *
+ * @brief Version definition based on UCB serial protocol.
  ******************************************************************************/
 /*******************************************************************************
 Copyright 2020 ACEINNA, INC
@@ -22,28 +23,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 *******************************************************************************/
-#include <string.h>
+#ifndef _APP_VERSION_H
+#define _APP_VERSION_H
 
-#include "FreeRTOS.h"
-#include "lwip_comm.h"
-#include "ntrip_client.h"
+#define  APP_VERSION_STRING  "RTK_INS App v23.00"
 
+#define  PRODUCT_NAME_STRING "OpenRTK330L"
 
-/** ***************************************************************************
- * @name EthTask()
- * @brief Embedded server,sending and receiving data from Internet
- * @param N/A
- * @retval N/A
- ******************************************************************************/
-void EthTask(void const *argument)
-{
-	fifo_init(&ntrip_tx_fifo, ntripTxBuf, NTRIP_TX_BUFSIZE);
-	fifo_init(&ntrip_rx_fifo, ntripRxBuf, NTRIP_RX_BUFSIZE);
+#define INS_APP
 
-	ethernet_init(); // init ethnernet
-	
-	while (1)
-	{
-        NTRIP_interface();
-	}
-}
+#endif

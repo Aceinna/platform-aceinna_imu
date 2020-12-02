@@ -39,27 +39,36 @@ limitations under the License.
 #include "configurationAPI.h"
 #include "user_config.h"
 #include "timer.h"
-
+#include "lwipopts.h"
+#include "spi.h"
+#include "taskCanCommunicationJ1939.h"
 
 osThreadId IMU_DATA_ACQ_TASK;
-osThreadId GNSS_RTK_TASK;
+// osThreadId GNSS_RTK_TASK;
 osThreadId GNSS_DATA_ACQ_TASK;
 osThreadId ETHERNET_TASK;
-
+osThreadId CAN1939_TASK;
+#ifdef USE_TCP_DRIVER
+osThreadId TCP_DRIVER_TASK;
+#endif
 osSemaphoreDef(IMU_DATA_ACQ_SEM);
 osSemaphoreDef(RTK_START_SEM);
 osSemaphoreDef(RTK_FINISH_SEM);
-
+osSemaphoreDef(CAN_DATA_SEM);
 
 osSemaphoreId g_sem_imu_data_acq;
 osSemaphoreId g_sem_rtk_start;
 osSemaphoreId g_sem_rtk_finish;
+osSemaphoreId g_sem_can_data;
+
 
 /** ***************************************************************************
  * @name CreateTasks()
  * @brief CreateTasks
  * @param N/A
  * @retval N/A
+ * 
+ * 
  ******************************************************************************/
 void CreateTasks(void)
 {
@@ -70,6 +79,7 @@ void CreateTasks(void)
     g_sem_imu_data_acq = osSemaphoreCreate(osSemaphore(IMU_DATA_ACQ_SEM), 1);
     g_sem_rtk_start = osSemaphoreCreate(osSemaphore(RTK_START_SEM), 1);
     g_sem_rtk_finish = osSemaphoreCreate(osSemaphore(RTK_FINISH_SEM), 1);
+    g_sem_can_data = osSemaphoreCreate(osSemaphore(CAN_DATA_SEM), 1);
 
     osThreadDef(IMU_DATA_ACQ_TASK, TaskDataAcquisition, osPriorityRealtime, 0, TASK_IMU_DATA_ACQ_STACK);
     iD = osThreadCreate(osThread(IMU_DATA_ACQ_TASK), NULL);
@@ -87,15 +97,15 @@ void CreateTasks(void)
             ;
     }
 
-    osThreadDef(GNSS_RTK_TASK, RTKTask, osPriorityLow, 0, TASK_GNSS_RTK_STACK);
-    iD = osThreadCreate(osThread(GNSS_RTK_TASK), NULL);
-    if (iD == NULL)
-    {
-        while (1)
-            ;
-    }
+    // osThreadDef(GNSS_RTK_TASK, RTKTask, osPriorityLow, 0, TASK_GNSS_RTK_STACK);
+    // iD = osThreadCreate(osThread(GNSS_RTK_TASK), NULL);
+    // if (iD == NULL)
+    // {
+    //     while (1)
+    //         ;
+    // }
 
-    osThreadDef(ETHERNET_TASK, EthTask, osPriorityNormal, 0, TASK_ETHERNET_STACK);
+    osThreadDef(ETHERNET_TASK, EthTask, osPriorityNormal, 0, TASK_USERTCP_STACK);
     iD = osThreadCreate(osThread(ETHERNET_TASK), NULL);
     if (iD == NULL)
     {
@@ -103,6 +113,21 @@ void CreateTasks(void)
             ;
     }
 
+    // osThreadDef(TCP_DRIVER_TASK, TcpDriverTask, osPriorityNormal, 0, TASK_USERTCP_STACK);
+    // iD = osThreadCreate(osThread(TCP_DRIVER_TASK), NULL);
+    // if (iD == NULL)
+    // {
+    //     while (1)
+    //         ;
+    // }
+
+    osThreadDef(CAN1939_TASK, TaskCANCommunicationJ1939, osPriorityLow, 0, TASK_CAN1939_STACK);
+    iD = osThreadCreate(osThread(CAN1939_TASK), NULL);
+    if (iD == NULL)
+    {
+        while (1)
+            ;
+    }
 }
 
 
@@ -122,28 +147,43 @@ int main(void)
     uart_driver_install(UART_USER,&uart_user_rx_fifo,&huart_user,460800);
     uart_driver_install(UART_GPS,&uart_gps_rx_fifo,&huart_gps,460800);
     uart_driver_install(UART_BT,&uart_bt_rx_fifo,&huart_bt,460800);
+    fifo_init(&fifo_user_uart, fifo_user_uart_buf, GPS_BUFF_SIZE);
 
-    delay_ms(10000);    //Delay, in case the usb driver is not installed on computer
+    DelayMs(10000);    //Delay, in case the usb driver is not installed on computer
 
     ResetForEnterBootMode();  // normal or iap mode
 
     InitFactoryCalibration();
     ApplyFactoryConfiguration();
     userInitConfigureUnit();
+    ins_init();
+
+    int wheeltick_pin_mode = get_wheeltick_pin_mode();
+    if (wheeltick_pin_mode == 0) {
+        /*
+        Encoder input pin initialization
+        Connect encoder PHASE AB, A phase recording pulse, B phase reading direction
+        Encoder pulse count, read direction
+        Now repeat with SPI pin so that only one can be enabled
+        */
+        wt_pulse_detect_init();
+    }
+    else if(wheeltick_pin_mode == 1)
+    {
+        MX_SPI5_Init();
+    }
 
     CreateTasks();
     MX_TIM_SENSOR_Init();
 
     /* Infinite loop */
-    while ( 1 ) 
-    {
+    while ( 1 ) {
 
         osKernelStart();
 
         // We should never get here as control is now taken by the scheduler
         for (;;)
             ;
-
     }
 }
 
