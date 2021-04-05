@@ -37,8 +37,9 @@ limitations under the License.
 #include "debug.h"
 #endif
 
-int gpsSerialChan = UART_CHANNEL_NONE;  // undefined, needs to be explicitly defined 
-
+int gpsChan = UART_CHANNEL_NONE;  // undefined, needs to be explicitly defined 
+BOOL _handleGpsMessages(GpsData_t *GPSData);
+BOOL gpsUartInitialized = FALSE;
 
 /// GPS data struct
 // to change to NMEA then pass GPS out debug port: un-comment this and
@@ -60,12 +61,18 @@ int16_t _getIndexLineFeed(uint16_t numInBuff, unsigned *msgLength);
 void    _setGPSMessageSignature(GpsData_t* GPSData);
 void    _userCmdBaudProtcol(GpsData_t* GPSData);
 
+/*******************************************
+ * @brief 
+ * 
+ * @param GPSData ==
+********************************************/
 void loadGpsCommSettings(GpsData_t* GPSData)
 {
     GPSData->GPSAUTOSetting = 0;
   	_setGPSMessageSignature(GPSData);
 	GPSData->GPSConfigureOK = 0;
 }
+
 
 // extern_port.c
 extern void GetGpsExternUartChannel(unsigned int* uartChannel);
@@ -77,8 +84,8 @@ extern void GetGpsExternUartChannel(unsigned int* uartChannel);
  ******************************************************************************/
 int initGpsUart(int baudrate) 
 {
-    gpsSerialChan  = platformGetSerialChannel(GPS_SERIAL_PORT);
-    return uart_init(gpsSerialChan, baudrate);
+    gpsChan  = platformGetSerialChannel(GPS_SERIAL_PORT, FALSE);
+    return uart_init(gpsChan, baudrate);
 }
 
 
@@ -90,7 +97,7 @@ int initGpsUart(int baudrate)
  ******************************************************************************/
 int gpsBytesAvailable()
 {
-    return uart_rxBytesAvailable(gpsSerialChan);
+    return uart_rxBytesAvailable(gpsChan);
 }
 
 /** ****************************************************************************
@@ -100,7 +107,7 @@ int gpsBytesAvailable()
  ******************************************************************************/
 void flushGPSRecBuf(void)
 {
-    uart_flushRecBuffer(gpsSerialChan);
+    uart_flushRecBuffer(gpsChan);
 }
 
 /** ****************************************************************************
@@ -110,7 +117,7 @@ void flushGPSRecBuf(void)
  ******************************************************************************/
 BOOL isGpsTxEmpty(void)
 {
-    return uart_txBytesRemains(gpsSerialChan) == 0;
+    return uart_txBytesRemains(gpsChan) == 0;
 }
 
 /** ****************************************************************************
@@ -122,11 +129,11 @@ uint16_t delBytesGpsBuf(uint16_t numToPop)
 {
 	int16_t numInBuffer;
 
-    numInBuffer = uart_rxBytesAvailable(gpsSerialChan);
+    numInBuffer = uart_rxBytesAvailable(gpsChan);
     if (numInBuffer < numToPop) {
         numToPop = numInBuffer;
     }
-    uart_removeRxBytes(gpsSerialChan, numToPop);
+    uart_removeRxBytes(gpsChan, numToPop);
 //    COM_buf_delete(&(gGpsUartPtr->rec_buf),
 //                   numToPop);
     return ( numInBuffer - numToPop ); ///< unscanned bytes
@@ -158,7 +165,7 @@ uint8_t peekByteGpsBuf(uint16_t index)
 {
     uint8_t output = 0;
 
-    uart_copyBytes(gpsSerialChan, index, 1, &output);
+    uart_copyBytes(gpsChan, index, 1, &output);
 
 	return output;
 }
@@ -181,7 +188,7 @@ unsigned long peekGPSmsgHeader(uint16_t      index,
 	unsigned long GPSHeader;
 
     headerLength = GPSData->GPSMsgSignature.GPSheaderLength;
-    uart_copyBytes(gpsSerialChan, index, headerLength, header);
+    uart_copyBytes(gpsChan, index, headerLength, header);
     GPSHeader = 0;
 
     for (i = 0, j = headerLength - 1; i < headerLength; i++, j--) {
@@ -203,8 +210,8 @@ unsigned long peekGPSmsgHeader(uint16_t      index,
  ******************************************************************************/
 int16_t retrieveGpsMsg(uint16_t  numBytes, GpsData_t *GPSData, uint8_t  *outBuffer)
 {
-	uart_read(gpsSerialChan, outBuffer, numBytes);
-    return uart_rxBytesAvailable(gpsSerialChan);
+	uart_read(gpsChan, outBuffer, numBytes);
+    return uart_rxBytesAvailable(gpsChan);
 }
 
 /** ****************************************************************************
@@ -226,10 +233,10 @@ int16_t findHeader(uint16_t      numInBuff,
     int      num;
 
 	do {
-		uart_copyBytes(gpsSerialChan,0,1,&byte);
+		uart_copyBytes(gpsChan,0,1,&byte);
 
 		if (byte == GPSData->GPSMsgSignature.startByte) {
-		    uart_copyBytes(gpsSerialChan,1,GPSData->GPSMsgSignature.GPSheaderLength - 1, buf);
+		    uart_copyBytes(gpsChan,1,GPSData->GPSMsgSignature.GPSheaderLength - 1, buf);
 			header = byte <<  (GPSData->GPSMsgSignature.GPSheaderLength - 1) * 8;
 			switch (GPSData->GPSMsgSignature.GPSheaderLength) {
 				case 2: // SiRF 0xa0a2
@@ -242,13 +249,13 @@ int16_t findHeader(uint16_t      numInBuff,
             if ( header == GPSData->GPSMsgSignature.GPSheader ) {
 				exit = 1;
 			} else {
-				num = uart_removeRxBytes(gpsSerialChan, 1);
+				num = uart_removeRxBytes(gpsChan, 1);
 				if(num){
 				numInBuff--;
 			}
 			}
 		} else {
-			num = uart_removeRxBytes(gpsSerialChan, 1);
+			num = uart_removeRxBytes(gpsChan, 1);
 			if(num){
 			numInBuff--;
 		}
@@ -267,7 +274,7 @@ int16_t findHeader(uint16_t      numInBuff,
  ******************************************************************************/
 int writeGps(char  *data, uint16_t len)
 {
-    return uart_write(gpsSerialChan, (uint8_t*)data, len);
+    return uart_write(gpsChan, (uint8_t*)data, len);
 
 }
 
@@ -400,10 +407,19 @@ void initGPSHandler(void)
 	gGpsDataPtr->GPSTopLevelConfig |= (1 << HZ2); // update to change internal (ublox) GPS to 2Hz
     /// Configure GPS structure, from Flash (EEPROM)
 	loadGpsCommSettings(gGpsDataPtr);
+    if(!gpsUartInitialized){
+        gpsUartInitialized = TRUE;
     initGpsUart(gGpsDataPtr->GPSbaudRate);
+    }
 #endif
 }
 
+void  InitGpsSerialCommunication(int baudrate, BOOL fInit)
+{
+    gGpsDataPtr->GPSbaudRate = baudrate;
+    gpsChan = platformGetSerialChannel(GPS_SERIAL_PORT, FALSE);
+    gpsUartInitialized = fInit;
+}
 
 
 /** ****************************************************************************
@@ -422,6 +438,7 @@ void initGPSDataStruct(void)
 }
 
 
+#ifndef NMEA_ONLY
 BOOL _handleGpsMessages(GpsData_t *GPSData)
 {
 	static uint8_t gpsUartBuf[100]; 
@@ -433,7 +450,7 @@ BOOL _handleGpsMessages(GpsData_t *GPSData)
     
 	while(1){
         if(!bytesInBuffer){
-            bytesInBuffer = uart_read(gpsSerialChan, gpsUartBuf, sizeof (gpsUartBuf));
+            bytesInBuffer = uart_read(gpsChan, gpsUartBuf, sizeof (gpsUartBuf));
             if(!bytesInBuffer){
                 return 0; // nothing to do
             }
@@ -457,6 +474,42 @@ BOOL _handleGpsMessages(GpsData_t *GPSData)
         }
 }
 /* end _handleGpsMessages */
+#endif
+
+
+BOOL _handleGpsNMEAMessages(GpsData_t *GPSData)
+{
+	static uint8_t gpsUartBuf[100]; 
+    static uint8_t gpsMsg[MAX_MSG_LENGTH];
+    static int     bytesInBuffer = 0;
+    unsigned char  tmp;
+	unsigned static int  pos = 0;
+	
+    // refresh GPS channel
+    gpsChan = platformGetSerialChannel(GPS_SERIAL_PORT, FALSE);
+	while(1){
+        if(!bytesInBuffer){
+            bytesInBuffer = uart_read(gpsChan, gpsUartBuf, sizeof (gpsUartBuf));
+            if(!bytesInBuffer){
+                return 0; // nothing to do
+            }
+            pos = 0; 
+#ifdef GNSS_TRAFFIC_RELAY
+            if(platformIsGnssTrafficRelayEnabled()){
+                int masterChan = platformGetSerialChannel(MASTER_SERIAL_PORT, TRUE);
+                uart_write(masterChan, gpsUartBuf, bytesInBuffer);
+                return 0;
+            }
+#endif
+        }
+        tmp = gpsUartBuf[pos++];
+        bytesInBuffer--;
+        platformDetectPingMessageFromGpsDriver(tmp);
+        parseNMEAMessage(tmp, gpsMsg, GPSData);
+   }
+}
+/* end _handleGpsMessages */
+
 
 /** ****************************************************************************
  * @name GPSHandler GPS stream data and return GPS data for NAV algorithms
@@ -469,13 +522,16 @@ void GPSHandler(void)
 {
 	gGpsDataPtr->Timer100Hz10ms     = getSystemTime();      ///< get system clock ticks
     gGpsDataPtr->isGPSBaudrateKnown = 1;
-
+#ifndef NMEA_ONLY
     // parse moved to top since is always called after init
   	if (gGpsDataPtr->GPSConfigureOK > 0 ) {              // Configuration is completed
         _handleGpsMessages(gGpsDataPtr);
     } else { ///< configure GPS receiver if needed: OK < 0
 		_configGPSReceiver(gGpsDataPtr);
     }
+#else
+   _handleGpsNMEAMessages(gGpsDataPtr);
+#endif
 }
 
 /** ****************************************************************************

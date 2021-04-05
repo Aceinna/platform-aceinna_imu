@@ -29,7 +29,6 @@ limitations under the License.
 extern int userPacketOut;
 
 
-
 typedef struct {
     uint16_t masterFail             :    1; // 0 = normal, 1 = fatal error has occurred
     uint16_t hardwareError          :    1; // 0 = normal, 1 = internal hardware error
@@ -86,23 +85,7 @@ typedef struct {
 // data packet payload
 typedef  struct {
     uint8_t dest_address;             // targer address
-    union {
-        struct {
-            uint8_t slope_sensor       :   1;     // ss2 packet
-            uint8_t angular_rate       :   1;     // angular rate packet
-            uint8_t accelerator        :   1;     // acceleration packet
-            uint8_t reserved           :   5;
-        } b;
-        
-        uint8_t r;
-    } type1_bits;
-    union {
-        struct {
-            uint8_t reserved           :   8;
-        } b;
-        
-        uint8_t r;
-    } type2_bits;
+    uint8_t type[2];
 } PACKET_TYPE_PAYLOAD;
 
 
@@ -120,19 +103,19 @@ typedef struct {
     uint8_t orien_bits[2];                 // orientation setting 
 } ORIENTATION_SETTING;
 
-// orientation set payload format
-typedef struct {
-    uint8_t dest_address;                  // target's address
-    uint8_t cmd[7];                        // command 
-} MAG_ALIGN_PAYLOAD;
-
 
 // user behavior set payload format
 typedef struct {
     uint8_t dest_address;                  // target's address
-    uint8_t  restart_on_overrange;         // restart or not while over range
-    uint8_t  dynamic_motion;               // dynamic motion
+    uint8_t  data[7]; 
 } USER_BEHAVIOR_PAYLOAD;
+
+
+// mag align payload
+typedef struct {
+    uint8_t dest_address;                  // target's address
+    uint8_t cmd[7];                        // command 
+} MAG_ALIGN_PAYLOAD;
 
 
 // Angle alarm set payload format

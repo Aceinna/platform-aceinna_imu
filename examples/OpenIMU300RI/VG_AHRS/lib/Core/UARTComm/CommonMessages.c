@@ -31,6 +31,9 @@ limitations under the License.
 #include "platformAPI.h"
 #include "sensorsAPI.h"
 #include "appVersion.h"
+#include "ucb_packet_struct.h"
+#include "magAPI.h"
+#include "magAlign.h"
 
 #include "CommonMessages.h"
 #include "algorithm.h"
@@ -360,3 +363,144 @@ BOOL Fill_e2PacketPayload(uint8_t *payload, uint8_t *payloadLen)
     return TRUE;
 }
 
+BOOL    Fill_MagAlignResponsePayload(int8_t state, UcbPacketStruct *ptrUcbPacket)
+{
+    int8_t estimatedMagAlignVals[8] = {0};
+    int8_t magAlignVals[8] = {0};
+    BOOL valid = TRUE;
+
+    switch (state - 1)
+    {
+        //
+        uint8_t len;
+
+    case 0: // Return the Mag-Align status
+        //uint8_t *model = (uint8_t*)unitVersionString();
+        //uint8_t *rev   = (uint8_t*)platformBuildInfo();
+        //unsigned int serialNum = unitSerialNumber();
+        //len = snprintf((char*)ptrUcbPacket->payload, 250, "%s %s SN:%u", model, rev, serialNum );
+        //ptrUcbPacket->payloadLength = len;
+        if (gMagAlign.state == MAG_ALIGN_STATUS_START_CAL_WITH_AUTOEND)
+        {
+            // Start (auto end)
+            len = snprintf((char *)ptrUcbPacket->payload, 250, "%c", (char)0x1);
+        }
+        else if (gMagAlign.state == MAG_ALIGN_STATUS_START_CAL_WITHOUT_AUTOEND)
+        {
+            // Start (manual end)
+            len = snprintf((char *)ptrUcbPacket->payload, 250, "%c", (char)0x2);
+        }
+        else
+        {
+            // Start (manual end)
+            len = snprintf((char *)ptrUcbPacket->payload, 250, "%c", (char)0x0);
+        }
+
+        ptrUcbPacket->payloadLength = len;
+        break;
+
+    case 1: // Start mag-align w/ autoend
+    case 2: // Start mag-align w/ autoend
+    case 3: // Stop mag-align w/ autoend
+    case 4: // Accept results
+    case 5: // Accept results and write to EEPROM
+    case 6: // Abort Mag-Align or reject results
+    case 8: // Restore default mag-align values
+    case 9: // Restore default mag-align values and save in EEPROM
+        len = snprintf((char *)ptrUcbPacket->payload, 250, "%c", (char)state - 1);
+        ptrUcbPacket->payloadLength = len;
+        break;
+
+    case 7: // Return stored mag-align values
+#if 0
+                    // Test values:
+                    gMagAlign.estParams.hardIronBias[X_AXIS] =  0.1;
+                    gMagAlign.estParams.hardIronBias[Y_AXIS] = -0.2;
+                    gMagAlign.estParams.softIronScaleRatio   = 0.98;
+                    gMagAlign.estParams.softIronAngle        = -270.0 * DEG_TO_RAD;
+#endif
+
+        // Bias can be +/- 8.0 [g] (full scale of sensor)
+        //   SF = 2^15 / maxVal = 2^15 / 8.0 = 4096
+        magAlignVals[0] = (char)(((int16_t)(gMagAlign.hardIronBias[X_AXIS] * (float)4096.0) >> 8) & 0xFF);
+        magAlignVals[1] = (char)(((int16_t)(gMagAlign.hardIronBias[X_AXIS] * (float)4096.0) >> 0) & 0xFF);
+        magAlignVals[2] = (char)(((int16_t)(gMagAlign.hardIronBias[Y_AXIS] * (float)4096.0) >> 8) & 0xFF);
+        magAlignVals[3] = (char)(((int16_t)(gMagAlign.hardIronBias[Y_AXIS] * (float)4096.0) >> 0) & 0xFF);
+
+        // Ratio can be 0 --> 1
+        //   SF = (2^16-1) / maxVal = (2^16-1) / 1.0 = 65535
+        magAlignVals[4] = (char)(((int16_t)(gMagAlign.softIronScaleRatio * (float)65535.0) >> 8) & 0xFF);
+        magAlignVals[5] = (char)(((int16_t)(gMagAlign.softIronScaleRatio * (float)65535.0) >> 0) & 0xFF);
+
+        //   SF = 2^15 / maxVal = 2^15 / pi = 10430.37835047045
+        magAlignVals[6] = (char)(((int16_t)(gMagAlign.softIronAngle * (float)10430.37835047046) >> 8) & 0xFF);
+        magAlignVals[7] = (char)(((int16_t)(gMagAlign.softIronAngle * (float)10430.37835047046) >> 0) & 0xFF);
+
+        // Bias can be +/- 8.0 [g] (full scale of sensor)
+        //   SF = 2^15 / maxVal = 2^15 / 8.0 = 4096
+        estimatedMagAlignVals[0] = (char)(((int16_t)(gMagAlign.estParams.hardIronBias[X_AXIS] * (float)4096.0) >> 8) & 0xFF);
+        estimatedMagAlignVals[1] = (char)(((int16_t)(gMagAlign.estParams.hardIronBias[X_AXIS] * (float)4096.0) >> 0) & 0xFF);
+        estimatedMagAlignVals[2] = (char)(((int16_t)(gMagAlign.estParams.hardIronBias[Y_AXIS] * (float)4096.0) >> 8) & 0xFF);
+        estimatedMagAlignVals[3] = (char)(((int16_t)(gMagAlign.estParams.hardIronBias[Y_AXIS] * (float)4096.0) >> 0) & 0xFF);
+
+        // Ratio can be 0 --> 1
+        //   SF = (2^16-1) / maxVal = (2^16-1) / 1.0 = 65535
+        estimatedMagAlignVals[4] = (char)(((int16_t)(gMagAlign.estParams.softIronScaleRatio * (float)65535.0) >> 8) & 0xFF);
+        estimatedMagAlignVals[5] = (char)(((int16_t)(gMagAlign.estParams.softIronScaleRatio * (float)65535.0) >> 0) & 0xFF);
+
+        // Angle can be +/- pi (in radians)
+        //   Correct for angles that exceed +/-180
+        if (gMagAlign.estParams.softIronAngle > PI)
+        {
+            gMagAlign.estParams.softIronAngle = (float)PI - gMagAlign.estParams.softIronAngle;
+        }
+        else if (gMagAlign.estParams.softIronAngle < -PI)
+        {
+            gMagAlign.estParams.softIronAngle = TWO_PI + gMagAlign.estParams.softIronAngle;
+        }
+
+        //   SF = 2^15 / maxVal = 2^15 / pi = 10430.37835047045
+        estimatedMagAlignVals[6] = (char)(((int16_t)(gMagAlign.estParams.softIronAngle * (float)10430.37835047046) >> 8) & 0xFF);
+        estimatedMagAlignVals[7] = (char)(((int16_t)(gMagAlign.estParams.softIronAngle * (float)10430.37835047046) >> 0) & 0xFF);
+
+#if 0
+                    DebugPrintFloat("     ", (float)estimatedMagAlignVals[0], 1);
+                    DebugPrintFloat(",  ", (float)estimatedMagAlignVals[1], 1);
+                    DebugPrintFloat(",  ", (float)estimatedMagAlignVals[2], 1);
+                    DebugPrintFloat(",  ", (float)estimatedMagAlignVals[3], 1);
+                    DebugPrintFloat(",  ", (float)estimatedMagAlignVals[4], 1);
+                    DebugPrintFloat(",  ", (float)estimatedMagAlignVals[5], 1);
+                    DebugPrintFloat(",  ", (float)estimatedMagAlignVals[6], 1);
+                    DebugPrintFloat(",  ", (float)estimatedMagAlignVals[7], 1);
+                    DebugPrintEndline();
+#endif
+
+        len = snprintf((char *)ptrUcbPacket->payload, 250, "%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c", (char)magAlignVals[0],
+                       (char)magAlignVals[1],
+                       (char)magAlignVals[2],
+                       (char)magAlignVals[3],
+                       (char)magAlignVals[4],
+                       (char)magAlignVals[5],
+                       (char)magAlignVals[6],
+                       (char)magAlignVals[7],
+                       (char)estimatedMagAlignVals[0],
+                       (char)estimatedMagAlignVals[1],
+                       (char)estimatedMagAlignVals[2],
+                       (char)estimatedMagAlignVals[3],
+                       (char)estimatedMagAlignVals[4],
+                       (char)estimatedMagAlignVals[5],
+                       (char)estimatedMagAlignVals[6],
+                       (char)estimatedMagAlignVals[7]);
+        
+        ptrUcbPacket->payloadLength = len;
+        break;
+
+    case 10: // Load user computed mag-align values
+        break;
+
+    default:
+        valid = FALSE;
+        break;
+    }
+    return valid;
+}

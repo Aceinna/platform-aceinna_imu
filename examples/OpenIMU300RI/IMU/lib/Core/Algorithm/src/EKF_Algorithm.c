@@ -94,6 +94,7 @@ void EKF_Algorithm(void)
                                 gEKFInput.angRate_B,
                                 gAlgorithm.dt,
                                 gAlgorithm.Limit.linAccelSwitchDelay,
+                                gKalmanFilter.rateBias_B,
                                 &gImuStats);
         }
         else
@@ -102,6 +103,7 @@ void EKF_Algorithm(void)
                                 gEKFInput.angRate_B,
                                 gAlgorithm.dt,
                                 gAlgorithm.Limit.linAccelSwitchDelay,
+                                gKalmanFilter.rateBias_B,
                                 &gImuStats);
         }
         

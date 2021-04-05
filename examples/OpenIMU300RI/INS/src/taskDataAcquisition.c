@@ -31,6 +31,7 @@ limitations under the License.
 #include "magAPI.h"
 #include "platformAPI.h"
 #include "userAPI.h"
+#include "UserConfiguration.h"
 
 #include "taskDataAcquisition.h"
 
@@ -84,6 +85,9 @@ void TaskDataAcquisition(void const *argument)
         // *****************************************************************
         // Handle Timing vard, watchdog and BIT
         PrepareToNewDacqTickAndProcessUartMessages();
+        // Apply parameters from NavView or legacy protocol 
+        ApplyLegacyConfigParameters();
+
         // Wait for next tick 
         // Upon timeout of TIM5(orTIM2 or user sync), let the process continue
         

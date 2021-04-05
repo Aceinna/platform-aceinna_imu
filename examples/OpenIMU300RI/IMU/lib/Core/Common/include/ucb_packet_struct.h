@@ -64,6 +64,9 @@ typedef struct {
     uint8_t         packetCode[2];
 }usr_packet_t;
 
+#define SYSTEM_TYPE_MASTER   0
+#define SYSTEM_TYPE_SLAVE    1
+
 
 typedef struct {
      uint8_t       packetType;      // 0

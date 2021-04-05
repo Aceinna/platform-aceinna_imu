@@ -31,6 +31,7 @@ limitations under the License.
 #include "magAPI.h"
 #include "platformAPI.h"
 #include "userAPI.h"
+#include "UserConfiguration.h"
 
 #include "taskDataAcquisition.h"
 
@@ -84,9 +85,10 @@ void TaskDataAcquisition(void const *argument)
         // *****************************************************************
         // Handle Timing vard, watchdog and BIT
         PrepareToNewDacqTickAndProcessUartMessages();
+        // apply some parameters from NavView if requested
+        ApplyLegacyConfigParameters();
         // Wait for next tick 
         // Upon timeout of TIM5(orTIM2 or user sync), let the process continue
-        
         res = osSemaphoreWait(dataAcqSem, 1000);
         if(res != osOK){
             // Wait timeout expired. Something wrong wit the dacq system
@@ -150,6 +152,5 @@ void TaskDataAcquisition(void const *argument)
             //   vector in the NED-frame)
             MagAlign();   // only does this on align
         }
-        
     }
 }

@@ -149,6 +149,14 @@ typedef enum{
 	UNKNOWN                 = 0xFF
 } enumGPSProtocol;
 
+// Choices for IMU type
+typedef enum{
+	CurrentIMU              = -1,
+	OpenIMU300RI            =  0,
+	OpenIMU300ZI            =  1,
+	OpenIMU330              =  2,
+	OpenIMU335RI            =  3
+} enumIMUType;
 
 // Algorithm specifiers
 #define  IMU   0

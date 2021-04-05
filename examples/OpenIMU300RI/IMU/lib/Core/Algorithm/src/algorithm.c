@@ -27,8 +27,17 @@ AlgorithmStruct gAlgorithm;
 AlgoStatus      gAlgoStatus;
 
 
-void InitializeAlgorithmStruct(uint8_t callingFreq)
+void InitializeAlgorithmStruct(uint8_t callingFreq, const enumIMUType imuTypeIn)
 {
+
+#ifndef IMU_ONLY
+    enumIMUType imuType = imuTypeIn;
+    
+    if(imuType == CurrentIMU){
+        // Reuse previously initialized IMU type
+        imuType = gAlgorithm.imuType;
+    }
+    
     memset(&gAlgorithm, 0, sizeof(AlgorithmStruct));
 
     //----------------------------algortihm config-----------------------------
@@ -59,7 +68,7 @@ void InitializeAlgorithmStruct(uint8_t callingFreq)
     // Set up other timing variables
     gAlgorithm.dtOverTwo = (real)(0.5) * gAlgorithm.dt;
     gAlgorithm.dtSquared = gAlgorithm.dt * gAlgorithm.dt;
-    gAlgorithm.sqrtDt = sqrtf(gAlgorithm.dt);
+    gAlgorithm.sqrtDt    = sqrtf(gAlgorithm.dt);
 
     // Set the algorithm duration periods
     gAlgorithm.Duration.Stabilize_System = (uint32_t)(gAlgorithm.callingFreq * STABILIZE_SYSTEM_DURATION);
@@ -97,8 +106,11 @@ void InitializeAlgorithmStruct(uint8_t callingFreq)
     gAlgorithm.Limit.Free_Integration_Cntr = gAlgorithm.callingFreq * LIMIT_FREE_INTEGRATION_CNTR;
 
     // Linear acceleration switch limits (level and time)
-    gAlgorithm.Limit.accelSwitch = (real)(0.012);   // [g]
-    gAlgorithm.Limit.linAccelSwitchDelay = (uint32_t)(2.0 * gAlgorithm.callingFreq);
+    gAlgorithm.Limit.accelSwitch         = (real)(0.012);   // [g]
+    float tmp = getAlgorithmAccelSwitchDelay();
+    gAlgorithm.Limit.linAccelSwitchDelay  = (uint32_t)(tmp * gAlgorithm.callingFreq);
+    tmp = getAlgorithmRateIntegrationTime();
+    gAlgorithm.Limit.rateIntegrationTime  = (uint32_t)(tmp * gAlgorithm.callingFreq);
 
     // Innovation error limits for EKF states
     gAlgorithm.Limit.Innov.positionError = (real)270.0;
@@ -113,7 +125,18 @@ void InitializeAlgorithmStruct(uint8_t callingFreq)
     // Uing raw accel to detect linear acceleration has lower failure rate in small
     //  and smooth linear acceleration. But on some platform, there is large vibration,
     //  uing raw accel to detect linear acceleration will always detect linear accel.
-    gAlgorithm.useRawAccToDetectLinAccel = TRUE;
+    gAlgorithm.useRawAccToDetectLinAccel = getAlgorithmLinAccelDetectMode();    // TRUE: raw accel, FALSE: filtered accel.
+
+    // The gyro data normally has just a small bias after factory calibration 
+    // and the accuracy is good enough to detect linear acceleration. 
+    // However, the gyro_x with a big bias, and the rate integration time default
+    // setting of 2 seconds combined to not be accurate enough predicting the 
+    // next acceleration measurement. So in most of situations, 
+    // corrected rate should be used to predict next accel.
+    gAlgorithm.useRawRateToPredAccel     = getAlgorithmAccelPredictMode();   // FALSE: corrected rate, TRUE: raw rate.
+
+    // Coefficient of reducing Q.
+    gAlgorithm.coefOfReduceQ             = getAlgorithmCoefOfReduceQ();
 
     // Set the turn-switch threshold to a default value in [deg/sec]
     gAlgorithm.turnSwitchThreshold = 6.0;
@@ -130,6 +153,29 @@ void InitializeAlgorithmStruct(uint8_t callingFreq)
     gAlgorithm.velocityAlwaysAlongBodyX = TRUE;
 
     // get IMU specifications
+    switch (imuType)
+    {
+    case OpenIMU330:
+    case OpenIMU335RI:
+        {
+            //0.2deg/sqrt(Hr) = 0.2 / 60 * D2R = 5.8177640741e-05rad/sqrt(s)
+            gAlgorithm.imuSpec.arw      = (real)5.82e-5; 
+            gAlgorithm.imuSpec.sigmaW   = (real)(1.25 * 5.82e-5 / sqrt(1.0/RW_ODR));
+            //1.5deg/Hr = 1.5 / 3600 * D2R = 7.272205093e-06rad/s
+            gAlgorithm.imuSpec.biW      = (real)7.27e-6;
+            gAlgorithm.imuSpec.maxBiasW = (real)MAX_BW;
+            //0.04m/s/sqrt(Hr) = 0.04 / 60 = 6.67e-04 m/s/sqrt(s)
+            gAlgorithm.imuSpec.vrw      = (real)6.67e-04;
+            gAlgorithm.imuSpec.sigmaA   = (real)(1.25 * 6.67e-04 / sqrt(1.0/RW_ODR));
+             //20ug = 20.0e-6g * GRAVITY
+            gAlgorithm.imuSpec.biA      = (real)(20.0e-6 * GRAVITY);
+            gAlgorithm.imuSpec.maxBiasA = (real)MAX_BA;            
+        }
+        break;
+    case OpenIMU300ZI:
+    case OpenIMU300RI:
+    default:
+        {
     gAlgorithm.imuSpec.arw = (real)ARW_300ZA;
     gAlgorithm.imuSpec.sigmaW = (real)(1.25 * ARW_300ZA / sqrt(1.0/RW_ODR));
     gAlgorithm.imuSpec.biW = (real)BIW_300ZA;
@@ -138,6 +184,9 @@ void InitializeAlgorithmStruct(uint8_t callingFreq)
     gAlgorithm.imuSpec.sigmaA = (real)(1.25 * VRW_300ZA / sqrt(1.0/RW_ODR));
     gAlgorithm.imuSpec.biA = (real)BIA_300ZA;
     gAlgorithm.imuSpec.maxBiasA = (real)MAX_BA;
+        }
+        break;
+    }
 
     // default noise level multiplier for static detection
     gAlgorithm.staticDetectParam.staticVarGyro = (real)(gAlgorithm.imuSpec.sigmaW * gAlgorithm.imuSpec.sigmaW);
@@ -152,6 +201,8 @@ void InitializeAlgorithmStruct(uint8_t callingFreq)
 
     //----------------------------algorithm states-----------------------------
     memset(&gAlgoStatus, 0, sizeof(gAlgoStatus));
+#endif
+
 }
 
 void GetAlgoStatus(AlgoStatus *algoStatus)

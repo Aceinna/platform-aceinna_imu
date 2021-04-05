@@ -577,7 +577,7 @@ void _GenerateObservationCovariance_AHRS(void)
      * After accel in the algorithm is changed to [m/s/s],
      * 40000*Rnom(g^2) = 40000*Rnom([m/s/s]^2)/gravity/gravity = 400*Rnom([m/s/s]^2)
      */
-    real maxR = 400.0f * Rnom;
+    real maxR = 4.0f * Rnom;
     if (gKalmanFilter.R[STATE_ROLL] > maxR)
     {
         gKalmanFilter.R[STATE_ROLL] = maxR;

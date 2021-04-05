@@ -80,7 +80,7 @@ typedef struct {
 
 	real accelSwitch;
 	uint32_t linAccelSwitchDelay;
-
+	uint32_t rateIntegrationTime;
 	InnovationStruct       Innov;
 } LimitStruct;
 
@@ -192,6 +192,8 @@ typedef struct {
 
     uint8_t linAccelLPFType;
     uint8_t useRawAccToDetectLinAccel;
+    uint8_t useRawRateToPredAccel;
+    real coefOfReduceQ;
 
     uint8_t callingFreq;
     real    dt;
@@ -215,6 +217,8 @@ typedef struct {
 
     DurationStruct    Duration;
     LimitStruct       Limit;
+    enumIMUType       imuType;
+    
 } AlgorithmStruct;
 
 extern AlgorithmStruct gAlgorithm;

@@ -50,10 +50,11 @@ void MotionStatusImu(real *gyro, real *accel, ImuStatsStruct *imuStats, BOOL res
  * @param [in] staticDelay      A Counter. When static period detected, delay [staticDelay] samples before
  *                              lowering accel error. [staticDelay] is also used to reset initial accel that
  *                              is propagated using gyro to estimate future accel.
+ * @param [in] rateBias         Input angular rate bias, rad/s.
  * @param [out] gAccelStats     A struct for results storage.
  * @retval None.
 ******************************************************************************/
-void EstimateAccelError(real *accel, real *w, real dt, uint32_t staticDelay, ImuStatsStruct *gAccelStats);
+void EstimateAccelError(real *accel, real *w, real dt, uint32_t staticDelay, real *rateBias, ImuStatsStruct *imuStats);
 
 /******************************************************************************
  * @brief Detect motion according to the difference between measured accel magnitude and 1g.

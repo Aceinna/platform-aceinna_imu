@@ -88,7 +88,6 @@ void DebugInterfaceInit(void)
 
     BoardGetResetStatus(status, sizeof(status));
 
-    ERROR_STRING(status);
 }
 
 void CreateTasks(void)

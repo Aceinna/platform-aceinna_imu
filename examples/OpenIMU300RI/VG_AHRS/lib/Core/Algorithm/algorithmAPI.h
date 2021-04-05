@@ -36,7 +36,7 @@ limitations under the License.
  *
  * @retval N/A
  *****************************************************************************/
-void InitializeAlgorithmStruct(uint8_t callingFreq);
+void InitializeAlgorithmStruct(uint8_t callingFreq, const enumIMUType imuType);
 
 /******************************************************************************
  * @brief Get algorithm status.
@@ -93,6 +93,11 @@ uint32_t getAlgorithmTimer();
 uint16_t getAlgorithmCounter();
 uint16_t getAlgorithmFrequency();
 uint32_t getAlgorithmITOW();
+BOOL     getAlgorithmLinAccelDetectMode();
+BOOL     getAlgorithmAccelPredictMode();
+float    getAlgorithmCoefOfReduceQ();
+float    getAlgorithmAccelSwitchDelay();
+float    getAlgorithmRateIntegrationTime();    
 
 
 /******************************************************************************

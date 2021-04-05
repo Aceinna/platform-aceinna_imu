@@ -67,6 +67,7 @@ typedef enum {
     USR_IN_GET_VERSION      ,
     USR_IN_RESET            ,
     // add new packet type here, before USR_IN_MAX
+    USR_IN_MAG_ALIGN        ,
     USR_IN_MAX              ,
 }UserInPacketType;
 
@@ -78,6 +79,7 @@ typedef enum {
     USR_OUT_DATA2,      // 3
 // add new output packet type here, before USR_OUT_MAX  
     USR_OUT_SCALED1,    // 4
+    USR_OUT_LEGACY_S1,  // 5
     USR_OUT_MAX
 } UserOutPacketType;
 
@@ -123,9 +125,10 @@ typedef struct {
 #pragma pack()
 
 
-#define USR_OUT_TEST_PAYLOAD_LEN   (4)     // test parameter (uint32_t)    
-#define USR_OUT_DATA1_PAYLOAD_LEN  (4*10)  // 1 integer +3accels (float LE) + 3gyros (float LE) + 3 mags (floatLE)    
-#define USR_OUT_SCALED1_PAYLOAD_LEN (52)   // See UserMessaging.c for make-up of Scaled1 message
+#define USR_OUT_TEST_PAYLOAD_LEN      (4)     // test parameter (uint32_t)    
+#define USR_OUT_DATA1_PAYLOAD_LEN     (4*10)  // 1 integer +3accels (float LE) + 3gyros (float LE) + 3 mags (floatLE)    
+#define USR_OUT_SCALED1_PAYLOAD_LEN   (52)   // See UserMessaging.c for make-up of Scaled1 message
+#define USR_OUT_LEGACY_S1_PAYLOAD_LEN (24)   // See UserMessaging.c for make-up of Scaled1 message
 
 
 #define USER_OK      0x00

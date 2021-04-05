@@ -29,8 +29,10 @@ limitations under the License.
 #include "gpsAPI.h"
 #include "magAPI.h"
 #include "platformAPI.h"
+#include "userAPI.h"
 
 #include "UserConfiguration.h"
+#include "UserMessagingUart.h"
 #include "eepromAPI.h"
 #include "Indices.h"
 #include "sae_j1939.h"
@@ -58,45 +60,65 @@ const UserConfigurationStruct gDefaultUserConfig = {
     .ecuOrientation = 0,    // +X +Y +Z
     .canTermResistorEnabled = 0,
     .canBaudRateDetectEnabled = 0,
-    .userBehavior  = 0x0003,     // algorithm enabled, force mag usage
-
+    .userBehavior  = USER_BEHAVIOR_RUN_ALGORITHM_MASK   |
+                     USER_BEHAVIOR_USE_MAGS_MASK        |
+                     USER_BEHAVIOR_SWAP_PITCH_ROLL      |
+                     USER_BEHAVIOR_NWU_FRAME            |
+                     USER_BEHAVIOR_SWAP_REQUEST_PGN     |
+                     0,
     .algResetPs    = 0,
     .saveCfgPs     = 0,
     .packetTypePs  = 0,
     .packetRatePs  = 0,
     .filterPs      = 0,
     .orientationPs = 0,
+    .magAlignPs    = 0,
     .userBehvPs    = 0,
-    .statusPs      = 0
+    .statusPs      = 0,
+// Below are UART-related parameters - kept compatible with other OpenIMU products
+    .uartConfig.uartPacketRate          = 0,
+    .uartConfig.uartBaudRate            =  115200,  
+    .uartConfig.uartPacketType          =  "z1",  
+    .uartConfig.uartLpfAccelFilterFreq  =  25,
+    .uartConfig.uartLpfRateFilterFreq   =  25,
+    .uartConfig.uartOrientation         =  "+X+Y+Z",
+    .uartConfig.uartGpsBaudRate         =  0, 
+    .uartConfig.uartGpsProtocol         =  0,
+    .uartConfig.uartHardIron_X          =  0.0,
+    .uartConfig.uartHardIron_Y          =  0.0,
+    .uartConfig.uartSoftIron_Ratio      =  1.0,
+    .uartConfig.uartSoftIron_Angle      =  0.0,
 };
 
 UserConfigurationStruct gUserConfiguration;
 UserConfigurationStruct gTmpUserConfiguration;
+UserConfigurationUartStruct* pUserUartConfig;
 
 uint8_t UserDataBuffer[4096];
 volatile char   *info;
 BOOL configValid = FALSE;
 
-//void setUserMagAlignParams(magAlignUserParams_t *params)
-//{
-//    gUserConfiguration.hardIron_X      = params->hardIron_X;
-//    gUserConfiguration.hardIron_Y      = params->hardIron_Y;
-//    gUserConfiguration.softIron_Ratio  = params->softIron_Ratio;
-//    gUserConfiguration.softIron_Angle  = params->softIron_Angle;
-//}
+void setUserMagAlignParams(magAlignUserParams_t *params)
+{
+    gUserConfiguration.uartConfig.uartHardIron_X  = params->hardIron_X;
+    gUserConfiguration.uartConfig.uartHardIron_Y  = params->hardIron_Y;
+    gUserConfiguration.uartConfig.uartSoftIron_Ratio  = params->softIron_Ratio;
+    gUserConfiguration.uartConfig.uartSoftIron_Angle  = params->softIron_Angle;
+}
 
 void getUserMagAlignParams(magAlignUserParams_t *params)
 {
-//    params->hardIron_X     = gUserConfiguration.hardIron_X;
-//    params->hardIron_Y     = gUserConfiguration.hardIron_Y;
-//    params->softIron_Ratio = gUserConfiguration.softIron_Ratio;
-//    params->softIron_Angle = gUserConfiguration.softIron_Angle;
+    params->hardIron_X     = gUserConfiguration.uartConfig.uartHardIron_X;
+    params->hardIron_Y     = gUserConfiguration.uartConfig.uartHardIron_Y;
+    params->softIron_Ratio = gUserConfiguration.uartConfig.uartSoftIron_Ratio;
+    params->softIron_Angle = gUserConfiguration.uartConfig.uartSoftIron_Angle;
 }
 
 
 void userInitConfigureUnit()
 {
-    int       size      = sizeof(gUserConfiguration);        // total size in bytes
+    pUserUartConfig = &gUserConfiguration.uartConfig;
+    int       size  = sizeof(gUserConfiguration);        // total size in bytes
 
     // sanity check for maximum size of user config structure;
     if(size >= 0x4000){
@@ -124,10 +146,11 @@ void userInitConfigureUnit()
     gUserConfiguration.dataSize = sizeof(UserConfigurationStruct);
     memset(&gEcuConfig, 0, sizeof(gEcuConfig));
 
-    ApplyEcuSettings(&gEcuConfig);
+    LoadEcuBankSettings(&gEcuConfig);
 
     if(EEPROM_IsUserApplicationActive())
     {
+        ApplyEcuControlSettings(&gEcuConfig);
         ApplySystemParameters(&gEcuConfig);
     }
 
@@ -159,6 +182,67 @@ BOOL  SaveUserConfig(void)
 
 }
 
+BOOL ApplyLegacyConfigParameters()
+{
+    BOOL fApply = FALSE;
+    uint16_t orientation = GetNewOrientation();
+    uint16_t accelFiltr  = GetNewAccelFiltr();
+    uint16_t rateFiltr   = GetNewRateFiltr();
+    uint16_t ecuAddress  = GetNewEcuAddress();
+    uint16_t ecuBaudrate = GetNewEcuBaudrate();
+    uint16_t ecuUartBaudrate = GetNewEcuUartBaudrate();
+    uint16_t ecuUartPacketType = GetNewEcuPacketType();
+    uint16_t ecuUartPacketRate = GetNewEcuUartPacketRate();
+
+    if(ecuUartBaudrate != 0xFFFF){
+        fApply = TRUE;
+        gUserConfiguration.uartConfig.uartBaudRate = platformGetBaudRate(ecuUartBaudrate);
+    }
+
+    if(ecuUartPacketType != 0xFFFF){
+        uint16_t type = ((ecuUartPacketType >> 8) & 0xff) | ((ecuUartPacketType << 8) & 0xff00);
+        fApply = TRUE;
+        *(uint64_t *)gUserConfiguration.uartConfig.uartPacketType = type;
+    }
+    if(ecuUartPacketRate != 0xFFFF){
+        fApply = TRUE;
+        gUserConfiguration.uartConfig.uartPacketRate = platformGetPacketRate(ecuUartPacketRate);
+    }
+
+    if(orientation != 0xFFFF){
+        fApply = TRUE;
+        gUserConfiguration.ecuOrientation = orientation;
+    }
+    
+    if(accelFiltr != 0xFFFF){
+        gUserConfiguration.ecuFilterFreqAccel =  platformGetFilterFrequencyFromCounts(accelFiltr);
+        fApply = TRUE;
+    }
+
+    if(rateFiltr != 0xFFFF){
+        fApply = TRUE;
+        gUserConfiguration.ecuFilterFreqRate  = platformGetFilterFrequencyFromCounts(rateFiltr);;
+    }
+
+    if(ecuAddress != 0xFFFF){
+        fApply = TRUE;
+        gUserConfiguration.ecuAddress  = ecuAddress;
+    }
+
+    if(ecuBaudrate != 0xFFFF){
+        fApply = TRUE;
+        gUserConfiguration.ecuBaudRate = ecuBaudrate;
+    }
+
+    if(fApply){
+        if(!SaveUserConfig()){
+            return FALSE;
+        }
+        ResetChanges();
+    }
+
+    return TRUE;
+}
 
 BOOL LoadDefaultUserConfig(BOOL fSave)
 {
@@ -199,6 +283,7 @@ BOOL UpdateEcuConfig(EcuConfigurationStruct  *gEcuConfigPtr, BOOL fSave)
     gUserConfiguration.filterPs          = gEcuConfigPtr->digital_filter_ps;
     gUserConfiguration.orientationPs     = gEcuConfigPtr->orientation_ps;
     gUserConfiguration.userBehvPs        = gEcuConfigPtr->user_behavior_ps;
+    gUserConfiguration.magAlignPs        = gEcuConfigPtr->mag_align_ps;
 
     if(fSave){
         return SaveUserConfig();
@@ -243,11 +328,13 @@ ACEINNA_J1939_PACKET_TYPE is_valid_config_command(SAE_J1939_IDENTIFIER_FIELD *id
        ((ps_val >= SAE_J1939_GROUP_EXTENSION_ALGORITHM_RESET) && (ps_val <= SAE_J1939_GROUP_EXTENSION_ACCELERATION_PARAM)) ||
        (ps_val == SAE_J1939_GROUP_EXTENSION_BANK0) ||
        (ps_val == SAE_J1939_GROUP_EXTENSION_BANK1) ||
+       (ps_val == gEcuConfig.user_behavior_ps) ||
        (ps_val == gEcuConfig.alg_reset_ps) ||
        (ps_val == gEcuConfig.status_ps) ||  
        (ps_val == gEcuConfig.packet_rate_ps) ||
        (ps_val == gEcuConfig.packet_type_ps) ||
        (ps_val == gEcuConfig.digital_filter_ps) || 
+       (ps_val == gEcuConfig.mag_align_ps) || 
        (ps_val == gEcuConfig.orientation_ps))
     ) {
          return ACEINNA_J1939_CONFIG;
@@ -297,18 +384,9 @@ void  SetEcuOrientation(uint16_t orien_bits)
 }
 
 
-void  ApplyEcuSettings(void *pConfig)
+void  LoadEcuBankSettings(void *pConfig)
 {
     EcuConfigurationStruct *pEcuConfig = (EcuConfigurationStruct *)pConfig;
-
-    // Add/Remove/Verify ECU-specific parameters here
-    pEcuConfig->address           = gUserConfiguration.ecuAddress;
-    pEcuConfig->baudRate          = gUserConfiguration.ecuBaudRate;
-    pEcuConfig->packet_rate       = gUserConfiguration.ecuPacketRate;
-    pEcuConfig->accel_cut_off     = gUserConfiguration.ecuFilterFreqAccel;
-    pEcuConfig->rate_cut_off      = gUserConfiguration.ecuFilterFreqRate;
-    pEcuConfig->packet_type       = gUserConfiguration.ecuPacketType;
-    pEcuConfig->orien_bits        = gUserConfiguration.ecuOrientation;
 
     // Add/Remove/Verify payload specific codes here
     // If Payload-specific code here is zero - it will be substituted by predefined code
@@ -321,6 +399,7 @@ void  ApplyEcuSettings(void *pConfig)
     pEcuConfig->digital_filter_ps = gUserConfiguration.filterPs;
     pEcuConfig->orientation_ps    = gUserConfiguration.orientationPs;
     pEcuConfig->user_behavior_ps  = gUserConfiguration.userBehvPs;
+    pEcuConfig->mag_align_ps      = gUserConfiguration.magAlignPs;
     pEcuConfig->status_ps         = gUserConfiguration.statusPs;
 
 }
@@ -346,6 +425,22 @@ BOOL UseMags()
     return (gUserConfiguration.userBehavior & USER_BEHAVIOR_USE_MAGS_MASK) != 0? TRUE : FALSE;  
 }
 
+BOOL SwapPitchAndroll()
+{
+    return (gUserConfiguration.userBehavior & USER_BEHAVIOR_SWAP_PITCH_ROLL) != 0? TRUE : FALSE;  
+}
+
+BOOL UseNWUFrame()
+{
+    return (gUserConfiguration.userBehavior & USER_BEHAVIOR_NWU_FRAME) != 0? TRUE : FALSE;  
+}
+
+BOOL SwapRequestPGN()
+{
+    return (gUserConfiguration.userBehavior & USER_BEHAVIOR_SWAP_REQUEST_PGN) != 0? TRUE : FALSE;  
+}
+
+
 void  ApplySystemParameters(void *pConfig)
 {
     EcuConfigurationStruct *pEcuConfig = (EcuConfigurationStruct *)pConfig;
@@ -353,7 +448,62 @@ void  ApplySystemParameters(void *pConfig)
     platformSelectLPFilter(RATE_SENSOR,  pEcuConfig->rate_cut_off, TRUE);
     platformSelectLPFilter(ACCEL_SENSOR, pEcuConfig->accel_cut_off, TRUE);
     platformApplyOrientation(pEcuConfig->orien_bits);
-    userInitConfigureUart();
 
+    if(UseMags()){
+        platformForceMagUsage();
+    }
+    
+    UserInitConfigureUart();
+    platformSetEcuBaudrate(gUserConfiguration.ecuBaudRate);
+    platformSetEcuAddress(gUserConfiguration.ecuAddress);
 }
+
+void  ApplyEcuControlSettings(void *pConfig)
+{
+    EcuConfigurationStruct *pEcuConfig = (EcuConfigurationStruct *)pConfig;
+
+    // Add/Remove/Verify ECU-specific parameters here
+    pEcuConfig->address           = gUserConfiguration.ecuAddress;
+    pEcuConfig->baudRate          = gUserConfiguration.ecuBaudRate;
+    pEcuConfig->packet_rate       = gUserConfiguration.ecuPacketRate;
+    pEcuConfig->accel_cut_off     = gUserConfiguration.ecuFilterFreqAccel;
+    pEcuConfig->rate_cut_off      = gUserConfiguration.ecuFilterFreqRate;
+    pEcuConfig->packet_type       = gUserConfiguration.ecuPacketType;
+    pEcuConfig->orien_bits        = gUserConfiguration.ecuOrientation;
+    pEcuConfig->user_behavior     = gUserConfiguration.userBehavior;
+}
+
+void    UpdateEcuOrientationSettings(uint16_t data)
+{
+    gEcuConfig.orien_bits             = data;
+    gUserConfiguration.ecuOrientation = data;
+}
+
+void    UpdateEcuUartBaudrate(uint64_t data)
+{
+    gUserConfiguration.uartConfig.uartBaudRate = data;
+}
+
+void    UpdateEcuUartPacketRate(uint64_t data)
+{
+    gUserConfiguration.uartConfig.uartPacketRate = data;
+}
+
+void    UpdateEcuUartPacketType(uint64_t data)
+{
+    *(uint64_t *)gUserConfiguration.uartConfig.uartPacketType = data;
+}
+
+void    UpdateEcuAccelFilterSettings(uint16_t data)
+{
+    gEcuConfig.accel_cut_off              = data;
+    gUserConfiguration.ecuFilterFreqAccel = data;
+}
+
+void    UpdateEcuRateFilterSettings(uint16_t data)
+{
+    gEcuConfig.rate_cut_off     = data;
+    gUserConfiguration.ecuFilterFreqRate = data;
+}
+
 

@@ -26,7 +26,7 @@ limitations under the License.
 #ifndef _IMU_APP_VERSION_H
 #define _IMU_APP_VERSION_H
 
-#define  APP_VERSION_STRING  "VG_AHRS_J1939 1.0.3"
+#define  APP_VERSION_STRING  "VG_AHRS_J1939 03.01.09"
 
 
 #endif

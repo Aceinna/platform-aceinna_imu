@@ -60,7 +60,7 @@ static void _Algorithm();
 void InitUserAlgorithm()
 {
     // Initialize built-in algorithm structure
-    InitializeAlgorithmStruct(FREQ_200_HZ);
+    InitializeAlgorithmStruct(FREQ_200_HZ, OpenIMU300RI);
 
     // place additional required initialization here
     /* Set the configuration variables for AHRS solution
@@ -98,3 +98,32 @@ static void _Algorithm()
     // Aceinna VG/AHRS/INS algorithm
         EKF_Algorithm();
 }
+
+
+BOOL   getAlgorithmLinAccelDetectMode()
+{
+    return TRUE;  
+}
+
+BOOL   getAlgorithmAccelPredictMode()
+{
+    return FALSE;
+}
+
+float   getAlgorithmCoefOfReduceQ()
+{
+    // 0.0001 to 1 (1 to  10000)
+    return (float)10/10000;
+}
+
+float   getAlgorithmAccelSwitchDelay()
+{
+    // 0.01 to 10 (100 to 10000)
+    return (float)2000/1000;
+}     
+
+float   getAlgorithmRateIntegrationTime()      
+{
+    // 0.01 to 10 (100 to 10000)
+    return (float)2000/1000;
+}     

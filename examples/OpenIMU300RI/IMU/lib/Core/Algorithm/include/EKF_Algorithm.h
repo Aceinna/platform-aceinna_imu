@@ -172,6 +172,7 @@ void EKF_GetOperationalSwitches(uint8_t *EKF_LinAccelSwitch, uint8_t *EKF_TurnSw
 void EKF_SetInputStruct(double *accels, double *rates, double *mags,
                         gpsDataStruct_t *gps, odoDataStruct_t *odo,
                         BOOL ppsDetected);
+void EKF_SetSteeringAngle(real angle, uint16_t states);
 void EKF_SetOutputStruct(void);
 
 #endif /* _EKF_ALGORITHM_H_ */

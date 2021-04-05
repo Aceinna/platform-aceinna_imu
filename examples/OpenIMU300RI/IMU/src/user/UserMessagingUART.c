@@ -32,6 +32,7 @@ limitations under the License.
 #include "sensorsAPI.h"
 #include "userAPI.h"
 #include "appVersion.h"
+#include "magAPI.h"
 
 #include "UserMessagingUART.h"
 #include "UserConfiguration.h"
@@ -63,6 +64,7 @@ usr_packet_t userInputPackets[] = {
     {USR_IN_GET_VERSION,        "gV"}, 
     {USR_IN_RESET,              "rS"}, 
 // place new input packet code here, before USR_IN_MAX
+    {USR_IN_MAG_ALIGN,          "ma"},           // 0x6D 0x61
     {USR_IN_MAX,                {0xff, 0xff}},   //  "" 
 };
 
@@ -78,11 +80,12 @@ usr_packet_t userOutputPackets[] = {
     {USR_OUT_DATA2,             "z2"},
 // place new type and code here
     {USR_OUT_SCALED1,           "s1"},
-    {USR_OUT_MAX,               {0xff, 0xff}},   //  "" 
+    {USR_OUT_LEGACY_S1,         "S1"},
+    {USR_OUT_MAX,       {0xff, 0xff}},      //  "" 
 };
 
 volatile char   *info;
-static   int    _userPayloadLen = 0;
+static   int    _userPayloadLen    = 0;
 static   int    _outputPacketType  = USR_OUT_MAX;
 static   int    _inputPacketType   = USR_IN_MAX;
 
@@ -179,6 +182,10 @@ BOOL setUserPacketType(uint8_t *data, BOOL fApply)
             _outputPacketType = type;
             _userPayloadLen   = USR_OUT_SCALED1_PAYLOAD_LEN;
             break;
+        case USR_OUT_LEGACY_S1:          // packet with arbitrary data
+            _outputPacketType = type;
+            _userPayloadLen   = USR_OUT_LEGACY_S1_PAYLOAD_LEN ;
+            break;
         default:
             result = FALSE;
             break; 
@@ -218,7 +225,7 @@ int HandleUserInputPacket(UcbPacketStruct *ptrUcbPacket)
 {
     BOOL valid = TRUE;
     int ret = USER_PACKET_OK;
-//    userPacket *pkt =  (userPacket *)ptrUcbPacket->payload;
+    uint8_t retVal;
 
     /// call appropriate function based on packet type
 	switch (_inputPacketType) {
@@ -270,6 +277,10 @@ int HandleUserInputPacket(UcbPacketStruct *ptrUcbPacket)
                 valid = FALSE;
              }
              break;
+        case USR_IN_MAG_ALIGN:
+            retVal = ProcessMagAlignCmds((magAlignCmdPayload*)ptrUcbPacket->payload, &ptrUcbPacket->payloadLength);
+            valid  = Fill_MagAlignResponsePayload(retVal, ptrUcbPacket);
+            break;
         default:
              /// default handler - unknown packet
              valid = FALSE;

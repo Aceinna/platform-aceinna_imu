@@ -1,5 +1,5 @@
 {
-	"appVersion": "OpenIMU300ZI VG_AHRS_J1939 1.0.1",
+	"appVersion": "OpenIMU300RI VG_AHRS_J1939 03.01.04",
 	"type": "openimu",
 	"description": "9-axis OpenIMU with triaxial rate, acceleration, and magnetic measurement",
 	"userConfiguration": [
@@ -10,7 +10,11 @@
 		{ "paramId": 4, "category": "General","paramType": "select", "type": "int64", "name": "Packet Rate", "argument": "rate", "value_range":[-1,1],"value_accuracy":6, "options": [200, 100, 50, 20, 10, 5, 2, 0] },
 		{ "paramId": 5, "category": "General","paramType": "select", "type": "int64", "name": "Accel LPF", "argument": "xl_lpf", "value_range":[-1,1],"value_accuracy":6,"options": [50, 40, 25, 20, 10, 5, 2] },
 		{ "paramId": 6, "category": "General","paramType": "select", "type": "int64", "name": "Rate LPF", "argument": "rate_lpf", "value_range":[-1,1],"value_accuracy":6,"options": [50, 40, 25, 20, 10, 5, 2] },
-		{ "paramId": 7, "category": "General","paramType": "select", "type": "char8", "name": "Orientation", "argument": "orien", "value_range":[-1,1],"value_accuracy":6,"options": ["+X+Y+Z"] }
+		{ "paramId": 7, "category": "General","paramType": "select", "type": "char8", "name": "Orientation", "argument": "orien", "value_range":[-1,1],"value_accuracy":6,"options": ["+X+Y+Z"] },
+		{ "paramId": 8,  "category": "Advanced","paramType": "input", "type": "double", "name": "hard iron x", "argument": "hard_iron_x",     "value_range":[-1,1], "value_accuracy":6, "options": [0.0 ] },
+		{ "paramId": 9,  "category": "Advanced","paramType": "input", "type": "double", "name": "hard iron y", "argument": "hard_iron_y",     "value_range":[-1,1], "value_accuracy":6, "options": [0.0 ] },
+		{ "paramId": 10, "category": "Advanced","paramType": "input", "type": "double", "name": "soft iron ratio", "argument": "soft_iron_ratio", "value_range":[-1,1], "value_accuracy":6, "options": [1.0 ] },
+		{ "paramId": 11, "category": "Advanced","paramType": "input", "type": "double", "name": "soft iron angle", "argument": "soft_iron_angle", "value_range":[-1,1], "value_accuracy":6, "options": [0.0 ] }
 	],
 	"userMessages": {
 		"inputPackets": [{

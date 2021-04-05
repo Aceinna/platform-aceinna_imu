@@ -61,7 +61,7 @@ static void _GenerateDebugMessage(uint16_t dacqRate, uint16_t debugOutputFreq);
 void InitUserAlgorithm()
 {
     // Initialize built-in algorithm structure
-    InitializeAlgorithmStruct(FREQ_100_HZ);
+    InitializeAlgorithmStruct(FREQ_100_HZ, OpenIMU300RI);
 
     setLeverArm( (real)gUserConfiguration.leverArmBx,
                  (real)gUserConfiguration.leverArmBy,
@@ -276,3 +276,31 @@ static void _GenerateDebugMessage(uint16_t dacqRate, uint16_t debugOutputFreq)
     }
 }
 #endif // !INS_OFFLINE
+
+BOOL   getAlgorithmLinAccelDetectMode()
+{
+    return TRUE;  
+}
+
+BOOL   getAlgorithmAccelPredictMode()
+{
+    return FALSE;
+}
+
+float   getAlgorithmCoefOfReduceQ()
+{
+    // 0.0001 to 1 (1 to  10000)
+    return (float)10/10000;
+}
+
+float   getAlgorithmAccelSwitchDelay()
+{
+    // 0.01 to 10 (100 to 10000)
+    return (float)2000/1000;
+}     
+
+float   getAlgorithmRateIntegrationTime()      
+{
+    // 0.01 to 10 (100 to 10000)
+    return (float)2000/1000;
+}     

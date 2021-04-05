@@ -31,21 +31,6 @@ limitations under the License.
 #include "Indices.h"
 #include "eepromAPI.h"
 
-// Default user configuration structure
-// So Far Not Saved into EEPROM
-// Do Not remove - just add extra parameters if needed
-// Change default settings  if desired
-UserConfigurationUartStruct gUserUartConfig = {
-    .dataCRC             =  0,
-    .dataSize            =  sizeof(UserConfigurationUartStruct),
-    .userUartBaudRate    =  115200,  
-    .userPacketType      =  "z1",  
-    .userPacketRate      =  0,  
-    .lpfAccelFilterFreq  =  25,
-    .lpfRateFilterFreq   =  25,
-    .orientation         =  "+X+Y+Z",
-    // add default parameter values here, if desired
-};
 
 uint8_t UserDataBuffer[4096];
 static  volatile char   *info;
@@ -64,7 +49,7 @@ static  volatile char   *info;
 BOOL  UpdateSystemParameter(uint32_t number, uint64_t data, BOOL fApply)
 {
      BOOL result = TRUE;
-     uint64_t *ptr = (uint64_t *)&gUserUartConfig;
+     uint64_t *ptr = (uint64_t *)pUserUartConfig;
 
      if(number < USER_UART_CRC || number >= USER_UART_MAX_PARAM ){
          return FALSE;
@@ -73,12 +58,43 @@ BOOL  UpdateSystemParameter(uint32_t number, uint64_t data, BOOL fApply)
      switch (number) {
             case USER_UART_BAUD_RATE:
                 result = platformSetBaudRate((int)data, fApply);
+                if(fApply && result == TRUE){
+                    UpdateEcuUartBaudrate(data);
+                }
                 break;
             case USER_UART_PACKET_TYPE:
                 result = setUserPacketType((uint8_t*)&data, fApply);
+                if(fApply && result == TRUE){
+                    UpdateEcuUartPacketType(data);
+                }
                 break;
             case USER_UART_PACKET_RATE:
                 result = platformSetPacketRate((int)data, fApply);
+                if(fApply && result == TRUE){
+                    UpdateEcuUartPacketRate(data);
+                }
+                break;
+            case USER_UART_LPF_ACCEL_TYPE:
+                result = platformSelectLPFilter(ACCEL_SENSOR, (uint32_t)data, fApply);
+                if(fApply && result == TRUE){
+                    UpdateEcuAccelFilterSettings((uint16_t)data);
+                }
+                break;
+            case USER_UART_LPF_RATE_TYPE:
+                result = platformSelectLPFilter(RATE_SENSOR, (uint32_t)data, fApply);
+                if(fApply && result == TRUE){
+                    UpdateEcuRateFilterSettings((uint16_t)data);
+                }
+                break;
+            case  USER_UART_ORIENTATION:
+                {
+                    uint64_t tmp = data;
+                    result = platformSetOrientation((uint16_t*)&data, fApply);
+                    if(fApply && result == TRUE){
+                        UpdateEcuOrientationSettings((uint16_t)data);
+                        data = tmp;
+                    }
+                }
                 break;
             case  USER_UART_CRC:
             case  USER_UART_CONFIG_SIZE:
@@ -101,16 +117,11 @@ BOOL  UpdateSystemParameter(uint32_t number, uint64_t data, BOOL fApply)
 }
 
 
-void userInitConfigureUart()
+void UserInitConfigureUart()
 {
-
-     uint64_t *ptr  = (uint64_t*)&gUserUartConfig;
-   
-    // apply parameters to the platform
-    for(int i = USER_UART_BAUD_RATE; i < USER_UART_MAX_PARAM; i++){
-        UpdateSystemParameter(i, ptr[i], TRUE);
-    }
-
+    platformSetBaudRate(pUserUartConfig->uartBaudRate, TRUE);
+    setUserPacketType(pUserUartConfig->uartPacketType, TRUE);
+    platformSetPacketRate(pUserUartConfig->uartPacketRate, TRUE);
     info = getBuildInfo();
 } 
 
@@ -282,7 +293,7 @@ BOOL GetUserConfig(userConfigPayload*  pld, uint8_t *payloadLen)
 {
     uint32_t offset, i;
     BOOL lenValid = TRUE;
-    uint64_t *ptr = (uint64_t *)&gUserUartConfig;
+    uint64_t *ptr = (uint64_t *)pUserUartConfig;
 
     lenValid    = (pld->numParams + pld->paramOffset) <= USER_UART_MAX_PARAM;
     
@@ -316,7 +327,7 @@ BOOL GetUserParam(userParamPayload*  pld, uint8_t *payloadLen)
 {
     uint32_t offset;
     BOOL offsetValid;
-    uint64_t *ptr = (uint64_t *)&gUserUartConfig;
+    uint64_t *ptr = (uint64_t *)pUserUartConfig;
 
     offsetValid = pld->paramNum < USER_UART_MAX_PARAM;        
     
@@ -346,19 +357,131 @@ BOOL GetUserParam(userParamPayload*  pld, uint8_t *payloadLen)
 BOOL GetAllUserParams(allUserParamsPayload*  pld, uint8_t *payloadLen)
 {
     uint32_t offset, i, numParams;
-    uint64_t *ptr = (uint64_t *)&gUserUartConfig;
+    uint64_t *ptr = (uint64_t *)pUserUartConfig;
 
     numParams   = USER_UART_MAX_PARAM;
     
     offset = 0;
 
     for (i = 0; i < numParams; i++, offset++){
-            pld->parameters[i] = ptr[offset];
+        pld->parameters[i] = ptr[offset];
     }
 
-    *payloadLen     = numParams* 8;  
+    *payloadLen = numParams* 8;  
 
     return TRUE;
 }
 
+BOOL  OrientationToAscii(uint8_t *asciiOrien, uint16_t hexOrien)
+{
+
+   uint64_t orientation = 0LL;
+
+   uint16_t tmp = hexOrien;
+   uint16_t fwdSign;
+   uint16_t rightSign;
+   uint16_t downSign;
+   uint16_t fwdAxis;
+   uint16_t rightAxis;
+   uint16_t downAxis;
+
+// Forward axis
+    fwdSign   = tmp & 0x0001U;
+
+    if(fwdSign == 0){
+        fwdSign = 0x2B;
+    }else {
+        fwdSign = 0x2D;
+    }
+    fwdAxis   = (tmp >> 1U) & 0x0003U;
+    
+    switch(fwdAxis){
+        case 0:
+            fwdAxis = 0x58; // X
+            break;
+        case 1:
+            fwdAxis = 0x59; // Y
+            break;
+        case 2:
+            fwdAxis = 0x5A; // Z
+            break;
+        case 3:
+            return FALSE;   // invalid
+    }
+
+// Right axis
+
+   rightSign = (tmp >> 3U) & 0x0001U;
+   rightAxis = (tmp >> 4U) & 0x0003U;
+
+    if(rightSign == 0){
+        rightSign = 0x2B;
+    }else {
+        rightSign = 0x2D;
+    }
+    
+    switch(rightAxis){
+        case 0:
+            rightAxis = 0x59; // Y
+            break;
+        case 1:
+            rightAxis = 0x5A; // Z
+            break;
+        case 2:
+            rightAxis = 0x58; // X
+            break;
+        case 3:
+            return FALSE;   // invalid
+    }
+
+// Down axis
+   downSign  = (tmp >> 6U) & 0x0001U;
+   downAxis  = (tmp >> 7U) & 0x0003U;
+
+    if(downSign == 0){
+        downSign = 0x2B;
+    }else {
+        downSign = 0x2D;
+    }
+    
+    switch(downAxis){
+        case 0:
+            downAxis = 0x5A; // Z
+            break;
+        case 1:
+            downAxis = 0x58; // X
+            break;
+        case 2:
+            downAxis = 0x59; // Y
+            break;
+        case 3:
+            return FALSE;   // invalid
+    }
+
+    orientation        = ((uint64_t)fwdSign)            |
+                         ((uint64_t)fwdAxis   << 8)     |
+                         ((uint64_t)rightSign << 16)    |
+                         ((uint64_t)rightAxis << 24)    |
+                         ((uint64_t)downSign  << 32)    |
+                         ((uint64_t)downAxis  << 40)    ; 
+
+    memcpy(asciiOrien, (uint8_t *)&orientation, 8);
+    return TRUE;
+}
+
+
+void      UpdateUARTAccelFilterSettings(uint16_t data)
+{
+    pUserUartConfig->uartLpfAccelFilterFreq = data;
+}
+
+void      UpdateUARTRateFilterSettings(uint16_t data)
+{
+    pUserUartConfig->uartLpfRateFilterFreq = data;
+}
+
+void      UpdateUARTOrientationSettings(uint16_t data)
+{
+    OrientationToAscii((uint8_t *)&pUserUartConfig->uartOrientation,  data);
+}
 

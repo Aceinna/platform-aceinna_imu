@@ -31,6 +31,8 @@ limitations under the License.
 #include "platformAPI.h"
 #include "sensorsAPI.h"
 #include "userAPI.h"
+#include "magAPI.h"
+#include "magAlign.h"
 #include "appVersion.h"
 
 #include "UserMessagingUART.h"
@@ -56,6 +58,7 @@ usr_packet_t userInputPackets[] = {
     {USR_IN_GET_VERSION,        "gV"}, 
     {USR_IN_RESET,              "rS"}, 
 // place new input packet code here, before USR_IN_MAX
+    {USR_IN_MAG_ALIGN,          "ma"},           // 0x6D 0x61
     {USR_IN_MAX,                {0xff, 0xff}},   //  "" 
 };
 
@@ -73,6 +76,7 @@ usr_packet_t userOutputPackets[] = {
     {USR_OUT_SCALED1,           "s1"},
     {USR_OUT_ANG1,              "a1"},   
     {USR_OUT_ANG2,              "a2"},   
+    {USR_OUT_LEGACY_S1,         "S1"},
     {USR_OUT_MAX,               {0xff, 0xff}},   //  "" 
 };
 
@@ -173,6 +177,7 @@ BOOL setUserPacketType(uint8_t *data, BOOL fApply)
         case USR_OUT_SCALED1:          // packet with arbitrary data
             _outputPacketType = type;
             _userPayloadLen   = USR_OUT_SCALED1_PAYLOAD_LEN;
+            break;
         case USR_OUT_ANG1:            // packet with sensors data. Change at will
             _outputPacketType = type;
             _userPayloadLen   = USR_OUT_ANG1_PAYLOAD_LEN;
@@ -180,6 +185,10 @@ BOOL setUserPacketType(uint8_t *data, BOOL fApply)
         case USR_OUT_ANG2:            // packet with sensors data. Change at will
             _outputPacketType = type;
             _userPayloadLen   = USR_OUT_ANG2_PAYLOAD_LEN;
+            break;
+        case USR_OUT_LEGACY_S1:       // legacy scaled sensors data packet
+            _outputPacketType = type;
+            _userPayloadLen   = USR_OUT_LECAGY_S1_PAYLOAD_LEN;
             break;
         default:
             result = FALSE;
@@ -210,6 +219,7 @@ int getUserPayloadLength(void)
     return _userPayloadLen;
 }
 
+
 /******************************************************************************
  * @name HandleUserInputPacket - API
  * @brief general handler
@@ -220,7 +230,7 @@ int HandleUserInputPacket(UcbPacketStruct *ptrUcbPacket)
 {
     BOOL valid = TRUE;
     int ret = USER_PACKET_OK;
-//    userPacket *pkt =  (userPacket *)ptrUcbPacket->payload;
+    uint8_t retVal;
 
     /// call appropriate function based on packet type
 	switch (_inputPacketType) {
@@ -272,6 +282,10 @@ int HandleUserInputPacket(UcbPacketStruct *ptrUcbPacket)
                 valid = FALSE;
              }
              break;
+        case USR_IN_MAG_ALIGN:
+            retVal = ProcessMagAlignCmds((magAlignCmdPayload*)ptrUcbPacket->payload, &ptrUcbPacket->payloadLength);
+            valid  = Fill_MagAlignResponsePayload(retVal, ptrUcbPacket);
+            break;
         default:
              /// default handler - unknown packet
              valid = FALSE;

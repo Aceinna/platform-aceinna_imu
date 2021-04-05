@@ -90,7 +90,7 @@ typedef  struct {
             uint8_t slope_sensor       :   1;     // ss2 packet
             uint8_t angular_rate       :   1;     // angular rate packet
             uint8_t accelerator        :   1;     // acceleration packet
-            uint8_t reserve            :   5;
+            uint8_t reserved           :   5;
         } b;
         
         uint8_t r;
@@ -115,9 +115,8 @@ typedef struct {
 
 // user behavior set payload format
 typedef struct {
-    uint8_t dest_address;                  // target's address
-    uint8_t  restart_on_overrange;         // restart or not while over range
-    uint8_t  dynamic_motion;               // dynamic motion
+    uint8_t  dest_address;                  // target's address
+    uint8_t  data[7]; 
 } USER_BEHAVIOR_PAYLOAD;
 
 

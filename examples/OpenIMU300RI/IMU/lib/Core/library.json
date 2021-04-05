@@ -14,6 +14,8 @@
             "-I GPS/include",
             "-I Odo",
             "-I Odo/include",
+            "-I SteerAlgo",
+            "-I SteerAlgo/include",
             "-I Math",
             "-I Math/include",
             "-I SPIComm",

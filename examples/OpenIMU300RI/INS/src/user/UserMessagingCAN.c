@@ -63,7 +63,7 @@ void ProcessRequest(void *dsc)
 {
   struct sae_j1939_rx_desc   *desc = (struct sae_j1939_rx_desc*)dsc;
   SAE_J1939_IDENTIFIER_FIELD *ident;
-  uint8_t pf_val, req_pf_val, req_ps_val;
+  uint8_t pf_val, req_pf_val, req_ps_val, req_page_val;
   uint8_t *command;
   
   // check desc
@@ -85,10 +85,20 @@ void ProcessRequest(void *dsc)
   if (command == NULL)
     return;
   
-  pf_val = ident->pdu_format;
-  req_pf_val = command[1];
-  req_ps_val = command[2];
-  
+  pf_val       = ident->pdu_format;
+
+  if(SwapRequestPGN()){
+  // New format
+      req_ps_val    = command[0];
+      req_pf_val    = command[1];
+      req_page_val  = command[2];
+  }else{
+    // Legacy format
+      req_page_val  = command[0];
+      req_pf_val    = command[1];
+      req_ps_val    = command[2];
+  }
+
   if (pf_val != SAE_J1939_PDU_FORMAT_REQUEST)
     return;
   
@@ -98,8 +108,8 @@ void ProcessRequest(void *dsc)
     case SAE_J1939_PDU_FORMAT_254:
         {
          	if(req_ps_val == SAE_J1939_GROUP_EXTENSION_SOFTWARE_VERSION){
-            aceinna_j1939_send_software_version();
-        }
+                aceinna_j1939_send_software_version();
+            }
         }
         break;
     // ecu id request
@@ -148,24 +158,30 @@ void ProcessRequest(void *dsc)
         status_bits.sensorOverRange = gBitStatus.sensorStatus.bit.overRange;
         aceinna_j1939_send_status_packet(ACEINNA_SAE_J1939_BUILTIN_STATUS, (void *)&status_bits);
       }
-      // packet rate request 
+      // pasket rate request 
       else if ((req_ps_val == gEcuConfigPtr->packet_rate_ps)) {
         aceinna_j1939_send_packet_rate(gEcuConfigPtr->packet_rate);
       }
-      // packet type request 
+      // pasket type request 
       else if ((req_ps_val == gEcuConfigPtr->packet_type_ps)) {
         aceinna_j1939_send_packet_type(gEcuConfigPtr->packet_type);
       }
       // filter settings request 
       else if ((req_ps_val == gEcuConfigPtr->digital_filter_ps)) {
-        aceinna_j1939_send_digital_filter(gEcuConfigPtr->accel_cut_off, gEcuConfigPtr->rate_cut_off);
+        uint8_t   accelFreq = platformGetFilterFrequency(ACCEL_SENSOR, FALSE);
+        uint8_t   rateFreq  = platformGetFilterFrequency(RATE_SENSOR, FALSE);
+        aceinna_j1939_send_digital_filter(accelFreq, rateFreq);
       }
       // orientation settings request 
       else if ((req_ps_val == gEcuConfigPtr->orientation_ps)) {
         uint8_t bytes[2];
-        bytes[0] = (gEcuConfigPtr->orien_bits >> 8) & 0xff;
-        bytes[1] = (gEcuConfigPtr->orien_bits) & 0xff;
+        uint16_t    tmp = platformGetOrientationWord();
+        bytes[0] = (tmp >> 8) & 0xff;
+        bytes[1] = tmp & 0xff;
         aceinna_j1939_send_orientation(bytes);
+      }  // behaviour settings request 
+      else if ((req_ps_val == gEcuConfigPtr->user_behavior_ps)) {
+        aceinna_j1939_send_user_behavior(gEcuConfigPtr->user_behavior);
       }
 
       break;
@@ -183,11 +199,11 @@ void ProcessRequest(void *dsc)
 void ProcessVehiclePosition(struct sae_j1939_rx_desc   *desc)
 {
 	GPS_DATA *posData = (GPS_DATA*)desc->rx_buffer.Data; 
-	canInputNavParams.latitude  = (double)posData->latitude*0.0000001 - 210;	// degrees
-	canInputNavParams.longitude = (double)posData->longitude*0.0000001 - 210;	// degrees
+	canInputNavParams.latitude  = (double)posData->latitude*0.000001 - 210;	// degrees
+	canInputNavParams.longitude = (double)posData->longitude*0.000001 - 210;	// degrees
 	canInputNavParams.status   |= J1939_GPS_POSITION_DATA_UPDATED;
-    gCanGps.latitude            = (double)posData->latitude*0.0000001 - 210;	// degrees
-	gCanGps.longitude           = (double)posData->longitude*0.0000001 - 210;	// degrees
+    gCanGps.latitude            = (double)posData->latitude*0.000001 - 210;	// degrees
+	gCanGps.longitude           = (double)posData->longitude*0.000001 - 210;	// degrees
 }
 
 void ProcessWheelSpeed(struct sae_j1939_rx_desc   *desc)
@@ -360,7 +376,6 @@ void EnqeuePeriodicDataPackets(int latency, int sendPeriodicPackets)
   }
 
   // ss2 packets supported by 9DOF 
-#ifndef GPS_OVER_CAN
   if (packets_to_send & ACEINNA_SAE_J1939_PACKET_LATLONG) {
       GPS_DATA  gpsData;
       
@@ -376,15 +391,31 @@ void EnqeuePeriodicDataPackets(int latency, int sendPeriodicPackets)
 
        aceinna_j1939_send_GPS(&gpsData);
   }
-#endif
+
 
    // acceleration packets
    if (packets_to_send & ACEINNA_SAE_J1939_PACKET_ACCELERATION) {
         double accelData[3];
         GetAccelData_mPerSecSq(accelData);
-        accel_data.acceleration_x = (uint16_t)(((accelData[0]) + 320.00) * 100);
-        accel_data.acceleration_y = (uint16_t)(((accelData[1]) + 320.00) * 100);
-        accel_data.acceleration_z = (uint16_t)(((accelData[2]) + 320.00) * 100);
+        
+		// use NWU frame
+        if(UseNWUFrame()){
+		accelData[1] *= -1;
+		accelData[2] *= -1;
+        }
+        
+		// scale data
+        accel_data.acceleration_x =  (uint16_t)(((accelData[0]) + 320.00) * 100);
+        accel_data.acceleration_y =  (uint16_t)(((accelData[1]) + 320.00) * 100);
+        accel_data.acceleration_z =  (uint16_t)(((accelData[2]) + 320.00) * 100);
+
+        // swap pitch and roll
+        if(SwapPitchAndroll()){
+        double tmp                 = accel_data.acceleration_x;
+        accel_data.acceleration_x  = accel_data.acceleration_y;
+        accel_data.acceleration_y  = tmp;
+        }
+
 
         accel_data.lateral_merit        = 3;
         accel_data.longitudinal_merit   = 3;
@@ -417,6 +448,12 @@ void EnqeuePeriodicDataPackets(int latency, int sendPeriodicPackets)
         rate[0] = (float)(rateData[0]);
         rate[1] = (float)(rateData[1]);
         rate[2] = (float)(rateData[2]);
+     }
+     // swap pitch and roll
+     if(SwapPitchAndroll()){
+    double tmp = rate[0];
+    rate[0]    = rate[1];
+    rate[1]    = tmp;
      }
 
      for (i = 0; i < 3; i++)
@@ -535,48 +572,6 @@ void ProcessEcuCommands(void * command, uint8_t ps, uint8_t addr)
           aceinna_j1939_send_algrst_cfgsave(&target, 0, 1);  
       }
   }
-  else if  (ps == gEcuConfigPtr->packet_rate_ps)
-  {
-    // Update packet rate command
-    RATE_CONFIG_PAYLOAD * pld = (RATE_CONFIG_PAYLOAD *)command;
-    if (pld->dest_address == *(uint8_t *)gEcu->addr) {
-      gEcuConfigPtr->packet_rate       =  pld->odr;
-      gUserConfiguration.ecuPacketRate =  pld->odr;
-    }
-  }
-  else if  (ps == gEcuConfigPtr->packet_type_ps)
-  {
-    // Update set of transmitted packets
-    PACKET_TYPE_PAYLOAD * pld = (PACKET_TYPE_PAYLOAD *)command;
-    if(pld->dest_address == *(uint8_t *)gEcu->addr) {
-      gEcuConfigPtr->packet_type       = pld->type1_bits.r | (pld->type2_bits.r << 8);
-      gUserConfiguration.ecuPacketType = gEcuConfigPtr->packet_type;
-    }
-  }
-  else if  (ps == gEcuConfigPtr->digital_filter_ps)
-  {
-    // Update cutoff frequencies for digital filters
-    DIGITAL_FILTER_PAYLOAD * pld = (DIGITAL_FILTER_PAYLOAD *)command;
-    if (pld->dest_address == *(uint8_t *)gEcu->addr) {
-      gEcuConfigPtr->rate_cut_off            = pld->rate_cutoff;
-      gEcuConfigPtr->accel_cut_off           = pld->accel_cutoff;
-      gUserConfiguration.ecuFilterFreqAccel  = pld->accel_cutoff;
-      gUserConfiguration.ecuFilterFreqRate   = pld->rate_cutoff;
-      platformSelectLPFilter(RATE_SENSOR,  gEcuConfigPtr->rate_cut_off, TRUE);
-      platformSelectLPFilter(ACCEL_SENSOR, gEcuConfigPtr->accel_cut_off, TRUE);
-    }
-  }
-  else if  (ps == gEcuConfigPtr->orientation_ps)
-  {
-    // Update unit orientation
-    ORIENTATION_SETTING * pld = (ORIENTATION_SETTING *)command;
-    if (pld->dest_address == *(uint8_t *)gEcu->addr) {
-      gEcuConfigPtr->orien_bits = pld->orien_bits[0] << 8 | pld->orien_bits[1];
-      if(platformApplyOrientation(gEcuConfigPtr->orien_bits)){
-          gUserConfiguration.ecuOrientation = gEcuConfigPtr->orien_bits;
-      }
-    }
-  }   
   else if  (ps == gEcuConfigPtr->mag_align_ps)
   {
     // Update unit orientation
@@ -591,41 +586,104 @@ void ProcessEcuCommands(void * command, uint8_t ps, uint8_t addr)
 		aceinna_j1939_send_mag_align(cmd, state, params);  
     }
   }   
-  else if (ps == gEcuConfigPtr->user_behavior_ps) 
+  else if  (ps == gEcuConfigPtr->packet_rate_ps)
   {
-    // Update algotirtm behaviour
-    USER_BEHAVIOR_PAYLOAD * pld = (USER_BEHAVIOR_PAYLOAD *)command;
+    // Update packet rate command
+    RATE_CONFIG_PAYLOAD * pld = (RATE_CONFIG_PAYLOAD *)command;
     if (pld->dest_address == *(uint8_t *)gEcu->addr) {
-      gEcuConfigPtr->restart_on_overrange = pld->restart_on_overrange;
-      gEcuConfigPtr->dynamic_motion       = pld->dynamic_motion;
+      gEcuConfigPtr->packet_rate       =  pld->odr;
+      gUserConfiguration.ecuPacketRate =  pld->odr;
     }
   }
+  else if  (ps == gEcuConfigPtr->packet_type_ps)
+  {
+    // Update set of transmitted packets
+    PACKET_TYPE_PAYLOAD * pld = (PACKET_TYPE_PAYLOAD *)command;
+    if(pld->dest_address == *(uint8_t *)gEcu->addr) {
+      gEcuConfigPtr->packet_type       = pld->type[0] | (pld->type[1] << 8);
+      gUserConfiguration.ecuPacketType = gEcuConfigPtr->packet_type;
+    }
+  }
+  else if  (ps == gEcuConfigPtr->digital_filter_ps)
+  {
+    // Update cutoff frequencies for digital filters
+    DIGITAL_FILTER_PAYLOAD * pld = (DIGITAL_FILTER_PAYLOAD *)command;
+    if (pld->dest_address == *(uint8_t *)gEcu->addr) {
+      gEcuConfigPtr->rate_cut_off            = pld->rate_cutoff;
+      gEcuConfigPtr->accel_cut_off           = pld->accel_cutoff;
+      gUserConfiguration.ecuFilterFreqAccel  = pld->accel_cutoff;
+      gUserConfiguration.ecuFilterFreqRate   = pld->rate_cutoff;
+      platformSelectLPFilter(RATE_SENSOR,  gEcuConfigPtr->rate_cut_off, TRUE);
+      platformSelectLPFilter(ACCEL_SENSOR, gEcuConfigPtr->accel_cut_off, TRUE);
+      UpdateUARTAccelFilterSettings(gEcuConfigPtr->accel_cut_off);
+      UpdateUARTRateFilterSettings(gEcuConfigPtr->rate_cut_off);
+    }
+  }
+  else if  (ps == gEcuConfigPtr->orientation_ps)
+  {
+    // Update unit orientation
+    ORIENTATION_SETTING * pld = (ORIENTATION_SETTING *)command;
+    if (pld->dest_address == *(uint8_t *)gEcu->addr) {
+      gEcuConfigPtr->orien_bits = pld->orien_bits[0] << 8 | pld->orien_bits[1];
+      if(platformApplyOrientation(gEcuConfigPtr->orien_bits)){
+          gUserConfiguration.ecuOrientation = gEcuConfigPtr->orien_bits;
+          UpdateUARTOrientationSettings(gEcuConfigPtr->orien_bits);
+      }
+    }
+  }   
   else if (ps == SAE_J1939_GROUP_EXTENSION_BANK0)
   {
       // Reassign pdu-specific codes
-      BANK0_PS_PAYLOAD * pld = (BANK0_PS_PAYLOAD *)command;
+    BANK0_PS_PAYLOAD * pld = (BANK0_PS_PAYLOAD *)command;
     if (pld->dest_address == *(uint8_t *)gEcu->addr) {
-      gEcuConfigPtr->alg_reset_ps    = pld->alg_reset_ps;
-      gEcuConfigPtr->status_ps       = pld->status_ps;
-      gEcuConfigPtr->mag_align_ps    = pld->mag_align_ps;
-      UpdateEcuConfig(gEcuConfigPtr, FALSE);
-  }
+        uint8_t *pPld = command;
+        BOOL  fError = FALSE;
+        for(int i = 1; i < 8; i++){
+            if(pPld[i] != 0 && (pPld[i] < ACEINNA_J1939_MIN_CMD_PS || pPld[i] > ACEINNA_J1939_MAX_CMD_PS)){
+                fError = TRUE;   
+            }
+        } 
+        if(!fError){
+            gEcuConfigPtr->alg_reset_ps    = pld->alg_reset_ps;
+            gEcuConfigPtr->status_ps       = pld->status_ps;
+            gEcuConfigPtr->mag_align_ps    = pld->mag_align_ps;
+            UpdateEcuConfig(gEcuConfigPtr, FALSE);
+        }
+    }
   }
   else if (ps == SAE_J1939_GROUP_EXTENSION_BANK1)
   {
       // Reassign pdu-specific codes
       BANK1_PS_PAYLOAD * pld = (BANK1_PS_PAYLOAD *)command;
-    if (pld->dest_address == *(uint8_t *)gEcu->addr) {
-      gEcuConfigPtr->packet_rate_ps        = pld->packet_rate_ps;
-      gEcuConfigPtr->packet_type_ps        = pld->packet_type_ps;
-      gEcuConfigPtr->digital_filter_ps     = pld->digital_filter_ps;
-      gEcuConfigPtr->orientation_ps        = pld->orientation_ps;
-      gEcuConfigPtr->user_behavior_ps      = pld->user_behavior_ps;
-      UpdateEcuConfig(gEcuConfigPtr, FALSE);
-    }
+      if (pld->dest_address == *(uint8_t *)gEcu->addr) {
+            uint8_t *pPld = command;
+            BOOL  fError = FALSE;
+            for(int i = 1; i < 8; i++){
+            if(pPld[i] != 0 && (pPld[i] < ACEINNA_J1939_MIN_CMD_PS || pPld[i] > ACEINNA_J1939_MAX_CMD_PS)){
+                fError = TRUE;   
+            }
+        } 
+        if(!fError){
+            gEcuConfigPtr->packet_rate_ps        = pld->packet_rate_ps;
+            gEcuConfigPtr->packet_type_ps        = pld->packet_type_ps;
+            gEcuConfigPtr->digital_filter_ps     = pld->digital_filter_ps;
+            gEcuConfigPtr->orientation_ps        = pld->orientation_ps;
+            gEcuConfigPtr->user_behavior_ps      = pld->user_behavior_ps;
+            UpdateEcuConfig(gEcuConfigPtr, FALSE);
+        }
+     }
   }    
+    else if (ps == gEcuConfigPtr->user_behavior_ps) 
+  {
+        // Update algotirtm behaviour
+        USER_BEHAVIOR_PAYLOAD * pld = (USER_BEHAVIOR_PAYLOAD *)command;
+        if (pld->dest_address == *(uint8_t *)gEcu->addr) {
+            uint16_t behavior = (pld->data[1] << 8) | pld->data[0];
+            gEcuConfigPtr->user_behavior    = behavior;
+            gUserConfiguration.userBehavior = behavior;
+        }
+  }
   
-  return;  
 }
 
 

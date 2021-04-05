@@ -26,9 +26,80 @@ limitations under the License.
 #include "GlobalConstants.h"
 #include "filter.h"
 
+
+
 /// User defined configuration strucrture
 ///Please notice, that parameters are 64 bit to accomodate double types as well as longer string types
 
+typedef struct {
+    uint64_t           dataCRC;             /// CRC of user configuration structure CRC-16
+    uint64_t           dataSize;            /// Size of the user configuration structure 
+    
+    int64_t            uartBaudRate;        /// baudrate of user UART, bps. 
+                                            /// valid options are:
+                                            /// 4800
+                                            /// 9600
+                                            /// 19200
+                                            /// 38400
+                                            /// 57600
+                                            /// 115200
+                                            /// 230400
+                                            /// 460800
+    uint8_t            uartPacketType[8];   /// User packet to be continiously sent by unit
+                                            /// Packet types defined in structure UserOutPacketType
+                                            /// in file UserMessaging.h
+                                            
+    int64_t            uartPacketRate;      /// Packet rate for continiously output packet, Hz.
+                                            /// Valid settings are: 0 ,2, 5, 10, 20, 25, 50, 100, 200 
+
+    int64_t            uartLpfAccelFilterFreq;  /// built-in lpf filter cutoff frequency selection for accelerometers   
+    int64_t            uartLpfRateFilterFreq;   /// built-in lpf filter cutoff frequency selection for rate sensors   
+                                            /// Options are:
+                                            /// 0  -  Filter turned off
+                                            /// 50 -  Butterworth LPF 50HZ
+                                            /// 20 -  Butterworth LPF 20HZ
+                                            /// 10 -  Butterworth LPF 10HZ
+                                            /// 05 -  Butterworth LPF 5HZ
+                                            /// 02 -  Butterworth LPF 2HZ
+                                            /// 25 -  Butterworth LPF 25HZ
+                                            /// 40 -  Butterworth LPF 40HZ
+    
+    uint8_t           uartOrientation[8];   /// unit orientation in format 0x0000000000ddrrff
+                                            /// where   dd - down axis, rr - right axis, ff - forward axis
+                                            /// next axis values a valid :  
+                                            /// 'X' (0x58) -> plus  X, 'Y' (0x59) -> plus Y,  'Z' (0x5a) -> plus Z
+                                            /// 'x' (0x78) -> minus X, 'y' (0x79) -> minus Y, 'z' (0x7a) ->minusZ
+
+    //***************************************************************************************
+    // here is the border between arbitrary parameters and platform configuration parameters
+    //***************************************************************************************
+    int64_t           uartGpsBaudRate;      /// baudrate of GPS UART, bps. 
+                                            /// valid options are:
+                                            /// 4800
+                                            /// 9600
+                                            /// 19200
+                                            /// 38400
+                                            /// 57600
+                                            /// 115200
+                                            /// 230400
+    int64_t           uartGpsProtocol;      /// protocol of GPS receicer. 
+                                            /// so far valid options are:
+                                            /// NMEA_TEXT
+                                            /// NOVATEL_BINARY
+    double            uartHardIron_X;
+    double            uartHardIron_Y;
+    double            uartSoftIron_Ratio;
+    double            uartSoftIron_Angle;
+
+    // place new arbitrary configuration parameters here
+    // parameter size should even to 8 bytes
+    // Add parameter offset in UserConfigParamOffset structure if validation or
+    // special processing required 
+
+} UserConfigurationUartStruct;
+
+/// User defined configuration strucrture
+///Please notice, that parameters are 64 bit to accomodate double types as well as longer string types
 typedef struct {
     uint64_t           dataCRC;             // CRC of user configuration structure CRC-16
     uint64_t           dataSize;            // Size of the user configuration structure 
@@ -76,65 +147,22 @@ typedef struct {
     uint16_t           filterPs;            // ps value of lpf
     uint16_t           orientationPs;       // ps value of orientation
     uint16_t           userBehvPs;          // ps value of user behavior
+    uint16_t           magAlignPs;          // ps value of mag alignment command
+    float              hardIron_X;
+    float              hardIron_Y;
+    float              softIron_Ratio;
+    float              softIron_Angle;
+                                            
+    UserConfigurationUartStruct uartConfig;
+
 } UserConfigurationStruct;
 
-/// User defined configuration strucrture
-///Please notice, that parameters are 64 bit to accomodate double types as well as longer string types
-
-typedef struct {
-    uint64_t           dataCRC;             /// CRC of user configuration structure CRC-16
-    uint64_t           dataSize;            /// Size of the user configuration structure 
-    
-    int64_t            userUartBaudRate;    /// baudrate of user UART, bps. 
-                                            /// valid options are:
-                                            /// 4800
-                                            /// 9600
-                                            /// 19200
-                                            /// 38400
-                                            /// 57600
-                                            /// 115200
-                                            /// 230400
-                                            /// 460800
-    uint8_t            userPacketType[8];   /// User packet to be continiously sent by unit
-                                            /// Packet types defined in structure UserOutPacketType
-                                            /// in file UserMessaging.h
-                                            
-    int64_t            userPacketRate;      /// Packet rate for continiously output packet, Hz.
-                                            /// Valid settings are: 0 ,2, 5, 10, 20, 25, 50, 100, 200 
-
-    int64_t            lpfAccelFilterFreq;  /// built-in lpf filter cutoff frequency selection for accelerometers   
-    int64_t            lpfRateFilterFreq;   /// built-in lpf filter cutoff frequency selection for rate sensors   
-                                            /// Options are:
-                                            /// 0  -  Filter turned off
-                                            /// 50 -  Butterworth LPF 50HZ
-                                            /// 20 -  Butterworth LPF 20HZ
-                                            /// 10 -  Butterworth LPF 10HZ
-                                            /// 05 -  Butterworth LPF 5HZ
-                                            /// 02 -  Butterworth LPF 2HZ
-                                            /// 25 -  Butterworth LPF 25HZ
-                                            /// 40 -  Butterworth LPF 40HZ
-    
-    uint8_t           orientation[8];         /// unit orientation in format 0x0000000000ddrrff
-                                            /// where   dd - down axis, rr - right axis, ff - forward axis
-                                            /// next axis values a valid :  
-                                            /// 'X' (0x58) -> plus  X, 'Y' (0x59) -> plus Y,  'Z' (0x5a) -> plus Z
-                                            /// 'x' (0x78) -> minus X, 'y' (0x79) -> minus Y, 'z' (0x7a) ->minusZ
-
-    //***************************************************************************************
-    // here is the border between arbitrary parameters and platform configuration parameters
-    //***************************************************************************************
-
-    // place new arbitrary configuration parameters here
-    // parameter size should even to 8 bytes
-    // Add parameter offset in UserConfigParamOffset structure if validation or
-    // special processing required 
-
-} UserConfigurationUartStruct;
+extern UserConfigurationUartStruct* pUserUartConfig;
 
 enum{
 //*****************************************************************************************
 // These parateters are not saved into eeprom as of yet
-    USER_UART_CRC                  = 0,
+    USER_UART_CRC                  = 0,   // 0
     USER_UART_CONFIG_SIZE             ,   // 1
     USER_UART_BAUD_RATE               ,   // 2 
     USER_UART_PACKET_TYPE             ,   // 3 
@@ -142,7 +170,14 @@ enum{
     USER_UART_LPF_ACCEL_TYPE          ,   // 5  prefered LPF filter type for accelerometer
     USER_UART_LPF_RATE_TYPE           ,   // 6  prefered LPF filter type for rate sensor
     USER_UART_ORIENTATION             ,   // 7  unit orientation
-    USER_UART_MAX_PARAM                   // 8   
+//*****************************************************************************************
+    USER_GPS_BAUD_RATE                ,   // 8
+    USER_GPS_PROTOCOL                 ,   // 9
+    USER_HARD_IRON_X                  ,   // 10 
+    USER_HARD_IRON_Y                  ,   // 11
+    USER_SOFT_IRON_RATIO              ,   // 12
+    USER_SOFT_IRON_ANGLE              ,   // 13
+    USER_UART_MAX_PARAM                   // 14   
 };
 
 #define MAX_SYSTEM_PARAM USER_ORIENTATION
@@ -157,8 +192,11 @@ extern int userPacketOut;
 #define INVALID_VALUE           -2
 #define INVALID_PAYLOAD_SIZE    -3
 
-#define USER_BEHAVIOR_RUN_ALGORITHM_MASK 0x0001
-#define USER_BEHAVIOR_USE_MAGS_MASK      0x0002
+#define USER_BEHAVIOR_RUN_ALGORITHM_MASK    0x8000
+#define USER_BEHAVIOR_USE_MAGS_MASK         0x4000
+#define USER_BEHAVIOR_SWAP_PITCH_ROLL       0x0008
+#define USER_BEHAVIOR_NWU_FRAME             0x0040
+#define USER_BEHAVIOR_SWAP_REQUEST_PGN      0x0200
 // define additional algorithm flavours here
 
 extern UserConfigurationStruct gUserConfiguration;
@@ -171,9 +209,25 @@ extern BOOL      checkIfUserEEPROMErased(void);
 extern BOOL      loadUserConfigFromEeprom(uint8_t *ptrToUserConfigInRam, int *userConfigSize);
 extern BOOL      SaveUserConfig(void);
 extern BOOL      LoadDefaultUserConfig(BOOL fSave);
-extern void      ApplyEcuSettings(void* pEcuConfig);
+extern void      ApplyEcuControlSettings(void* pEcuConfig);
 extern void      ApplySystemParameters(void* pEcuConfig);
-extern void      userInitConfigureUart();
+extern void      UserInitConfigureUart();
+extern void      CopyUserUartConfig(UserConfigurationUartStruct *ext, BOOL toLocal);
+extern void      UpdateEcuAccelFilterSettings(uint16_t data);
+extern void      UpdateEcuRateFilterSettings(uint16_t data);
+extern void      UpdateEcuOrientationSettings(uint16_t data);
+extern void      UpdateUARTAccelFilterSettings(uint16_t data);
+extern void      UpdateUARTRateFilterSettings(uint16_t data);
+extern void      UpdateUARTOrientationSettings(uint16_t data);
+extern void      UpdateEcuUartBaudrate(uint64_t data);
+extern void      UpdateEcuUartPacketType(uint64_t data);
+extern void      UpdateEcuUartPacketRate(uint64_t data);
+extern void      LoadEcuBankSettings(void *pConfig);
+extern BOOL      ApplyLegacyConfigParameters();
+extern BOOL      SwapPitchAndroll();
+extern BOOL      UseNWUFrame();
+extern BOOL      SwapRequestPGN();
+extern BOOL      OrientationToAscii(uint8_t *asciiOrien, uint16_t hexOrien);
 
 
 

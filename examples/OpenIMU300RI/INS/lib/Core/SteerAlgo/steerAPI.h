@@ -1,13 +1,13 @@
-/*****************************************************************************
- * @file appVersion.h
+/** ***************************************************************************
+ * @file odoApi.h Odometer interface.
  *
  * THIS CODE AND INFORMATION ARE PROVIDED "AS IS" WITHOUT WARRANTY OF ANY
  * KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
  * PARTICULAR PURPOSE.
  *
- * @brief Version definition based on UCB serial protocol.
- ******************************************************************************/
+ * @brief This is a generalized odometer interface.
+ *****************************************************************************/
 /*******************************************************************************
 Copyright 2018 ACEINNA, INC
 
@@ -23,10 +23,21 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 *******************************************************************************/
-#ifndef _IMU_APP_VERSION_H
-#define _IMU_APP_VERSION_H
 
-#define  APP_VERSION_STRING  "INS_J1939 03.01.09"
+#ifndef STEER_API_H
+#define STEER_API_H
 
+#include <stdint.h>
+#include "GlobalConstants.h"
 
-#endif
+typedef struct  {
+    uint8_t  update;             // 1 if contains new data
+    real     angle;              // streering angle floating point
+    int16_t  intAngle;           // streering angle as message - weighted
+    int16_t  sRate;              // stering angle rate
+    uint16_t steerAlgoStates;
+} steerDataStruct_t;
+
+extern steerDataStruct_t gSteerAngle;
+
+#endif /* ODO_API_H */

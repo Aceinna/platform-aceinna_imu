@@ -90,7 +90,7 @@ typedef  struct {
             uint8_t slope_sensor       :   1;     // ss2 packet
             uint8_t angular_rate       :   1;     // angular rate packet
             uint8_t accelerator        :   1;     // acceleration packet
-            uint8_t reserve            :   5;
+            uint8_t reserved           :   5;
         } b;
         
         uint8_t r;
@@ -115,10 +115,16 @@ typedef struct {
 
 // user behavior set payload format
 typedef struct {
-    uint8_t dest_address;                  // target's address
-    uint8_t  restart_on_overrange;         // restart or not while over range
-    uint8_t  dynamic_motion;               // dynamic motion
+    uint8_t  dest_address;                  // target's address
+    uint8_t  data[7]; 
 } USER_BEHAVIOR_PAYLOAD;
+
+
+// mag align payload
+typedef struct {
+    uint8_t dest_address;                  // target's address
+    uint8_t cmd[7];                        // command 
+} MAG_ALIGN_PAYLOAD;
 
 
 // Angle alarm set payload format
@@ -154,7 +160,6 @@ extern void  ProcessRequest(void *dsc);
 extern void  ProcessEcuCommands(void * command, uint8_t ps, uint8_t addr);
 extern void  PrepareJ1939DataPackets(void);
 extern void  EnqeuePeriodicDataPackets(int latency, int sendPeriodicPackets);
-extern void  ProcessDataPackets(void *dsc);
 
 
 
