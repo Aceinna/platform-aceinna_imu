@@ -209,7 +209,8 @@ extern BOOL      checkIfUserEEPROMErased(void);
 extern BOOL      loadUserConfigFromEeprom(uint8_t *ptrToUserConfigInRam, int *userConfigSize);
 extern BOOL      SaveUserConfig(void);
 extern BOOL      LoadDefaultUserConfig(BOOL fSave);
-extern void      ApplyEcuControlSettings(void* pEcuConfig);
+extern void      ApplyEcuFactorySettings(void* pEcuConfig);
+extern void      ApplyEcuUserSettings(void* pEcuConfig);
 extern void      ApplySystemParameters(void* pEcuConfig);
 extern void      UserInitConfigureUart();
 extern void      CopyUserUartConfig(UserConfigurationUartStruct *ext, BOOL toLocal);
@@ -228,6 +229,7 @@ extern BOOL      SwapPitchAndroll();
 extern BOOL      UseNWUFrame();
 extern BOOL      SwapRequestPGN();
 extern BOOL      OrientationToAscii(uint8_t *asciiOrien, uint16_t hexOrien);
+extern void      CheckUpdateCanPacketTypeRate();
 
 
 

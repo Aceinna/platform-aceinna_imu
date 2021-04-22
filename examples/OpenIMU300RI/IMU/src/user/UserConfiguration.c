@@ -150,8 +150,10 @@ void userInitConfigureUnit()
 
     if(EEPROM_IsUserApplicationActive())
     {
-        ApplyEcuControlSettings(&gEcuConfig);
+        ApplyEcuUserSettings(&gEcuConfig);
         ApplySystemParameters(&gEcuConfig);
+    }else {
+        ApplyEcuFactorySettings(&gEcuConfig);
     }
 
     info = getBuildInfo();
@@ -185,11 +187,15 @@ BOOL  SaveUserConfig(void)
 BOOL ApplyLegacyConfigParameters()
 {
     BOOL fApply = FALSE;
+    
     uint16_t orientation = GetNewOrientation();
     uint16_t accelFiltr  = GetNewAccelFiltr();
     uint16_t rateFiltr   = GetNewRateFiltr();
     uint16_t ecuAddress  = GetNewEcuAddress();
     uint16_t ecuBaudrate = GetNewEcuBaudrate();
+    uint16_t ecuPacketType     = GetNewEcuPacketType();
+    uint16_t ecuPacketRate     = GetNewEcuPacketRate();
+
     uint16_t ecuUartBaudrate = GetNewEcuUartBaudrate();
     uint16_t ecuUartPacketType = GetNewEcuPacketType();
     uint16_t ecuUartPacketRate = GetNewEcuUartPacketRate();
@@ -204,6 +210,7 @@ BOOL ApplyLegacyConfigParameters()
         fApply = TRUE;
         *(uint64_t *)gUserConfiguration.uartConfig.uartPacketType = type;
     }
+
     if(ecuUartPacketRate != 0xFFFF){
         fApply = TRUE;
         gUserConfiguration.uartConfig.uartPacketRate = platformGetPacketRate(ecuUartPacketRate);
@@ -233,6 +240,17 @@ BOOL ApplyLegacyConfigParameters()
         fApply = TRUE;
         gUserConfiguration.ecuBaudRate = ecuBaudrate;
     }
+
+    if(ecuPacketRate != 0xFFFF){
+        fApply = TRUE;
+        gUserConfiguration.ecuPacketRate = ecuPacketRate;
+    }
+
+    if(ecuPacketType != 0xFFFF){
+        fApply = TRUE;
+        gUserConfiguration.ecuPacketType = ecuPacketType;
+    }
+
 
     if(fApply){
         if(!SaveUserConfig()){
@@ -456,9 +474,11 @@ void  ApplySystemParameters(void *pConfig)
     UserInitConfigureUart();
     platformSetEcuBaudrate(gUserConfiguration.ecuBaudRate);
     platformSetEcuAddress(gUserConfiguration.ecuAddress);
+    platformSetEcuPacketRate(gUserConfiguration.ecuPacketRate);
+    platformSetEcuPacketType(gUserConfiguration.ecuPacketType);
 }
 
-void  ApplyEcuControlSettings(void *pConfig)
+void  ApplyEcuUserSettings(void *pConfig)
 {
     EcuConfigurationStruct *pEcuConfig = (EcuConfigurationStruct *)pConfig;
 
@@ -471,6 +491,16 @@ void  ApplyEcuControlSettings(void *pConfig)
     pEcuConfig->packet_type       = gUserConfiguration.ecuPacketType;
     pEcuConfig->orien_bits        = gUserConfiguration.ecuOrientation;
     pEcuConfig->user_behavior     = gUserConfiguration.userBehavior;
+}
+
+void  ApplyEcuFactorySettings(void *pConfig)
+{
+    EcuConfigurationStruct *pEcuConfig = (EcuConfigurationStruct *)pConfig;
+
+    pEcuConfig->address           = platformGetEcuAddress();
+    pEcuConfig->baudRate          = platformGetEcuBaudrate();
+    pEcuConfig->packet_rate       = platformGetEcuPacketRate();
+    pEcuConfig->packet_type       = platformGetEcuPacketType();
 }
 
 void    UpdateEcuOrientationSettings(uint16_t data)
@@ -506,4 +536,11 @@ void    UpdateEcuRateFilterSettings(uint16_t data)
     gUserConfiguration.ecuFilterFreqRate = data;
 }
 
+void    CheckUpdateCanPacketTypeRate()
+{
+    if(EEPROM_IsUserApplicationActive() == FALSE){
+        gEcuConfig.packet_rate       = platformGetEcuPacketRate();
+        gEcuConfig.packet_type       = platformGetEcuPacketType();
+    }
+}
 

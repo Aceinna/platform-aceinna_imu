@@ -1,5 +1,5 @@
 {
-	"appVersion": "OpenIMU300ZI INS 1.1.0",
+	"appVersion": "OpenIMU300ZI INS 3.1.9",
 	"description": "9-axis OpenIMU with triaxial rate, acceleration, and magnetic measurement",
 	"userConfiguration": [
     { "paramId": 0,"category": "General", "paramType": "disabled", "type": "uint64", "name": "Data CRC" },

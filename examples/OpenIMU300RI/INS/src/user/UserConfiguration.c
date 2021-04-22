@@ -541,4 +541,11 @@ void    UpdateEcuUartPacketType(uint64_t data)
     *(uint64_t *)gUserConfiguration.uartConfig.uartPacketType = data;
 }
 
+void    CheckUpdateCanPacketTypeRate()
+{
+    if(EEPROM_IsUserApplicationActive() == FALSE){
+        gEcuConfig.packet_rate       = platformGetEcuPacketRate();
+        gEcuConfig.packet_type       = platformGetEcuPacketType();
+    }
+}
 

@@ -1,5 +1,5 @@
 {
-	"appVersion": "OpenIMU300RI VG_AHRS_J1939 03.01.04",
+	"appVersion": "OpenIMU300RI VG_AHRS_J1939 03.01.09",
 	"type": "openimu",
 	"description": "9-axis OpenIMU with triaxial rate, acceleration, and magnetic measurement",
 	"userConfiguration": [

@@ -251,6 +251,7 @@ extern BOOL      UseNWUFrame();
 extern BOOL      SwapRequestPGN();
 extern BOOL      OrientationToAscii(uint8_t *asciiOrien, uint16_t hexOrien);
 extern BOOL      UseAutoBaud();
+extern void      CheckUpdateCanPacketTypeRate();
 
 
 
