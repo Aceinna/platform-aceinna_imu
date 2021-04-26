@@ -35,7 +35,7 @@ limitations under the License.
 
 #include "algorithm.h"
 #include "EKF_Algorithm.h"
-#include "BitStatus.h"
+#include "BITStatus.h"
 #include "UserConfiguration.h"
 #include "bsp.h"
 #include "debug.h"
