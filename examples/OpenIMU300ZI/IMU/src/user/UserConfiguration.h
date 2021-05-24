@@ -76,6 +76,19 @@ typedef struct {
     // parameter size should even to 8 bytes
     // Add parameter offset in UserConfigParamOffset structure if validation or
     // special processing required 
+    int64_t           uartGpsBaudRate;      /// baudrate of GPS UART, bps. 
+                                            /// valid options are:
+                                            /// 4800
+                                            /// 9600
+                                            /// 19200
+                                            /// 38400
+                                            /// 57600
+                                            /// 115200
+                                            /// 230400
+    int64_t           uartGpsProtocol;      /// protocol of GPS receicer. 
+                                            /// so far valid options are:
+                                            /// NMEA_TEXT
+                                            /// NOVATEL_BINARY
 
     double   hardIron_X;
     double   hardIron_Y;
@@ -157,6 +170,8 @@ typedef enum{
     USER_LAST_SYSTEM_PARAM = USER_ORIENTATION, 
 //*****************************************************************************************
 // add parameter enumerator here while adding new parameter in user UserConfigurationStruct
+    USER_GPS_BAUD_RATE                ,   // 8
+    USER_GPS_PROTOCOL                 ,   // 9
     USER_HARD_IRON_X                  ,
     USER_HARD_IRON_Y                  ,
     USER_SOFT_IRON_RATIO              ,

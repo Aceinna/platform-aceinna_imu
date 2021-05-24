@@ -37,7 +37,6 @@ limitations under the License.
 #endif
 
 #include "UserConfiguration.h"
-
 #include "algorithmAPI.h"
 #include "algorithm.h"
 #include "UserAlgorithm.h"
@@ -54,15 +53,24 @@ odoDataStruct_t gOdo;
 
 //
 static void _Algorithm();
-static void _InitAlgo(uint8_t algoType);
 
-// Initialize GPS algorithm variables
+// Initialize algorithm variables
 void InitUserAlgorithm()
 {
     // Initialize built-in algorithm structure
-    InitializeAlgorithmStruct(FREQ_100_HZ);
+    InitializeAlgorithmStruct(FREQ_100_HZ, OpenIMU300ZI);
 
     // place additional required initialization here
+    /* Set the configuration variables for INS solution.
+     * Enable GPS
+     * Enable stationary yaw lock
+     * Enable zero velocity detection by IMU
+     */
+    enableMagInAlgorithm(FALSE);
+    enableGpsInAlgorithm(TRUE);
+    enableOdoInAlgorithm(FALSE);
+    enableStationaryLockYaw(TRUE);  // enable yaw lock when vehicle is static
+    enableImuStaticDetect(TRUE);    // enable zero velocity detection by IMU
     setLeverArm( (real)gUserConfiguration.leverArmBx,
                  (real)gUserConfiguration.leverArmBy,
                  (real)gUserConfiguration.leverArmBz );
@@ -75,12 +83,6 @@ void InitUserAlgorithm()
 void *RunUserNavAlgorithm(double *accels, double *rates, double *mags,
                           gpsDataStruct_t *gps, odoDataStruct_t *odo, BOOL ppsDetected)
 {
-    // This can be set at startup based on the packet type selected
-    static uint8_t algoType = INS;
-
-    // Initialize variable related to the UserNavAlgorithm
-    _InitAlgo(algoType);
-
     // Populate the EKF input data structure
     EKF_SetInputStruct(accels, rates, mags, gps, odo, ppsDetected);
 
@@ -99,55 +101,37 @@ void *RunUserNavAlgorithm(double *accels, double *rates, double *mags,
 
 
 //
-static void _InitAlgo(uint8_t algoType)
-{
-    // Initialize the timer variables
-    static uint8_t initAlgo = 1;
-    if(initAlgo) {
-        // Reset 'initAlgo' so this is not executed more than once.  This
-        //   prevents the algorithm from being switched during run-time.
-        initAlgo = 0;
-        
-        // Set the configuration variables for a VG-type solution
-        //   (useMags = 0 forces the VG solution)
-        gAlgorithm.Behavior.bit.freeIntegrate      = 0;
-        gAlgorithm.Behavior.bit.useMag             = 0;
-        gAlgorithm.Behavior.bit.useGPS             = 0;
-        gAlgorithm.Behavior.bit.useOdo             = 0;
-        gAlgorithm.Behavior.bit.restartOnOverRange = 0;
-        gAlgorithm.Behavior.bit.dynamicMotion      = 1;
-
-        // Set the system configuration based on system type
-        switch( algoType ) {
-            case VG:
-                // Nothing additional to do (already configured for a VG
-                //   solution)
-                break;
-            case AHRS:
-                // Set the configuration variables for AHRS solution
-                //   (useMags = 1 and enable mags)
-                enableMagInAlgorithm(TRUE);
-                break;
-            case INS:
-                /* Set the configuration variables for INS solution.
-                 * (Enable GPS and set algorithm calling frequency to 100Hz)
-                 */
-                enableMagInAlgorithm(FALSE);
-                enableGpsInAlgorithm(TRUE);
-                enableOdoInAlgorithm(FALSE);
-                gAlgorithm.callingFreq = FREQ_100_HZ;  // redundant; set above
-                break;
-            default:
-                // Nothing to do
-                break;
-        }
-    }
-}
-
-
-//
 static void _Algorithm()
 {
     // Aceinna VG/AHRS/INS algorithm
     EKF_Algorithm();
+}
+
+
+BOOL   getAlgorithmLinAccelDetectMode()
+{
+    return TRUE;  
+}
+
+BOOL   getAlgorithmAccelPredictMode()
+{
+    return FALSE;
+}
+
+float   getAlgorithmCoefOfReduceQ()
+{
+    // 0.0001 to 1 (1 to  10000)
+    return (float)10/10000;
+}
+
+float   getAlgorithmAccelSwitchDelay()
+{
+    // 0.01 to 10 (100 to 10000)
+    return (float)2000/1000;
+}     
+
+float   getAlgorithmRateIntegrationTime()      
+{
+    // 0.01 to 10 (100 to 10000)
+    return (float)2000/1000;
 }

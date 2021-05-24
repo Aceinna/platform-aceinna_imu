@@ -122,5 +122,6 @@ BOOL Fill_a2PacketPayload(uint8_t *payload, uint8_t *payloadLen);
 BOOL Fill_s1PacketPayload(uint8_t *payload, uint8_t *payloadLen);
 BOOL Fill_e1PacketPayload(uint8_t *payload, uint8_t *payloadLen);
 BOOL Fill_e2PacketPayload(uint8_t *payload, uint8_t *payloadLen);
+BOOL Fill_MagAlignResponsePayload(int8_t state, UcbPacketStruct *ptrUcbPacket);
 
 #endif

@@ -33,6 +33,7 @@ float TimingVars_GetTime(void);
 
 void  TimingVars_SetTMin(float tMin);
 float TimingVars_GetTMin(void);
+void TimingVars_dacqFrequency(int freq);
 
 void TimingVars_DisplayTimerVars(signed long timeStep);
 

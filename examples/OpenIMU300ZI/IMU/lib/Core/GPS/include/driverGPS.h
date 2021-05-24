@@ -218,8 +218,8 @@ typedef struct  {
 	int    lon_deg;
 	int    lon_min;
 	double lon_min_fraction;
-    char latSign;
-    char lonSign;
+    int8_t latSign;
+    int8_t lonSign;
 } NmeaLatLonSTRUCT;
 
 // delta struct

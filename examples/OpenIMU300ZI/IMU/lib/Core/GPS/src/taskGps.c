@@ -51,7 +51,7 @@ void TaskGps(void const *argument)
     int    bytesAvailable;
     static uint32_t updateHDOP, pollSirfCnt;
 
-    while(gpsSerialChan == UART_CHANNEL_NONE) {
+    while(gpsChan == UART_CHANNEL_NONE) {
         // nothing to do untill port decided
             OS_Delay( 1000);
         }
@@ -91,6 +91,31 @@ void TaskGps(void const *argument)
             }
         }
     }
+}
+
+
+/** ****************************************************************************
+ * @name ProcGps
+ * @brief task callback with the main loop for handle GPS data, make sure the
+ *        GPS handling function gets called on a regular basis;.
+ * gCalibration.productConfiguration.bit.hasGps = 1; by setting:
+ * <hasGps>true</hasGps> and <useGps>true</useGps> in name_IMU380.xml file
+ * @param N/A
+ * @retval N/A
+ ******************************************************************************/
+void ProcGps()
+{
+    static BOOL firstTime = TRUE;
+
+    if(firstTime){
+        // start out with the DOP high
+        firstTime = 0;
+        gGpsDataPtr->HDOP = 50.0;
+        initGPSHandler();
+    }
+
+    GPSHandler();
+
 }
 
 #endif // GPS

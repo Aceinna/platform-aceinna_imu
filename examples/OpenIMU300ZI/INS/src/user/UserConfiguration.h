@@ -25,6 +25,7 @@ limitations under the License.
 
 #include "GlobalConstants.h"
 #include "UserMessagingUART.h"
+#include "filter.h"
 
 /// User defined configuration strucrture
 ///Please notice, that parameters are 64 bit to accomodate double types as well as longer string types
@@ -72,7 +73,7 @@ typedef struct {
     // here is the border between arbitrary parameters and platform configuration parameters
     //***************************************************************************************
 
-    int64_t          gpsBaudRate;           /// baudrate of GPS UART, bps. 
+    int64_t          uartGpsBaudRate;           /// baudrate of GPS UART, bps. 
                                             /// valid options are:
                                             /// 4800
                                             /// 9600
@@ -81,7 +82,7 @@ typedef struct {
                                             /// 57600
                                             /// 115200
                                             /// 230400
-    int64_t          gpsProtocol;           /// protocol of GPS receicer. 
+    int64_t          uartGpsProtocol;           /// protocol of GPS receicer. 
                                             /// so far valid options are:
                                             /// NMEA_TEXT
                                             /// NOVATEL_BINARY
@@ -100,12 +101,72 @@ typedef struct {
     double pointOfInterestBx;
     double pointOfInterestBy;
     double pointOfInterestBz;
+    uint64_t appBehavior;
+
+    //***************************************************************************************
+    // SPI-Related specific parameters
+    //***************************************************************************************
+    int64_t           spiSyncRate;          /// SPI data ready rate
+                                            /// 0 - 0 Hz   
+                                            /// 1 - 200 Hz   
+                                            /// 2 - 100 Hz   
+                                            /// 3 - 50 Hz   
+                                            /// 4 - 25 Hz   
+                                            /// 5 - 20 Hz   
+                                            /// 6 - 10 Hz   
+                                            /// 7 - 5 Hz   
+                                            /// 8 - 4 Hz   
+                                            /// 9 - 2 Hz   
+
+    int64_t           spiOrientation;       /// orientation for SPI mode
+                                               //0x0000	+Ux	+Uy	+Uz
+	                                           //0x0009	-Ux	-Uy	+Uz
+	                                           //0x0023	-Uy	+Ux	+Uz
+	                                           //0x002A	+Uy	-Ux	+Uz
+	                                           //0x0041	-Ux	+Uy	-Uz
+	                                           //0x0048	+Ux	-Uy	-Uz
+	                                           //0x0062	+Uy	+Ux	-Uz
+	                                           //0x006B	-Uy	-Ux	-Uz
+	                                           //0x0085	-Uz	+Uy	+Ux
+	                                           //0x008C	+Uz	-Uy	+Ux
+	                                           //0x0092	+Uy	+Uz	+Ux
+	                                           //0x009B	-Uy	-Uz	+Ux
+	                                           //0x00C4	+Uz	+Uy	-Ux
+	                                           //0x00CD	-Uz	-Uy	-Ux
+	                                           //0x00D3	-Uy	+Uz	-Ux
+	                                           //0x00DA	+Uy	-Uz	-Ux
+	                                           //0x0111	-Ux	+Uz	+Uy
+	                                           //0x0118	+Ux	-Uz	+Uy
+	                                           //0x0124	+Uz	+Ux	+Uy
+	                                           //0x012D	-Uz	-Ux	+Uy
+	                                           //0x0150	+Ux	+Uz	-Uy
+	                                           //0x0159	-Ux	-Uz	-Uy
+	                                           //0x0165	-Uz	+Ux	-Uy
+	                                           //0x016C	+Uz	-Ux	-Uy
+
+    int64_t           spiAccelLpfType;        /// built-in lpf filter cutoff frequency selection for accelerometers   
+    int64_t           spiGyroLpfType;         /// built-in lpf filter cutoff frequency selection for rate sensors   
+                                              /// Options are:
+                                              //  UNFILTERED          = 0x00,
+                                              //  FIR_40HZ_LPF        = 0x03,  // Bartlett LPF 40HZ
+                                              //  FIR_20HZ_LPF        = 0x04,  // Bartlett LPF 20HZ
+                                              //  FIR_10HZ_LPF        = 0x05,  // Bartlett LPF 10HZ
+                                              //  FIR_05HZ_LPF        = 0x06,  // Bartlett LPF 5HZ
+                                              //  IIR_50HZ_LPF        = 0x30, // Butterworth LPF 50HZ
+                                              //  IIR_20HZ_LPF        = 0x40, // Butterworth LPF 20HZ
+                                              // IIR_10HZ_LPF         = 0x50, // Butterworth LPF 10HZ
+                                              //  IIR_05HZ_LPF        = 0x60, // Butterworth LPF 5HZ
+                                              //  IIR_02HZ_LPF        = 0x70, // Butterworth LPF 2HZ
+                                              //  IIR_25HZ_LPF        = 0x80, // Butterworth LPF 25HZ
+                                              //  IIR_40HZ_LPF        = 0x90, // Butterworth LPF 40HZ
+    uint64_t          extSyncFreq;            /// external sync frequency
+
 } UserConfigurationStruct;
 
 typedef enum {
 //*****************************************************************************************
 // add system parameters here and reassign USER_LAST_SYSTEM_PARAM (DO NOT CHANGE THIS!!!)
-    USER_CRC                       = 0,
+    USER_CRC                       = 0,   // 0
     USER_DATA_SIZE                    ,   // 1
     USER_USER_BAUD_RATE               ,   // 2  order of next 4 parameters
     USER_USER_PACKET_TYPE             ,   // 3  of required unit output bandwidth
@@ -113,21 +174,29 @@ typedef enum {
     USER_LPF_ACCEL_TYPE               ,   // 5  prefered LPF filter type for accelerometer
     USER_LPF_RATE_TYPE                ,   // 6  prefered LPF filter type for rate sensor
     USER_ORIENTATION                  ,   // 7  unit orientation
-    USER_LAST_SYSTEM_PARAM = USER_ORIENTATION,
+    USER_LAST_SYSTEM_PARAM = USER_ORIENTATION,  // 7
 //*****************************************************************************************
 // add parameter enumerator here while adding new parameter in user UserConfigurationStruct
-    USER_GPS_BAUD_RATE                ,
-    USER_GPS_PROTOCOL                 ,
-    USER_HARD_IRON_X                  ,
-    USER_HARD_IRON_Y                  ,
-    USER_SOFT_IRON_RATIO              ,
-    USER_SOFT_IRON_ANGLE              ,
+    USER_GPS_BAUD_RATE                ,   // 8
+    USER_GPS_PROTOCOL                 ,   // 9 
+    USER_HARD_IRON_X                  ,   // 10
+    USER_HARD_IRON_Y                  ,   // 11
+    USER_SOFT_IRON_RATIO              ,   // 12
+    USER_SOFT_IRON_ANGLE              ,   // 13
     USER_LEVER_ARM_BX                 ,
     USER_LEVER_ARM_BY                 ,
     USER_LEVER_ARM_BZ                 ,
     USER_POINT_OF_INTEREST_BX         ,
     USER_POINT_OF_INTEREST_BY         ,
     USER_POINT_OF_INTEREST_BZ         ,
+    USER_LAST_UART_PARAM              ,   // 14
+    USER_APPLICATION_BEHAVIOR         ,
+// spi-specific parameters
+    USER_SPI_SYNC_RATE                ,   // SPI data ready rate
+    USER_SPI_ORIENTATION              ,   // SPI mode orientation
+    USER_SPI_ACCEl_LPF                ,   // SPI mode accel lpf
+    USER_SPI_RATE_LPF                 ,   // SPI mode gyro  lpf
+    USER_EXT_SYNC_FREQ                ,   // Extern sync frequency applied tp SYNC/1PPS input
     USER_MAX_PARAM
 } UserConfigParamNumber;
 
@@ -138,6 +207,7 @@ extern int userPacketOut;
 #define INVALID_PARAM           -1
 #define INVALID_VALUE           -2
 #define INVALID_PAYLOAD_SIZE    -3
+#define APP_BEHAVIOR_USE_EXT_SYNC  0x0000000000000001LL
 
 
 
@@ -164,6 +234,13 @@ extern BOOL      GetAllUserParams(allUserParamsPayload*  pld, uint8_t *payloadLe
 extern BOOL      UpdateUserParameter(uint32_t number, uint64_t data, BOOL fApply);
 extern BOOL      UpdateSystemParameter(uint32_t offset, uint64_t data, BOOL fApply);
 BOOL             setUserPacketType(uint8_t* type, BOOL fApply);
+extern BOOL      ExtSyncEnabled();
+extern int       ExtSyncFrequency();
+
+uint16_t         SpiOrientation();
+uint8_t          SpiSyncRate();
+uint8_t          SpiAccelLpfType();
+uint8_t          SpiGyroLpfType();
 
 #endif /* USER_CONFIGURATION_H */
 

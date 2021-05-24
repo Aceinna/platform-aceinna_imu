@@ -1,11 +1,12 @@
-/** ******************************************************************************
- * @file userAPI.h API functions for Interfacing with user algorithm
+/** ***************************************************************************
+ * @file odoApi.h Odometer interface.
  *
  * THIS CODE AND INFORMATION ARE PROVIDED "AS IS" WITHOUT WARRANTY OF ANY
  * KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
  * PARTICULAR PURPOSE.
  *
+ * @brief This is a generalized odometer interface.
  *****************************************************************************/
 /*******************************************************************************
 Copyright 2018 ACEINNA, INC
@@ -23,33 +24,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 *******************************************************************************/
 
-#ifndef _USER_API_H
-#define _USER_API_H
-
-// Some common constants used in the user algorithm logic
-#define  ZERO_HZ         0
-#define  ONE_HZ          1
-#define  TWO_HZ          2
-#define  FOUR_HZ         4
-#define  FIVE_HZ         5
-#define  TEN_HZ          10
-#define  TWENTY_HZ       20
-#define  TWENTY_FIVE_HZ  25
-#define  FIFTY_HZ        50
-
-#define  NUM_AXIS  3
+#ifndef ODO_API_H
+#define ODO_API_H
 
 #include <stdint.h>
-#include "gpsAPI.h"
+#include "GlobalConstants.h"
 
-void  inertialAndPositionDataProcessing(uint16_t dacqRate);
+typedef struct  {
+    uint8_t update;      // 1 if contains new data
+    real v;                 // velocity measured by odometer, [m/s]
+} odoDataStruct_t;
 
-void *RunUserNavAlgorithm(double *accels, double *rates, double* mags, gpsDataStruct_t *gps, uint16_t dacqRate);
-void  WriteResultsIntoOutputStream(void *results) ;
-void  InitUserDataStructures();
-void  InitUserFilters();       
-void  InitUserAlgorithm();     
-void  initUserDataProcessingEngine();
-void  userInitConfigureUnit();
+extern odoDataStruct_t gOdo;
 
-#endif
+#endif /* ODO_API_H */

@@ -50,7 +50,7 @@ BOOL  UpdateSystemParameter(uint32_t number, uint64_t data, BOOL fApply)
 {
      BOOL result = TRUE;
      uint64_t *ptr = (uint64_t *)pUserUartConfig;
-
+     uint16_t orientOut;
      if(number < USER_UART_CRC || number >= USER_UART_MAX_PARAM ){
          return FALSE;
      }
@@ -89,9 +89,9 @@ BOOL  UpdateSystemParameter(uint32_t number, uint64_t data, BOOL fApply)
             case  USER_UART_ORIENTATION:
                 {
                     uint64_t tmp = data;
-                    result = platformSetOrientation((uint16_t*)&data, fApply);
+                    result = platformSetOrientation((uint16_t*)&data, &orientOut, fApply);
                     if(fApply && result == TRUE){
-                        UpdateEcuOrientationSettings((uint16_t)data);
+                        UpdateEcuOrientationSettings(orientOut);
                         data = tmp;
                     }
                 }

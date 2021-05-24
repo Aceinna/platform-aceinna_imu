@@ -46,6 +46,8 @@ const UserConfigurationStruct gDefaultUserConfig = {
     .lpfRateFilterFreq   =  25,
     .orientation         =  "+X+Y+Z",
     // add default parameter values here, if desired
+    .uartGpsBaudRate     =  0, 
+    .uartGpsProtocol     =  0,
     .hardIron_X          = 0.0,
     .hardIron_Y          = 0.0,
     .softIron_Ratio      = 1.0,
@@ -152,6 +154,7 @@ BOOL  UpdateSystemParameter(uint32_t number, uint64_t data, BOOL fApply)
 {
      BOOL result = TRUE;
      uint64_t *ptr = (uint64_t *)&gUserConfiguration;
+     uint16_t orientOut;
 
      if(number < USER_CRC || number >= USER_MAX_PARAM ){
          return FALSE;
@@ -174,7 +177,7 @@ BOOL  UpdateSystemParameter(uint32_t number, uint64_t data, BOOL fApply)
                 result = platformSelectLPFilter(RATE_SENSOR, (uint32_t)data, fApply);
                 break;
             case  USER_ORIENTATION:
-                result = platformSetOrientation((uint16_t*)&data, fApply);
+                result = platformSetOrientation((uint16_t*)&data, &orientOut, fApply);
                 break;
             case  USER_CRC:
             case  USER_DATA_SIZE:

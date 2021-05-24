@@ -463,7 +463,7 @@ static void LowPassFilter(real *in, Buffer *bfIn, Buffer *bfOut, real *b, real *
     bfPut(bfIn, in);
 }
 
-void EstimateAccelError(real *accel, real *w, real dt, uint32_t staticDelay, ImuStatsStruct *imuStats)
+void EstimateAccelError(real *accel, real *w, real dt, uint32_t staticDelay, real *rateBias, ImuStatsStruct *imuStats)
 {
     static BOOL bIni = false;               // indicate if the procedure is initialized
     static real lastAccel[3];               // accel input of last step
@@ -504,9 +504,18 @@ void EstimateAccelError(real *accel, real *w, real dt, uint32_t staticDelay, Imu
         lastEstimatedAccel[2] = lastAccel[2];
     }
     counter++;
-    if (counter == staticDelay)
+    if (counter == gAlgorithm.Limit.rateIntegrationTime )
     {
         counter = 0;
+    }
+
+    //use corrected rate to predict acceleration
+    if(!gAlgorithm.useRawRateToPredAccel)
+    {
+        // Remove rate bias from raw rate sensor data.
+        lastGyro[X_AXIS] -= rateBias[X_AXIS];
+        lastGyro[Y_AXIS] -= rateBias[Y_AXIS];
+        lastGyro[Z_AXIS] -= rateBias[Z_AXIS];
     }
 
     // propagate accel using gyro

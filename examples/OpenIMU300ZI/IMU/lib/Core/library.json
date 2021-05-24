@@ -1,6 +1,6 @@
 {
 	"name": "Core",
- 	"version": "1.0.5",
+    "version": "1.0.6",
  	"description": "Algorithm and GPS libraries",
  	"build": {
  		"flags": [
@@ -12,6 +12,10 @@
 			"-I Common/include",
 			"-I GPS",
 			"-I GPS/include",
+            "-I Odo",
+            "-I Odo/include",
+            "-I SteerAlgo",
+            "-I SteerAlgo/include",
 			"-I Math",
 			"-I Math/include",
 			"-I SPIComm",

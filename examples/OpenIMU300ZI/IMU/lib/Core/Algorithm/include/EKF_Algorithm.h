@@ -14,6 +14,7 @@
 #include "StateIndices.h"
 
 #include "gpsAPI.h"   // For gpsDataStruct_t in EKF setter
+#include "odoAPI.h"
 
 #include "Indices.h"
 
@@ -64,10 +65,23 @@ typedef struct {
     real R[9];
     real K[NUMBER_OF_EKF_STATES][3];
     real stateUpdate[NUMBER_OF_EKF_STATES];
+    real deltaP_tmp[NUMBER_OF_EKF_STATES][NUMBER_OF_EKF_STATES];
 
     // The following two are used in more than one functions, so they are pre-computed.
     real wTrueTimesDtOverTwo[NUM_AXIS];
     real turnSwitchMultiplier;
+
+    // saved states when pps comes in
+    real ppsP[NUMBER_OF_EKF_STATES][NUMBER_OF_EKF_STATES];
+    real phi[NUMBER_OF_EKF_STATES][NUMBER_OF_EKF_STATES];
+    real dQ[NUMBER_OF_EKF_STATES][NUMBER_OF_EKF_STATES];
+    real ppsPosition_N[NUM_AXIS];
+    real ppsVelocity_N[NUM_AXIS];
+    //real ppsQuaternion[4];
+    real ppsEulerAngles[NUM_AXIS];
+    //real ppsRateBias_B[NUM_AXIS];
+    //real ppsAccelBias_B[NUM_AXIS];
+    uint32_t ppsITow;
 } KalmanFilterStruct;
 
 extern KalmanFilterStruct gKalmanFilter;
@@ -96,6 +110,13 @@ typedef struct {
                                      * This is valid only when there is gps udpate.
                                      */
     BOOL gpsUpdate;                 // Indicate if GNSS measurement is updated.
+
+    // odometer
+    BOOL odoUpdate;                 // indicate if odo measurement is updated
+    real odoVelocity;               // velocity from odo, [m/s]
+
+    // 1PPS from GNSS receiver
+    BOOL ppsDetected;
 } EKF_InputDataStruct;
 
 extern EKF_InputDataStruct gEKFInput;
@@ -148,7 +169,10 @@ void EKF_GetOperationalMode(uint8_t *EKF_OperMode);
 void EKF_GetOperationalSwitches(uint8_t *EKF_LinAccelSwitch, uint8_t *EKF_TurnSwitch);
 
 // Setter functions
-void EKF_SetInputStruct(double *accels, double *rates, double *mags, gpsDataStruct_t *gps);
+void EKF_SetInputStruct(double *accels, double *rates, double *mags,
+                        gpsDataStruct_t *gps, odoDataStruct_t *odo,
+                        BOOL ppsDetected);
+void EKF_SetSteeringAngle(real angle, uint16_t states);
 void EKF_SetOutputStruct(void);
 
 #endif /* _EKF_ALGORITHM_H_ */

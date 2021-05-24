@@ -94,6 +94,7 @@ void EKF_Algorithm(void)
                                 gEKFInput.angRate_B,
                                 gAlgorithm.dt,
                                 gAlgorithm.Limit.linAccelSwitchDelay,
+                                gKalmanFilter.rateBias_B,
                                 &gImuStats);
         }
         else
@@ -102,6 +103,7 @@ void EKF_Algorithm(void)
                                 gEKFInput.angRate_B,
                                 gAlgorithm.dt,
                                 gAlgorithm.Limit.linAccelSwitchDelay,
+                                gKalmanFilter.rateBias_B,
                                 &gImuStats);
         }
         
@@ -297,54 +299,6 @@ static void SaveKfStateAtPps()
     {
         gKalmanFilter.phi[i][i] = 1.0;
     }
-}
-
-void enableFreeIntegration(BOOL enable)
-{
-    gAlgorithm.Behavior.bit.freeIntegrate = enable;
-}
-
-
-BOOL freeIntegrationEnabled()
-{
-    return (BOOL)gAlgorithm.Behavior.bit.freeIntegrate;
-}   
-
-void enableMagInAlgorithm(BOOL enable)
-{
-    if(1)
-    {
-        gAlgorithm.Behavior.bit.useMag = enable;
-    }
-    else
-    {
-        gAlgorithm.Behavior.bit.useMag = FALSE;
-    }
-}
-
-BOOL magUsedInAlgorithm()
-{
-    return gAlgorithm.Behavior.bit.useMag != 0;
-}
-
-BOOL gpsUsedInAlgorithm(void)
-{
-    return (BOOL)gAlgorithm.Behavior.bit.useGPS;
-}
-
-void enableGpsInAlgorithm(BOOL enable)
-{
-    gAlgorithm.Behavior.bit.useGPS = enable;
-}
-
-BOOL odoUsedInAlgorithm(void)
-{
-    return (BOOL)gAlgorithm.Behavior.bit.useOdo;
-}
-
-void enableOdoInAlgorithm(BOOL enable)
-{
-    gAlgorithm.Behavior.bit.useOdo = enable;
 }
 
 // Getters based on results structure passed to WriteResultsIntoOutputStream()

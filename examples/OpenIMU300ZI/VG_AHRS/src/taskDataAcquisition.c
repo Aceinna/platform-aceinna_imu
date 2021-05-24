@@ -33,6 +33,7 @@ limitations under the License.
 #include "userAPI.h"
 #include "commAPI.h"
 #include "spiAPI.h"
+#include "UserMessagingSPI.h"
 
 #include "taskDataAcquisition.h"
 
@@ -52,6 +53,7 @@ void TaskDataAcquisition(void const *argument)
     //
     int  res;
     uint16_t dacqRate;
+    int  spiRateRef = 0, spiRateDiv = 0;
 
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
     BOOL overRange  = FALSE;        //uncomment this line if overrange processing required
@@ -87,9 +89,9 @@ void TaskDataAcquisition(void const *argument)
         // *****************************************************************
         // Handle Timing vard, watchdog and BIT
         PrepareToNewDacqTick();
-        //  Wait for next tick 
-        // Upon timeout of TIM5 (or user sync), let the process continue
         
+        //  Wait for next tick 
+        // Upon timeout or user sync let the process continue
         res = osSemaphoreWait(dataAcqSem, 1000);
         if(res != osOK){
             // Wait timeout expired. Something wrong wit the dacq system
@@ -101,17 +103,14 @@ void TaskDataAcquisition(void const *argument)
         // in case of UART communication interface sets pin IO2 high
         if(platformGetUnitCommunicationType() != UART_COMM){
             setDataReadyPin(1);
-        }else{
-        setIO2Pin (1);
         }
+        setIO2Pin (1);
+
 
         // Get calibrated sensor data:
         //   Inside this function the sensor data is filtered by a second-order low-pass
         //   Butterworth filter, with a cutoff frequency selected by the user (or zero to
-        //   disable).  The cutoff is selected using the following:
-        //
-        //       Select_LP_filter(rawSensor_e sensorType, eFilterType filterType)
-        //
+        //   disable).  
         //   Refer to UserConfiguration.c for implementation and to the enumerator structure 
         //   'eFilterType' in file filter.h for available selections.
         //
@@ -136,7 +135,7 @@ void TaskDataAcquisition(void const *argument)
         // Temperature  - degrees C
         //******************************************************************
         
-        // BIT status. May have inadvertently changed this during an update.
+        // Update BIT status
         updateBITandStatus();
 
         // **********************  Algorithm ************************
@@ -150,22 +149,14 @@ void TaskDataAcquisition(void const *argument)
         //   loop.
         inertialAndPositionDataProcessing(dacqRate);
         
-        // Uncomment next line if there is intention of using S0 or S1 xbow
+        // Uncomment next line if there is intention of using S0 or S1 legacy
         //   packets for continuous data output
         //*****************************************************************
-        // applyNewScaledSensorsData();
+        //applyNewScaledSensorsData();
         //*****************************************************************
 
-        // Inform user, that new data set is ready (if required)
-        // in case of UART communication interface clears pin IO2
-        // in case of SPI  communication interface clears pin DRDY
-        if(platformGetUnitCommunicationType() != UART_COMM){
-            setDataReadyPin(0);
-        }else{
             setIO2Pin (0);
-        }
-
-        if (platformHasMag() ) {
+        if(platformHasMag() ) {
             // Mag Alignment (follows Kalman filter or user algorithm as the
             //   innovation routine calculates the euler angles and the magnetic
             //   vector in the NED-frame)
@@ -175,8 +166,20 @@ void TaskDataAcquisition(void const *argument)
         if(platformGetUnitCommunicationType() != UART_COMM){
             // Perform interface - specific processing here
             FillSPIBurstDataBuffer();
-        } else {
-            // Process commands and output continuous packets to UART
+            if(spiRateRef){
+                spiRateDiv++;
+                if(spiRateDiv >= spiRateRef){
+                    // Inform user, that new data set is ready (if required)
+                    setDataReadyPin(0); // activate data ready - set low 
+                    spiRateDiv = 0;
+                    spiRateRef = GetSpiPacketRateDivider();
+                }
+            }else {
+                spiRateRef = GetSpiPacketRateDivider();
+            }
+            UpdateSpiUserConfig();
+        }else {
+            // Process user commands and  output continuous packets to UART
             // Processing of user commands always goes first
             ProcessUserCommands ();
             SendContinuousPacket(dacqRate);

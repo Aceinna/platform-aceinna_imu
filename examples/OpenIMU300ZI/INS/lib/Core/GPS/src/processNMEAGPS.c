@@ -40,6 +40,7 @@ limitations under the License.
 char _parseGPGGA(char *msgBody, GpsData_t* GPSData);
 char _parseVTG(char *msgBody, GpsData_t* GPSData);
 char _parseRMC(char *msgBody, GpsData_t* GPSData);
+char _parseZDA(char *msgBody, GpsData_t* GPSData);
 void _handleNMEAmsg(char *msgID, char *msgBody,GpsData_t* GPSData);
 void _NMEA2UbloxAndLLA(NmeaLatLonSTRUCT* NmeaData, GpsData_t* GPSData);
 void _smoothVerticalData(GpsData_t* GPSData);
@@ -185,6 +186,10 @@ void _handleNMEAmsg(char          *msgID,
 		GPSData->totalVTG++;
 		_parseVTG(msgBody, GPSData);
     }
+    if( strncmp(ptr, "ZDA", 3) == 0 ) {
+		GPSData->totalVTG++;
+		_parseZDA(msgBody, GPSData);
+    }
     if( strncmp(ptr, "RMC", 3) == 0 ) {
 		_parseRMC(msgBody, GPSData);
     }
@@ -312,7 +317,7 @@ char _parseGPGGA(char          *msgBody,
 
         if (field[6] == '.') {
             // Some messages have second fraction .SS skip the '.'
-		    GPSData->GPSSecondFraction =  ( (field[7] - '0') / 10) + (field[8] - '0') / 100;
+		    GPSData->GPSSecondFraction =  ( (field[7] - '0') / 10.0) + (field[8] - '0') / 100.0;
         }
 	} else
         status = 1;
@@ -501,6 +506,54 @@ char _parseRMC(char          *msgBody,
 	return status;
 
 }
+/** ****************************************************************************
+ * @name: _parseZDA LOCAL parse GPZDA message. duplicates nav data but has
+ *        calander data needed for WMM (Worl Magnetic Model) lookup
+ * @author  Dong An
+ * @param [in] msgBody - data to parse
+ * @param [in] GPSData - data structure to parst he data into
+ * @retval status
+ * @details       $GPZDA (Recommended Minimum sentence C)
+ *   172809       Fix taken at 17:28:09 UTC
+ *   12           Day   
+ *   07           Month
+ *   1996         Year
+ *   00           Offset from GMT Hours
+ *   00           Offset from GMT Minutes      
+ *   *45          The checksum data, always begins with '*'
+ * 07/01/15 dkh convert directly from ascii to decimal
+ * $GPZDA,172809.456,12,07,1996,00,00*45
+ ******************************************************************************/
+char _parseZDA(char          *msgBody,
+               GpsData_t     *GPSData)
+{
+	char field[NMEA_MSG_MAX_FIELD];
+	char status     = 0;
+    int  parseReset = 1;
+
+	/// Date field 8
+
+	if( extractNMEAfield(msgBody, field, 1, parseReset) )	{
+		GPSData->GPSday   = ( (field[0] - '0') * 10) + field[1] - '0';  /// month
+	} else
+        status = 1;
+
+	if( extractNMEAfield(msgBody, field, 2, parseReset) )	{
+		GPSData->GPSmonth = ((field[0] - '0') * 10) + field[1] - '0';   /// day
+	} else
+        status = 1;
+
+	if( extractNMEAfield(msgBody, field, 3, parseReset) )	{
+		GPSData->GPSyear  = ( (field[2] - '0') * 10) + field[3] - '0'; /// year
+	} else
+        status = 1;
+
+
+	return status;
+
+}
+
+
 /** ****************************************************************************
  * @name: computeNMEAChecksum compute the checksum of a NMEA  message.
  * @author  Dong An

@@ -36,7 +36,6 @@ limitations under the License.
 static void _IncrementIMUTimer(uint16_t dacqRate);
 static void _GenerateDebugMessage(uint16_t dacqRate, uint16_t debugOutputFreq);
 static void _IMUDebugMessage(void);
-BOOL fUpdateBias = FALSE;
 
 
 /*                                    *

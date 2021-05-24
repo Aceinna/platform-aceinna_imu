@@ -58,7 +58,6 @@ char buildInfo[] = {__DATE__"," __TIME__};
 BOOL fSPI = FALSE;
 BOOL fGPS = FALSE;
 
-
 /** ***************************************************************************
  * @name getBuildInfo - provides the pointer to the build date and time string
  * @brief  
@@ -88,7 +87,7 @@ void DebugInterfaceInit(void)
         return;         // no resources
     }
     
-    int debugChannel = platformGetSerialChannel(DEBUG_SERIAL_PORT);
+    int debugChannel = platformGetSerialChannel(DEBUG_SERIAL_PORT, TRUE);
 
     if(debugChannel == UART_CHANNEL_NONE){
         //nothing to do
@@ -97,13 +96,11 @@ void DebugInterfaceInit(void)
 
     // Initialize the DEBUG USART (serial) port
     InitDebugSerialCommunication(230400); // debug_usart.c
-    //DEBUG_STRING("\r\nDMU380 System\r\n");
 
     BoardGetResetStatus(status, sizeof(status));
 
-    //ERROR_STRING(status);
+//    ERROR_STRING(status);
 }
-
 
 void CreateTasks(void)
 {

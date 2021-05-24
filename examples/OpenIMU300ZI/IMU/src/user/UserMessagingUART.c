@@ -38,6 +38,7 @@ limitations under the License.
 
 #include "Indices.h"   // For X_AXIS, etc
 #include "CommonMessages.h"
+#include "magAPI.h"
 
 // Declare the IMU data structure
 IMUDataStruct gIMU;
@@ -63,8 +64,9 @@ usr_packet_t userInputPackets[] = {
     {USR_IN_GET_ALL,            "gA"}, 
     {USR_IN_GET_VERSION,        "gV"}, 
     {USR_IN_RESET,              "rS"}, 
-    {USR_IN_UPDATE_BIAS,        "uB"},
+//    {USR_IN_UPDATE_BIAS,        "uB"},
 // place new input packet code here, before USR_IN_MAX
+    {USR_IN_MAG_ALIGN,          "ma"},           // 0x6D 0x61
     {USR_IN_MAX,                {0xff, 0xff}},   //  "" 
 };
 
@@ -220,6 +222,7 @@ int HandleUserInputPacket(UcbPacketStruct *ptrUcbPacket)
 {
     BOOL valid = TRUE;
     int ret = USER_PACKET_OK;
+    uint8_t retVal;
 //    userPacket *pkt =  (userPacket *)ptrUcbPacket->payload;
 
     /// call appropriate function based on packet type
@@ -275,8 +278,9 @@ int HandleUserInputPacket(UcbPacketStruct *ptrUcbPacket)
                 valid = FALSE;
              }
              break;
-        case USR_IN_UPDATE_BIAS: 
-             UpdateBias();
+        case USR_IN_MAG_ALIGN:
+            retVal = ProcessMagAlignCmds((magAlignCmdPayload*)ptrUcbPacket->payload, &ptrUcbPacket->payloadLength);
+            valid  = Fill_MagAlignResponsePayload(retVal, ptrUcbPacket);
             break;
         default:
              /// default handler - unknown packet

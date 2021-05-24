@@ -47,10 +47,18 @@ const UserConfigurationStruct gDefaultUserConfig = {
     .lpfRateFilterFreq   =  25,
     .orientation         =  "+X+Y+Z",   // The EVB connector pointing forward
     // add default parameter values here, if desired
+    .uartGpsBaudRate     = 0, 
+    .uartGpsProtocol     = 0,
     .hardIron_X          = 0.0,
     .hardIron_Y          = 0.0,
     .softIron_Ratio      = 1.0,
-    .softIron_Angle      = 0.0
+    .softIron_Angle      = 0.0,
+    .appBehavior         = APP_BEHAVIOR_USE_EXT_SYNC,
+    .spiOrientation      = 0x0000,          //+X +Y +Z
+    .spiSyncRate         = 1,               // 200Hz
+    .extSyncFreq         = 1,               // 1Hz
+    .spiAccelLpfType     = IIR_20HZ_LPF,    // Butterworth 20Hz      
+    .spiGyroLpfType      = IIR_20HZ_LPF,    // Butterworth 20Hz
 };
 
 UserConfigurationStruct gUserConfiguration;
@@ -87,7 +95,7 @@ void userInitConfigureUnit()
         while(1);           
     }
 
-    if(EEPROM_IsAppStartedFirstTime()) {
+    if(EEPROM_IsAppStartedFirstTime()){
         // comment next line if want to keep previously stored in EEPROM parameters
         // after rebuilding and/or reloading new application 
         RestoreDefaultUserConfig();
@@ -135,7 +143,7 @@ BOOL  UpdateSystemParameter(uint32_t number, uint64_t data, BOOL fApply)
 {
      BOOL result = TRUE;
      uint64_t *ptr = (uint64_t *)&gUserConfiguration;
-
+     uint16_t orientOut;
      if(number < USER_CRC || number >= USER_MAX_PARAM ){
          return FALSE;
      }
@@ -157,7 +165,7 @@ BOOL  UpdateSystemParameter(uint32_t number, uint64_t data, BOOL fApply)
                 result = platformSelectLPFilter(RATE_SENSOR, (uint32_t)data, fApply);
                 break;
             case  USER_ORIENTATION:
-                result = platformSetOrientation((uint16_t*)&data, fApply);
+                result = platformSetOrientation((uint16_t*)&data, &orientOut, fApply);
                 break;
             case  USER_CRC:
             case  USER_DATA_SIZE:
@@ -194,7 +202,7 @@ BOOL  UpdateUserParameter(uint32_t number, uint64_t data, BOOL fApply)
      BOOL result;
      uint64_t *ptr = (uint64_t *)&gUserConfiguration;
 
-     if(number <= USER_LAST_SYSTEM_PARAM || number >= USER_MAX_PARAM ){
+     if(number <= USER_LAST_SYSTEM_PARAM || number > USER_LAST_UART_PARAM){
          return FALSE;
      }
 
@@ -233,7 +241,7 @@ BOOL UpdateUserConfig(userConfigPayload*  pld, uint8_t *payloadLen)
     BOOL ret = FALSE;
     int32_t result = 0;
 
-    maxParam    = sizeof(UserConfigurationStruct)/8;
+    maxParam    = USER_LAST_UART_PARAM;
 
     // Validate parameters numbers and quantity 
     if(pld->numParams  > MAX_NUMBER_OF_USER_PARAMS_IN_THE_PACKET){
@@ -300,7 +308,7 @@ BOOL UpdateUserParam(userParamPayload*  pld, uint8_t *payloadLen)
     BOOL ret = TRUE;
     int32_t result = 0;
 
-    maxParam    = sizeof(UserConfigurationStruct)/8;
+    maxParam    = USER_LAST_UART_PARAM;
     offsetValid = pld->paramNum <  maxParam;        
     
     if(offsetValid){
@@ -354,7 +362,7 @@ BOOL UpdateAllUserParams(allUserParamsPayload*  pld, uint8_t *payloadLen)
     int32_t    result = 0; 
 
     int    numParams = (*payloadLen)/8;
-    maxParam  = sizeof(UserConfigurationStruct)/8;
+    maxParam         = USER_LAST_UART_PARAM;
 
     if(numParams  > MAX_NUMBER_OF_USER_PARAMS_IN_THE_PACKET){
         lenValid = FALSE;
@@ -417,7 +425,7 @@ BOOL GetUserConfig(userConfigPayload*  pld, uint8_t *payloadLen)
     BOOL lenValid = TRUE;
     uint64_t *ptr = (uint64_t *)&gUserConfiguration;
 
-    maxParam    = sizeof(UserConfigurationStruct)/8;
+    maxParam    = USER_LAST_UART_PARAM;
 
     offsetValid = pld->paramOffset < maxParam;        
 
@@ -456,7 +464,7 @@ BOOL GetUserParam(userParamPayload*  pld, uint8_t *payloadLen)
     BOOL offsetValid;
     uint64_t *ptr = (uint64_t *)&gUserConfiguration;
 
-    maxParam    = sizeof(UserConfigurationStruct)/8;
+    maxParam    = USER_LAST_UART_PARAM;
     offsetValid = pld->paramNum < maxParam;        
     
     if(offsetValid){
@@ -487,7 +495,7 @@ BOOL GetAllUserParams(allUserParamsPayload*  pld, uint8_t *payloadLen)
     uint32_t offset, i, numParams;
     uint64_t *ptr = (uint64_t *)&gUserConfiguration;
 
-    numParams   = sizeof(UserConfigurationStruct)/8;
+    numParams   = USER_LAST_UART_PARAM;
     
     offset = 0;
     for (i = 0; i < numParams; i++, offset++){
@@ -562,3 +570,35 @@ BOOL RestoreDefaultUserConfig(void)
     }
     return valid;
 }
+
+BOOL ExtSyncEnabled()
+{
+    return (gUserConfiguration.appBehavior & APP_BEHAVIOR_USE_EXT_SYNC) != 0;
+}
+
+int ExtSyncFrequency()
+{
+    return  gUserConfiguration.extSyncFreq;
+}
+
+
+uint8_t SpiSyncRate()
+{
+    return (uint8_t)gUserConfiguration.spiSyncRate;
+}
+
+uint8_t SpiAccelLpfType()
+{
+    return (uint8_t)gUserConfiguration.spiAccelLpfType;
+}
+
+uint8_t SpiGyroLpfType()
+{
+    return (uint8_t)gUserConfiguration.spiGyroLpfType;
+}
+
+uint16_t SpiOrientation()
+{
+    return (uint16_t)gUserConfiguration.spiOrientation;
+}
+

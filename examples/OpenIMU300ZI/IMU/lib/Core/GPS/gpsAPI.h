@@ -92,5 +92,7 @@ extern gpsDataStruct_t gGPS, gCanGps;
 void  GetGPSData(gpsDataStruct_t *data);
 BOOL  SetGpsBaudRate(int rate, int fApply);
 BOOL  SetGpsProtocol(int protocol, int fApply);
+void  ProcGps();
+void  InitGpsSerialCommunication(int baudrate, BOOL fInit);
 
 #endif /* GPS_API_H */

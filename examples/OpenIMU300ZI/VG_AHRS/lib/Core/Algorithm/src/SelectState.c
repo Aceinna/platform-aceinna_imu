@@ -311,6 +311,8 @@ void LG_To_INS_Transition_Test(void)
 
             // Transit to INS solution
             gAlgorithm.state = INS_SOLUTION;
+
+            gAlgoStatus.bit.attitudeOnlyAlgorithm = FALSE;
             
             // Initialize the algorithm with GNSS position and lever arm
             InitINSFilter();

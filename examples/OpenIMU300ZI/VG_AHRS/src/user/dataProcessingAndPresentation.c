@@ -28,23 +28,24 @@ limitations under the License.
 
 #include "userAPI.h"
 #include "sensorsAPI.h"
-
-#ifdef GPS
 #include "gpsAPI.h"
-static void _GPSDebugMessage(void);
-#endif
-
 #include "UserAlgorithm.h"
 #include "algorithm.h"
 #include "algorithmAPI.h"
+#include "platformAPI.h"
 
 #include "Indices.h"   // For X_AXIS and Z_AXIS
 #include "debug.h"     // For debug commands
+
+BOOL            fAlgorithmSynced;
 
 // Local-function prototypes
 static void _IncrementIMUTimer(uint16_t dacqRate);
 static void _GenerateDebugMessage(uint16_t dacqRate, uint16_t debugOutputFreq);
 static void _IMUDebugMessage(void);
+#ifdef GPS
+static void _GPSDebugMessage(void);
+#endif
 
 /*                                    *
                         ****************** 
@@ -69,6 +70,8 @@ Data * Built-in    * Raw Data  *            *   Data     * User Filter s*   * Al
 void initUserDataProcessingEngine()
 {
     InitUserAlgorithm();         // default implementation located in file user_algorithm.c
+//  init PPS sync engine 
+    platformEnableGpsPps(TRUE);
 }
 
 
@@ -85,6 +88,44 @@ void inertialAndPositionDataProcessing(uint16_t dacqRate)
 
     // Increment the IMU timer by the calling rate of the data-acquisition task
     _IncrementIMUTimer(dacqRate);
+
+    static uint8_t initAlgo = 1;
+    static uint8_t algoCntr = 0, algoCntrLimit = 0;
+    static BOOL firstTimeSync = TRUE;
+    if (initAlgo) 
+    {
+        // Reset 'initAlgo' so this is not executed more than once.  This
+        //   prevents the algorithm from being switched during run-time.
+        initAlgo = 0;
+
+        // Set the variables that control the algorithm execution rate
+        algoCntrLimit = (uint8_t)((float)dacqRate / (float)gAlgorithm.callingFreq + 0.5);
+        if (algoCntrLimit < 1) 
+        {
+            // If this logic is reached, also need to adjust the algorithm
+            //   parameters to match the modified calling freq (or stop the
+            //   program to indicate that the user must adjust the program)
+            algoCntrLimit = 1;
+        }
+        algoCntr = algoCntrLimit;
+    }
+
+    // call the algorithm
+    algoCntr++;
+    // syn the calling of the algorithm with PPS. This is done only once.
+    if(firstTimeSync)
+    {
+        if (platformGetPpsFlag(FALSE))  // do not reset pps detection state
+        {
+            firstTimeSync = FALSE;
+            fAlgorithmSynced = TRUE;
+            algoCntr = algoCntrLimit;
+        }
+    }
+    if (algoCntr >= algoCntrLimit) 
+    {
+        // Reset counter
+        algoCntr = 0;
 
     // Obtain accelerometer data [g]
     GetAccelData_g(gIMU.accel_g);
@@ -104,12 +145,11 @@ void inertialAndPositionDataProcessing(uint16_t dacqRate)
     GetGPSData(&gGPS);
 #endif
 
-    // Generate a debug message that provide sensor data in order to verify the
-    //   algorithm input data is as expected.
-    _GenerateDebugMessage(dacqRate, ZERO_HZ);
+        // check if pps is detected right before this excution of the task.
+        BOOL ppsDetected = platformGetPpsFlag(TRUE);
 
     // Execute user algorithm (default implementation located in file user_algorithm.c)
-    results = RunUserNavAlgorithm(gIMU.accel_g, gIMU.rate_radPerSec, gIMU.mag_G, &gGPS, dacqRate);
+        results = RunUserNavAlgorithm(gIMU.accel_g, gIMU.rate_radPerSec, gIMU.mag_G, &gGPS, &gOdo, ppsDetected);
 
     // Get algorithm status, and set the state in system status
     AlgoStatus algoStatus;
@@ -118,7 +158,12 @@ void inertialAndPositionDataProcessing(uint16_t dacqRate)
     gBitStatus.swAlgBIT.bit.initialization = algoStatus.bit.algorithmInit;
 
     // add current result to output queue for subsequent sending out as continuous packet                                                                                                                                                     // returns pointer to user-defined results structure
-    WriteResultsIntoOutputStream(results) ;   // default implementation located in file file UserMessaging.c
+        WriteResultsIntoOutputStream(results);   // default implementation located in file file UserMessaging.c
+    }
+
+    // Generate a debug message that provide sensor data in order to verify the
+    //   algorithm input data is as expected.
+    _GenerateDebugMessage(dacqRate, ZERO_HZ);
 }
 
 
@@ -224,6 +269,8 @@ static void _GPSDebugMessage(void)
             DebugPrintFloat(", Lon: ", (float)gGPS.longitude, 8);
             DebugPrintFloat(", Alt: ", (float)gGPS.altitude, 5);
             DebugPrintLongInt(", ITOW: ", gGPS.itow );
+            DebugPrintLongInt(", EstITOW: ", platformGetEstimatedITOW() );
+            DebugPrintLongInt(", SolutionTstamp: ", (uint64_t)platformGetSolutionTstampAsDouble());
 #else
             //
             DebugPrintFloat("Time: ", 0.001 * (real)gIMU.timerCntr, 3);

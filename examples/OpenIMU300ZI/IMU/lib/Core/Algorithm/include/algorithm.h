@@ -77,24 +77,24 @@ typedef struct {
 	int32_t Declination_Expiration_Time;   // [msec]
 
 	uint16_t Free_Integration_Cntr;   // [count]
-//#define LIMIT_MAX_REST_TIME_BEFORE_DROP_TO_AHRS     60000 // 60000 [ msec ] = 60 [ sec ]
-//#define LIMIT_DECL_EXPIRATION_TIME                  60000  // 60,000 [ counts ] = 10 [ min ]
 
 	real accelSwitch;
 	uint32_t linAccelSwitchDelay;
-
+	uint32_t rateIntegrationTime;
 	InnovationStruct       Innov;
 } LimitStruct;
 
 /// specifying how the user sets up the device algorithm
-struct algoBehavior_BITS {        /// bits   description
-	uint16_t freeIntegrate : 1; /// 0
-	uint16_t useMag : 1; /// 1
-	uint16_t useGPS : 1; /// 2 - Not used yet
-	uint16_t stationaryLockYaw : 1; /// 3 - Not used yet
-	uint16_t restartOnOverRange : 1; /// 4
-	uint16_t dynamicMotion : 1; /// 5 - Not used
-	uint16_t rsvd : 10; /// 6:15
+struct algoBehavior_BITS {                  // bits   description
+    uint16_t freeIntegrate : 1;             // 0
+    uint16_t useMag : 1;                    // 1
+    uint16_t useGPS : 1;                    // 2
+    uint16_t useOdo : 1;                    // 3
+    uint16_t enableStationaryLockYaw : 1;   // 4
+    uint16_t restartOnOverRange : 1;        // 5
+    uint16_t dynamicMotion : 1;             // 6
+    uint16_t enableImuStaticDetect : 1;     // 7
+    uint16_t rsvd : 8;                      // 8:15
 };
 
 union AlgoBehavior
@@ -110,11 +110,21 @@ struct ALGO_STATUS_BITS
 	uint16_t highGain : 1; // 1  high gain mode
 	uint16_t attitudeOnlyAlgorithm : 1; // 2  attitude only algorithm
 	uint16_t turnSwitch : 1; // 3  turn switch
-	uint16_t noAirdataAiding : 1; // 4  airdata aiding
-	uint16_t noMagnetometerheading : 1; // 5  magnetometer heading
-	uint16_t noGPSTrackReference : 1; // 6  GPS track
-	uint16_t gpsUpdate : 1; // 7  GPS measurement update
-	uint16_t rsvd : 8; // 8:15
+    uint16_t linearAccel : 1;           // 4  Linear acceleration detected by difference from gravity
+	uint16_t staticImu : 1;             // 5  zero velocity detected by IMU
+	uint16_t gpsHeadingValid : 1;       /* 6  When GPS velocity is above a certain threshold,
+                                         * this is set to TRUE, and GPS heading measurement
+                                         * is used, otherwise, this is set to FALSE and magnetic
+                                         * heading (if available) is used.
+                                         */
+	uint16_t stationaryYawLock : 1;     // 7  Yaw is locked when unit is static
+    uint16_t ppsAvailable : 1;          /* 8.
+                                         * This will be initialized as FALSE.
+                                         * This will become TRUE when PPS is detected for the first time.
+                                         * This will become FALSE when PPS has not been detected for more than 2sec.
+                                         * This will become FALSE when GNSS measurement is refrshed and used.
+                                         */
+	uint16_t rsvd : 7;                  // 9:15
 };
 
 typedef union ALGO_STATUS
@@ -182,6 +192,8 @@ typedef struct {
 
     uint8_t linAccelLPFType;
     uint8_t useRawAccToDetectLinAccel;
+    uint8_t useRawRateToPredAccel;
+    real coefOfReduceQ;
 
     uint8_t callingFreq;
     real    dt;
@@ -205,8 +217,14 @@ typedef struct {
 
     DurationStruct    Duration;
     LimitStruct       Limit;
+    enumIMUType       imuType;
+    
 } AlgorithmStruct;
 
 extern AlgorithmStruct gAlgorithm;
+
+// Update IMU specs.
+void UpdateImuSpec(real rwOdr, real arw, real biw, real maxBiasW,
+                   real vrw, real bia, real maxBiasA);
 
 #endif

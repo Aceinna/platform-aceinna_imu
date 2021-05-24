@@ -18,8 +18,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 *******************************************************************************/
 
-#ifndef USER_MESSAGING_H
-#define USER_MESSAGING_H
+#ifndef _USER_MESSAGING_UART_H
+#define _USER_MESSAGING_UART_H
 
 #include <stdint.h>
 
@@ -44,7 +44,7 @@ typedef enum {
     PACKET_RATE_5HZ   = 5,       // packet rate 5  Hz
     PACKET_RATE_2HZ   = 2,       // packet rate 2  Hz
     PACKET_RATE_1HZ   = 1,       // packet rate 1  Hz
-}packet_rate_t;
+} packet_rate_t;
 
 
 // User Input packet payload has next structure:
@@ -90,7 +90,7 @@ typedef enum {
 #pragma pack(1)
 typedef struct {
     uint8_t  packetPayload[252];    // maximum 252 bytes     
-}userPacket;
+} userPacket;
 #define MAX_NUMBER_OF_USER_PARAMS_IN_THE_PACKET 30
 #define FIRST_30_PARAMS 0xFFFFFFFF
 

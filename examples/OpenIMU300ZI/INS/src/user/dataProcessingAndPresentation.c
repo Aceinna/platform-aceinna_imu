@@ -43,7 +43,9 @@ BOOL            fAlgorithmSynced;
 static void _IncrementIMUTimer(uint16_t dacqRate);
 static void _GenerateDebugMessage(uint16_t dacqRate, uint16_t debugOutputFreq);
 static void _IMUDebugMessage(void);
+#ifdef GPS
 static void _GPSDebugMessage(void);
+#endif
 
 /*                                    *
                         ****************** 
@@ -83,11 +85,6 @@ void inertialAndPositionDataProcessing(uint16_t dacqRate)
 {
     // 
     void *results;
-
-    // if 1PPS event detection required - use next two functions
-    // solutionTstamp is extrapolated Itow with 1uS precision 
-    double solutionTstamp = platformGetSolutionTstampAsDouble();
-  
 
     // Increment the IMU timer by the calling rate of the data-acquisition task
     _IncrementIMUTimer(dacqRate);
@@ -144,7 +141,9 @@ void inertialAndPositionDataProcessing(uint16_t dacqRate)
         GetBoardTempData(&gIMU.temp_C);
 
         // Obtain GPS data (lat/lon: deg, alt: meters, vel: m/s, ITOW: msec, )
+#ifdef GPS
         GetGPSData(&gGPS);
+#endif
 
         // check if pps is detected right before this excution of the task.
         BOOL ppsDetected = platformGetPpsFlag(TRUE);
@@ -187,7 +186,6 @@ static void _IncrementIMUTimer(uint16_t dacqRate)
     gIMU.timerCntr = gIMU.timerCntr + gIMU.dTimerCntr;
 }
 
-
 //
 static void _GenerateDebugMessage(uint16_t dacqRate, uint16_t debugOutputFreq)
 {
@@ -219,7 +217,7 @@ static void _GenerateDebugMessage(uint16_t dacqRate, uint16_t debugOutputFreq)
             //                          to the algorithm isn't set yet.
 
             // Create message here
-            static uint8_t msgType = 1;
+            static uint8_t msgType = 2;
             switch( msgType )
             {
                 case 0:
@@ -231,10 +229,12 @@ static void _GenerateDebugMessage(uint16_t dacqRate, uint16_t debugOutputFreq)
                     _IMUDebugMessage();
                     break;
                     
+#ifdef GPS
                 case 2:
                     // GPS data
                     _GPSDebugMessage();
                     break;
+#endif
             }
         }
     }
@@ -258,6 +258,7 @@ static void _IMUDebugMessage(void)
             DebugPrintEndline();
 }
 
+#ifdef GPS
 
 static void _GPSDebugMessage(void)
 {
@@ -294,3 +295,4 @@ static void _GPSDebugMessage(void)
 #endif
             DebugPrintEndline();
 }
+#endif

@@ -36,7 +36,7 @@ limitations under the License.
  *
  * @retval N/A
  *****************************************************************************/
-void InitializeAlgorithmStruct(uint8_t callingFreq);
+void InitializeAlgorithmStruct(uint8_t callingFreq, const enumIMUType imuType);
 
 /******************************************************************************
  * @brief Get algorithm status.
@@ -68,6 +68,22 @@ void enableGpsInAlgorithm(BOOL enable);
 
 BOOL gpsUsedInAlgorithm();
 
+void enableOdoInAlgorithm(BOOL enable);
+
+BOOL odoUsedInAlgorithm();
+
+void enableFreeIntegration(BOOL enable);
+
+BOOL freeIntegrationEnabled();
+
+void enableStationaryLockYaw(BOOL enable);
+
+BOOL stationaryLockYawEnabled();
+
+void enableImuStaticDetect(BOOL enable);
+
+BOOL imuStaticDetectEnabled();
+
 void   SetAlgorithmUseDgps(BOOL d);
 
 void updateAlgorithmTimings(int corr, uint32_t tmrVal );
@@ -77,6 +93,11 @@ uint32_t getAlgorithmTimer();
 uint16_t getAlgorithmCounter();
 uint16_t getAlgorithmFrequency();
 uint32_t getAlgorithmITOW();
+BOOL     getAlgorithmLinAccelDetectMode();
+BOOL     getAlgorithmAccelPredictMode();
+float    getAlgorithmCoefOfReduceQ();
+float    getAlgorithmAccelSwitchDelay();
+float    getAlgorithmRateIntegrationTime();    
 
 
 /******************************************************************************

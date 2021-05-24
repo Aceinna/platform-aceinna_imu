@@ -732,9 +732,9 @@ static void _UpdateProcessCovariance(void)
              * drive-test).  Note: this is only called upon the first-entry
              * into low-gain mode.
              */
-            /*gKalmanFilter.Q[STATE_WBX] = (real)1.0e-3 * gKalmanFilter.Q[STATE_WBX];
-            gKalmanFilter.Q[STATE_WBY] = (real)1.0e-3 * gKalmanFilter.Q[STATE_WBY];
-            gKalmanFilter.Q[STATE_WBZ] = (real)1.0e-3 * gKalmanFilter.Q[STATE_WBZ];*/
+            gKalmanFilter.Q[STATE_WBX] = gAlgorithm.coefOfReduceQ * gKalmanFilter.Q[STATE_WBX];
+            gKalmanFilter.Q[STATE_WBY] = gAlgorithm.coefOfReduceQ * gKalmanFilter.Q[STATE_WBY];
+            gKalmanFilter.Q[STATE_WBZ] = gAlgorithm.coefOfReduceQ * gKalmanFilter.Q[STATE_WBZ];
         }
     }
 

@@ -105,6 +105,7 @@ usr_packet_t userOutputPackets[] = {
     {USR_OUT_SCALED1,           "s1"},
     {USR_OUT_EKF1,              "e1"},
     {USR_OUT_EKF2,              "e2"},
+    {USR_OUT_ID,                "id"},
     {USR_OUT_MAX,               {0xff, 0xff}},   //  "" 
 };
 
@@ -160,7 +161,7 @@ void   userPacketTypeToBytes(uint8_t bytes[])
         // continuous packet
         bytes[0] = userOutputPackets[_outputPacketType].packetCode[0];
         bytes[1] = userOutputPackets[_outputPacketType].packetCode[1];
-    } else {
+    }else {
         bytes[0] = 0;
         bytes[1] = 0;
     }
@@ -217,6 +218,10 @@ BOOL setUserPacketType(uint8_t *data, BOOL fApply)
         case USR_OUT_EKF2: // packet with EKF algorithm data
             _outputPacketType = type;
             _userPayloadLen   = USR_OUT_EKF2_PAYLOAD_LEN;
+            break;
+        case USR_OUT_ID:
+            _outputPacketType = type;
+            _userPayloadLen = USR_OUT_ID_PAYLOAD_LEN;
             break;
         default:
             result = FALSE;
@@ -536,6 +541,115 @@ BOOL HandleUserOutputPacket(uint8_t *payload, uint8_t *payloadLen)
                 uint8_t len;
                 Fill_e2PacketPayload(payload, &len);
                 *payloadLen = len;
+            }
+            break;
+        //      break;
+        case USR_OUT_ID:
+            {
+                // The payload length (NumOfBytes) is based on the following:
+                // 1 uint32_t (4 bytes) =   4 bytes   timer
+                // 1 float  (4 bytes)   =   4 bytes   GPS heading
+                // 1 uint32_t (4 bytes) =   4 bytes   GPS itow
+                // 3 floats (4 bytes)   =  12 bytes   ea
+                // 3 floats (4 bytes)   =  12 bytes   a
+                // 3 floats (4 bytes)   =  12 bytes   aBias
+                // 3 floats (4 bytes)   =  12 bytes   w
+                // 3 floats (4 bytes)   =  12 bytes   wBias
+                // 3 floats (4 bytes)   =  12 bytes   v
+                // 3 floats (4 bytes)   =  12 bytes   gps NED velocity
+                // 3 double (8 bytes)   =  24 bytes   lla
+                // 3 double (8 bytes)   =  24 bytes   gps LLA
+                // 1 uint8_t (1 byte)   =   1 bytes
+                // 1 uint8_t (1 byte)   =   1 bytes
+                // 1 uint8_t (1 byte)   =   1 bytes
+                // =================================
+                //           NumOfBytes = 147 bytes
+                *payloadLen = USR_OUT_ID_PAYLOAD_LEN;
+
+                // Output time as represented by gLeveler.timerCntr (uint32_t
+                // incremented at each call of the algorithm)
+                uint32_t *algoData_1 = (uint32_t*)(payload);
+                *algoData_1++ = gIMU.timerCntr;
+
+                // Set the pointer of the algoData array to the payload
+                float *algoData_2_1 = (float*)(algoData_1);
+                *algoData_2_1++ = (float)gEKFInput.trueCourse;
+                uint32_t *algoData_2 = (uint32_t*)(algoData_2_1);
+                // *algoData_2++ = (double)( 0.001 * gIMU.timerCntr );
+                *algoData_2++ = gEKFInput.itow;
+
+                // Set the pointer of the algoData array to the payload
+                float *algoData_3 = (float*)(algoData_2);
+                real EulerAngles[NUM_AXIS];
+                EKF_GetAttitude_EA(EulerAngles);
+                *algoData_3++ = (float)EulerAngles[ROLL];
+                *algoData_3++ = (float)EulerAngles[PITCH];
+                *algoData_3++ = (float)EulerAngles[YAW];
+
+                // double accels[NUM_AXIS];
+                *algoData_3++ = (float)gIMU.accel_g[X_AXIS];
+                *algoData_3++ = (float)gIMU.accel_g[Y_AXIS];
+                *algoData_3++ = (float)gIMU.accel_g[Z_AXIS];
+
+                // float accelBias[NUM_AXIS];
+                // EKF_GetEstimatedAccelBias(accelBias);
+                // *algoData_3++ = (float)accelBias[X_AXIS];
+                // *algoData_3++ = (float)accelBias[Y_AXIS];
+                // *algoData_3++ = (float)accelBias[Z_AXIS];
+                *algoData_3++ = (float)gEKFInput.HDOP;
+                *algoData_3++ = (float)gEKFInput.GPSHorizAcc;
+                *algoData_3++ = (float)gEKFInput.GPSVertAcc;
+
+                // double rates[NUM_AXIS];
+                *algoData_3++ = (float)gIMU.rate_degPerSec[X_AXIS];
+                *algoData_3++ = (float)gIMU.rate_degPerSec[Y_AXIS];
+                *algoData_3++ = (float)gIMU.rate_degPerSec[Z_AXIS];
+
+                float rateBias[NUM_AXIS];
+                EKF_GetEstimatedAngRateBias(rateBias);
+                *algoData_3++ = (float)rateBias[X_AXIS];
+                *algoData_3++ = (float)rateBias[Y_AXIS];
+                *algoData_3++ = (float)rateBias[Z_AXIS];
+
+                float vel[NUM_AXIS];
+                EKF_GetEstimatedVelocity(vel);
+                *algoData_3++ = (float)vel[X_AXIS];
+                *algoData_3++ = (float)vel[Y_AXIS];
+                *algoData_3++ = (float)vel[Z_AXIS];
+
+                // double mags[NUM_AXIS];
+                // GetMagData_G(mags);
+                *algoData_3++ = (float)gEKFInput.vNedAnt[0];
+                *algoData_3++ = (float)gEKFInput.vNedAnt[1];
+                *algoData_3++ = (float)gEKFInput.vNedAnt[2];
+
+                // Set the pointer of the algoData array to the payload
+                double *algoData_4 = (double*)(algoData_3);
+                double lla[NUM_AXIS];
+                EKF_GetEstimatedLLA(lla);
+                *algoData_4++ = (double)lla[LAT];
+                *algoData_4++ = (double)lla[LON];
+                *algoData_4++ = (double)lla[ALT];
+
+                // debug
+                *algoData_4++ = (double)gEKFInput.llaAnt[LAT] * R2D;
+                *algoData_4++ = (double)gEKFInput.llaAnt[LON] * R2D;
+                *algoData_4++ = (double)gEKFInput.llaAnt[ALT];
+
+                // Set the pointer of the algoData array to the payload
+                uint8_t *algoData_5 = (uint8_t*)(algoData_4);
+                uint8_t opMode, linAccelSw, turnSw;
+                EKF_GetOperationalMode(&opMode);
+                EKF_GetOperationalSwitches(&linAccelSw, &turnSw);
+                turnSw = turnSw << 1;
+                turnSw |= gEKFInput.ppsDetected;
+                turnSw = turnSw << 1;
+                turnSw |= gEKFInput.gpsFixType;
+                turnSw = turnSw << 1;
+                turnSw |= gEKFInput.gpsUpdate;
+                *algoData_5++ = opMode;
+                *algoData_5++ = gEKFInput.numSatellites;
+                *algoData_5++ = turnSw;
             }
             break;
 

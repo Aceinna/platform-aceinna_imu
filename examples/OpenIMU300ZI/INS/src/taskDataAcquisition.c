@@ -31,14 +31,14 @@ limitations under the License.
 #include "magAPI.h"
 #include "platformAPI.h"
 #include "userAPI.h"
+#include "commAPI.h"
 #include "spiAPI.h"
+#include "UserMessagingSPI.h"
 
 #include "taskDataAcquisition.h"
 
 #include "osapi.h"
 #include "osresources.h"
-#include "commAPI.h"
-
 
 /** ***************************************************************************
  * @name TaskDataAcquisition() CALLBACK main loop
@@ -53,6 +53,7 @@ void TaskDataAcquisition(void const *argument)
     //
     int  res;
     uint16_t dacqRate;
+    int  spiRateRef = 0, spiRateDiv = 0;
 
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
     BOOL overRange  = FALSE;        //uncomment this line if overrange processing required
@@ -161,7 +162,7 @@ void TaskDataAcquisition(void const *argument)
         // in case of UART communication interface clears pin IO2
         // in case of SPI  communication interface clears pin DRDY
         if(platformGetUnitCommunicationType() != UART_COMM){
-            setDataReadyPin(0);
+            setDataReadyPin(1);
         }else{
             setIO2Pin (0);
         }
@@ -176,6 +177,18 @@ void TaskDataAcquisition(void const *argument)
         if(platformGetUnitCommunicationType() != UART_COMM){
             // Perform interface - specific processing here
             FillSPIBurstDataBuffer();
+            if(spiRateRef){
+                spiRateDiv++;
+                if(spiRateDiv >= spiRateRef){
+                    // Inform user, that new data set is ready (if required)
+                    setDataReadyPin(0); // activate data ready - set low 
+                    spiRateDiv = 0;
+                    spiRateRef = GetSpiPacketRateDivider();
+                }
+            }else {
+                spiRateRef = GetSpiPacketRateDivider();
+            }
+            UpdateSpiUserConfig();
         } else {
             // Process commands and output continuous packets to UART
             // Processing of user commands always goes first

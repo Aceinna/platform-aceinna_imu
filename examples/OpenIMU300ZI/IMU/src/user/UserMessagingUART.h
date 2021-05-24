@@ -67,9 +67,9 @@ typedef enum {
     USR_IN_GET_ALL          ,
     USR_IN_GET_VERSION      ,
     USR_IN_RESET            ,
-    USR_IN_UPDATE_BIAS      ,
     // add new packet type here, before USR_IN_MAX
-    USR_IN_MAX              ,
+    USR_IN_MAG_ALIGN        ,
+    USR_IN_MAX
 }UserInPacketType;
 
 // User output packet codes, change at will

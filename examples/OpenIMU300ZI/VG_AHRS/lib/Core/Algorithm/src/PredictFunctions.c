@@ -78,7 +78,7 @@ uint8_t RLE_Q[ROWS_IN_F][2] = { {  STATE_RX, STATE_RX  },
 // Local functions
 static void _PredictStateEstimate(void);
 static void _PredictCovarianceEstimate(void);
-
+static void StateCovarianceChange();
 static void _UpdateProcessJacobian(void);
 static void _UpdateProcessCovariance(void);
 
@@ -100,6 +100,19 @@ void EKF_PredictionStage(real *filteredAccel)
     // Propagate the state (22 usec) and covariance (1.82 msec) estimates
     _PredictStateEstimate();        // x(k+1) = x(k) + f(x(k), u(k))
     _PredictCovarianceEstimate();   // P = F*P*FTrans + Q
+
+    /* calculate state transition matrix and state covarariance increment
+     *P(k) = F(k)*( F(k-1) * P(k-1) * F(k-1)' )*F(k)' + Q(k)
+     *     = F(k)...F(1)*P(1)*F(1)'...F(k)' + F(k)...F(2)*Q1*F(2)'...F(k)' + ... + F(k)*Q(k-1)*F(k)' + Q(k)
+     *     = phi(k)*P(1)*phi(k)' + dQ(k)
+     * phi(k) = F(k)*phi(k-1), phi(1) = eye(N)
+     * dQ(k) = F(k)*dQ(k-1)*F(k)' + Q(k), dQ(1) = zeros(N)
+     */
+    if (gAlgoStatus.bit.ppsAvailable)
+    {
+        // This is done only when pps is detected.
+        StateCovarianceChange();
+    }
 
     // Extract the predicted Euler angles from the predicted quaternion
     QuaternionToEulerAngles( gKalmanFilter.eulerAngles,
@@ -664,7 +677,6 @@ static void _UpdateProcessCovariance(void)
         biSq[Y_AXIS] = biSq[X_AXIS];
         biSq[Z_AXIS] = biSq[X_AXIS];
 
-
         /* Rate-bias terms (computed once as it does not change with attitude). 
          *   sigDriftDot = (2*pi/ln(2)) * BI^2 / ARW
          *   2*pi/ln(2) = 9.064720283654388
@@ -680,9 +692,16 @@ static void _UpdateProcessCovariance(void)
         gKalmanFilter.Q[STATE_WBZ] = sigDriftDot * biSq[Z_AXIS] * gAlgorithm.dt;
         gKalmanFilter.Q[STATE_WBZ] = gKalmanFilter.Q[STATE_WBZ] * gKalmanFilter.Q[STATE_WBZ];
 
-        gKalmanFilter.Q[STATE_ABX] = (real)1.0e-12;
-        gKalmanFilter.Q[STATE_ABY] = (real)1.0e-12;
-        gKalmanFilter.Q[STATE_ABZ] = (real)1.0e-12;
+        // Accel bias
+        biSq[X_AXIS] = gAlgorithm.imuSpec.biA * gAlgorithm.imuSpec.biA;
+        biSq[Y_AXIS] = biSq[X_AXIS];
+        biSq[Z_AXIS] = biSq[X_AXIS];
+        sigDriftDot = (real)9.064720283654388 / gAlgorithm.imuSpec.vrw;
+        gKalmanFilter.Q[STATE_ABX] = sigDriftDot * biSq[X_AXIS] * gAlgorithm.dt;
+        gKalmanFilter.Q[STATE_ABX] = gKalmanFilter.Q[STATE_ABX] * gKalmanFilter.Q[STATE_ABX];
+        //gKalmanFilter.Q[STATE_ABX] = (real)1.0e-12;
+        gKalmanFilter.Q[STATE_ABY] = gKalmanFilter.Q[STATE_ABX];
+        gKalmanFilter.Q[STATE_ABZ] = gKalmanFilter.Q[STATE_ABX];
 
         /* Precalculate the multiplier applied to the Q terms associated with
          * attitude.  sigRate = ARW / sqrt( dt )
@@ -713,9 +732,9 @@ static void _UpdateProcessCovariance(void)
              * drive-test).  Note: this is only called upon the first-entry
              * into low-gain mode.
              */
-            /*gKalmanFilter.Q[STATE_WBX] = (real)1.0e-3 * gKalmanFilter.Q[STATE_WBX];
-            gKalmanFilter.Q[STATE_WBY] = (real)1.0e-3 * gKalmanFilter.Q[STATE_WBY];
-            gKalmanFilter.Q[STATE_WBZ] = (real)1.0e-3 * gKalmanFilter.Q[STATE_WBZ];*/
+            gKalmanFilter.Q[STATE_WBX] = gAlgorithm.coefOfReduceQ * gKalmanFilter.Q[STATE_WBX];
+            gKalmanFilter.Q[STATE_WBY] = gAlgorithm.coefOfReduceQ * gKalmanFilter.Q[STATE_WBY];
+            gKalmanFilter.Q[STATE_WBZ] = gAlgorithm.coefOfReduceQ * gKalmanFilter.Q[STATE_WBZ];
         }
     }
 
@@ -803,13 +822,92 @@ void GenerateProcessCovariance(void)
     gKalmanFilter.Q[STATE_VX] = 100 * dtSigAccelSq;//(real)1e-10;
     gKalmanFilter.Q[STATE_VY] = 100 * dtSigAccelSq;
     gKalmanFilter.Q[STATE_VZ] = 100 * dtSigAccelSq;
-
-    // Acceleration - bias
-    gKalmanFilter.Q[STATE_ABX] = (real)5e-11; //(real)1e-10; // dtSigAccelSq; //%1e-8 %sigmaAccelBiasSq;
-    gKalmanFilter.Q[STATE_ABY] = (real)5e-11; //(real)1e-10; //dtSigAccelSq; //%sigmaAccelBiasSq;
-    gKalmanFilter.Q[STATE_ABZ] = (real)5e-11; //(real)1e-10; //dtSigAccelSq; //%sigmaAccelBiasSq;
 }
 
+static void StateCovarianceChange()
+{
+    uint8_t rowNum, colNum, multIndex;
+    // 1) phi(k) = F(k)*phi(k-1)
+    // deltaP_tmp is used to hold F(k)*phi(k-1)
+    memset(&gKalmanFilter.deltaP_tmp[0][0], 0, sizeof(gKalmanFilter.deltaP_tmp));
+    for (rowNum = 0; rowNum < 16; rowNum++)
+    {
+        for (colNum = 0; colNum < 16; colNum++)
+        {
+            for (multIndex = RLE_F[rowNum][0]; multIndex <= RLE_F[rowNum][1]; multIndex++)
+            {
+                gKalmanFilter.deltaP_tmp[rowNum][colNum] += 
+                    gKalmanFilter.F[rowNum][multIndex] * gKalmanFilter.phi[multIndex][colNum];
+            }
+        }
+    }
+    memcpy(&gKalmanFilter.phi[0][0], &gKalmanFilter.deltaP_tmp[0][0], sizeof(gKalmanFilter.phi));
+
+    // 2) dQ(k) = F(k)*dQ(k-1)*F(k)' + Q(k)
+    // 2.1) deltaP_tmp is used to hold F(k)*dQ(k-1)
+    memset(&gKalmanFilter.deltaP_tmp[0][0], 0, sizeof(gKalmanFilter.deltaP_tmp));
+    for (rowNum = 0; rowNum < 16; rowNum++)
+    {
+        for (colNum = 0; colNum < 16; colNum++)
+        {
+            for (multIndex = RLE_F[rowNum][0]; multIndex <= RLE_F[rowNum][1]; multIndex++)
+            {
+                gKalmanFilter.deltaP_tmp[rowNum][colNum] +=
+                    gKalmanFilter.F[rowNum][multIndex] * gKalmanFilter.dQ[multIndex][colNum];
+            }
+        }
+    }
+    // 2.2) Calculate F(k)*dQ(k-1)*F(k)' = deltaP_tmp*F(k)'
+    memset(&gKalmanFilter.dQ[0][0], 0, sizeof(gKalmanFilter.dQ));
+    for (rowNum = 0; rowNum < ROWS_IN_F; rowNum++)
+    {
+        for (colNum = rowNum; colNum < ROWS_IN_F; colNum++)
+        {
+            for (multIndex = RLE_F[colNum][0]; multIndex <= RLE_F[colNum][1]; multIndex++)
+            {
+                gKalmanFilter.dQ[rowNum][colNum] = gKalmanFilter.dQ[rowNum][colNum] +
+                    gKalmanFilter.deltaP_tmp[rowNum][multIndex] * gKalmanFilter.F[colNum][multIndex];
+            }
+            gKalmanFilter.dQ[colNum][rowNum] = gKalmanFilter.dQ[rowNum][colNum];
+        }
+    }
+    // 2.3) Calculate F(k)*dQ(k-1)*F(k)' + Q(k)
+    gKalmanFilter.dQ[STATE_RX][STATE_RX] += gKalmanFilter.Q[STATE_RX];
+    gKalmanFilter.dQ[STATE_RY][STATE_RY] += gKalmanFilter.Q[STATE_RY];
+    gKalmanFilter.dQ[STATE_RZ][STATE_RZ] += gKalmanFilter.Q[STATE_RZ];
+
+    gKalmanFilter.dQ[STATE_VX][STATE_VX] += gKalmanFilter.Q[STATE_VX];
+    gKalmanFilter.dQ[STATE_VY][STATE_VY] += gKalmanFilter.Q[STATE_VY];
+    gKalmanFilter.dQ[STATE_VZ][STATE_VZ] += gKalmanFilter.Q[STATE_VZ];
+
+    gKalmanFilter.dQ[STATE_Q0][STATE_Q0] += gKalmanFilter.Q[STATE_Q0];
+    gKalmanFilter.dQ[STATE_Q0][STATE_Q1] += gKalmanFilter.Qq[0];
+    gKalmanFilter.dQ[STATE_Q0][STATE_Q2] += gKalmanFilter.Qq[1];
+    gKalmanFilter.dQ[STATE_Q0][STATE_Q3] += gKalmanFilter.Qq[2];
+
+    gKalmanFilter.dQ[STATE_Q1][STATE_Q0] = gKalmanFilter.dQ[STATE_Q0][STATE_Q1];
+    gKalmanFilter.dQ[STATE_Q1][STATE_Q1] += gKalmanFilter.Q[STATE_Q1];
+    gKalmanFilter.dQ[STATE_Q1][STATE_Q2] += gKalmanFilter.Qq[3];
+    gKalmanFilter.dQ[STATE_Q1][STATE_Q3] += gKalmanFilter.Qq[4];
+
+    gKalmanFilter.dQ[STATE_Q2][STATE_Q0] = gKalmanFilter.dQ[STATE_Q0][STATE_Q2];
+    gKalmanFilter.dQ[STATE_Q2][STATE_Q1] = gKalmanFilter.dQ[STATE_Q1][STATE_Q2];
+    gKalmanFilter.dQ[STATE_Q2][STATE_Q2] += gKalmanFilter.Q[STATE_Q2];
+    gKalmanFilter.dQ[STATE_Q2][STATE_Q3] += gKalmanFilter.Qq[5];
+
+    gKalmanFilter.dQ[STATE_Q3][STATE_Q0] = gKalmanFilter.dQ[STATE_Q0][STATE_Q3];
+    gKalmanFilter.dQ[STATE_Q3][STATE_Q1] = gKalmanFilter.dQ[STATE_Q1][STATE_Q3];
+    gKalmanFilter.dQ[STATE_Q3][STATE_Q2] = gKalmanFilter.dQ[STATE_Q2][STATE_Q3];
+    gKalmanFilter.dQ[STATE_Q3][STATE_Q3] += gKalmanFilter.Q[STATE_Q3];
+
+    gKalmanFilter.dQ[STATE_WBX][STATE_WBX] += gKalmanFilter.Q[STATE_WBX];
+    gKalmanFilter.dQ[STATE_WBY][STATE_WBY] += gKalmanFilter.Q[STATE_WBY];
+    gKalmanFilter.dQ[STATE_WBZ][STATE_WBZ] += gKalmanFilter.Q[STATE_WBZ];
+
+    gKalmanFilter.dQ[STATE_ABX][STATE_ABX] += gKalmanFilter.Q[STATE_ABX];
+    gKalmanFilter.dQ[STATE_ABY][STATE_ABY] += gKalmanFilter.Q[STATE_ABY];
+    gKalmanFilter.dQ[STATE_ABZ][STATE_ABZ] += gKalmanFilter.Q[STATE_ABZ];
+}
 
 /** ****************************************************************************
  * @name: firstOrderLowPass_float  implements a low pass yaw axis filter

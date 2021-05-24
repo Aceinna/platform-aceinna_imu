@@ -80,11 +80,11 @@ void TaskDataAcquisition(void const *argument)
         // *****************************************************************
         // NOTE: This task loop runs at 200 Hz
         // *****************************************************************
-
+        // Handle Timing vard, watchdog and BIT
         PrepareToNewDacqTick();
         
         //  Wait for next tick 
-        //  Upon timeout of TIM2 (or user sync), let the process continue
+        //  Upon timeout or user sync let the process continue
         res = osSemaphoreWait(dataAcqSem, 1000);
         if(res != osOK){
             // Wait timeout expired. Something wrong wit the dacq system
@@ -96,9 +96,8 @@ void TaskDataAcquisition(void const *argument)
         // in case of UART communication interface sets pin IO2 high
         if(platformGetUnitCommunicationType() != UART_COMM){
             setDataReadyPin(1);
-        }else{
-        setIO2Pin (1);
         }
+        setIO2Pin (1);
     
 
         // Get calibrated sensor data:
@@ -144,6 +143,7 @@ void TaskDataAcquisition(void const *argument)
         //applyNewScaledSensorsData();
         //*****************************************************************
 
+        setIO2Pin (0);
         if(platformHasMag() ) {
             // Mag Alignment (follows Kalman filter or user algorithm as the
             // innovation routine calculates the euler angles and the magnetic
@@ -169,8 +169,6 @@ void TaskDataAcquisition(void const *argument)
         }else {
             // Process user commands and  output continuous packets to UART
             // Processing of user commands always goes first
-            // Inform user, that new data set is ready (if required)
-            setIO2Pin (0);
             ProcessUserCommands ();
             SendContinuousPacket(200);
         }

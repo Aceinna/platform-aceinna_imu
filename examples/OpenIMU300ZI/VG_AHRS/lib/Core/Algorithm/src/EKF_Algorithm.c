@@ -61,6 +61,9 @@ ImuStatsStruct          gImuStats;
 static void RemoveLeverArm(double *lla, double *vNed, real *w, real *leverArmB,
                            real *rn2e, double *ecef);
 
+static void HandlePps();
+static void SaveKfStateAtPps();
+
 //=============================================================================
 
 /*  This routine is called at either 100 or 200 Hz based upon the system configuration:
@@ -91,6 +94,7 @@ void EKF_Algorithm(void)
                                 gEKFInput.angRate_B,
                                 gAlgorithm.dt,
                                 gAlgorithm.Limit.linAccelSwitchDelay,
+                                gKalmanFilter.rateBias_B,
                                 &gImuStats);
         }
         else
@@ -99,11 +103,20 @@ void EKF_Algorithm(void)
                                 gEKFInput.angRate_B,
                                 gAlgorithm.dt,
                                 gAlgorithm.Limit.linAccelSwitchDelay,
+                                gKalmanFilter.rateBias_B,
                                 &gImuStats);
         }
         
         // Detect if the unit is static or dynamic
         DetectMotionFromAccel(gImuStats.accelNorm, 0);
+        gAlgoStatus.bit.linearAccel = !gAlgorithm.linAccelSwitch;
+
+        // if zero velocity detection by IMU is not enabled, detection result is always false.
+        if (!gAlgorithm.Behavior.bit.enableImuStaticDetect)
+        {
+            gImuStats.bStaticIMU = FALSE;
+        }
+        gAlgoStatus.bit.staticImu = gImuStats.bStaticIMU;
     }
 
     // Compute the EKF solution if past the stabilization and initialization stages
@@ -114,6 +127,11 @@ void EKF_Algorithm(void)
 
         // Perform EKF Prediction
         EKF_PredictionStage(gImuStats.lpfAccel);
+
+        if (gAlgorithm.state == INS_SOLUTION)
+        {
+            HandlePps();
+        }
 
         /* Update the predicted states if not freely integrating
          * NOTE: free- integration is not applicable in HG AHRS mode.
@@ -222,42 +240,65 @@ void EKF_Algorithm(void)
     DynamicMotion();
 }
 
-void enableFreeIntegration(BOOL enable)
+static void HandlePps()
 {
-    gAlgorithm.Behavior.bit.freeIntegrate = enable;
-}
-
-
-BOOL freeIntegrationEnabled()
-{
-    return (BOOL)gAlgorithm.Behavior.bit.freeIntegrate;
-}   
-
-void enableMagInAlgorithm(BOOL enable)
-{
-    if(1)
+    // PPS not detected for a long time?
+    int32_t timeSinceLastPps = (int32_t)(gAlgorithm.itow - gKalmanFilter.ppsITow);
+    if (timeSinceLastPps < 0)
     {
-        gAlgorithm.Behavior.bit.useMag = enable;
+        timeSinceLastPps = timeSinceLastPps + MAX_ITOW;
     }
-    else
+    if (timeSinceLastPps > 2000)
     {
-        gAlgorithm.Behavior.bit.useMag = FALSE;
+        gAlgoStatus.bit.ppsAvailable = FALSE;
+    }
+    // PPS detected
+    if (gEKFInput.ppsDetected)
+    {
+        // PPS is available from now.
+        gAlgoStatus.bit.ppsAvailable = TRUE;
+        // save states when pps detected
+        SaveKfStateAtPps();
     }
 }
 
-BOOL magUsedInAlgorithm()
+static void SaveKfStateAtPps()
 {
-    return gAlgorithm.Behavior.bit.useMag != 0;
-}
+    // save time
+    gKalmanFilter.ppsITow = gAlgorithm.itow;
 
-BOOL gpsUsedInAlgorithm(void)
-{
-    return (BOOL)gAlgorithm.Behavior.bit.useGPS;
-}
+    // save states
+    gKalmanFilter.ppsPosition_N[0] = gKalmanFilter.Position_N[0];
+    gKalmanFilter.ppsPosition_N[1] = gKalmanFilter.Position_N[1];
+    gKalmanFilter.ppsPosition_N[2] = gKalmanFilter.Position_N[2];
+    gKalmanFilter.ppsVelocity_N[0] = gKalmanFilter.Velocity_N[0];
+    gKalmanFilter.ppsVelocity_N[1] = gKalmanFilter.Velocity_N[1];
+    gKalmanFilter.ppsVelocity_N[2] = gKalmanFilter.Velocity_N[2];
+    //gKalmanFilter.ppsQuaternion[0] = gKalmanFilter.quaternion[0];
+    //gKalmanFilter.ppsQuaternion[1] = gKalmanFilter.quaternion[1];
+    //gKalmanFilter.ppsQuaternion[2] = gKalmanFilter.quaternion[2];
+    //gKalmanFilter.ppsQuaternion[3] = gKalmanFilter.quaternion[3];
+    gKalmanFilter.ppsEulerAngles[0] = gKalmanFilter.eulerAngles[0];
+    gKalmanFilter.ppsEulerAngles[1] = gKalmanFilter.eulerAngles[1];
+    gKalmanFilter.ppsEulerAngles[2] = gKalmanFilter.eulerAngles[2];
+    //gKalmanFilter.ppsRateBias_B[0] = gKalmanFilter.rateBias_B[0];
+    //gKalmanFilter.ppsRateBias_B[1] = gKalmanFilter.rateBias_B[1];
+    //gKalmanFilter.ppsRateBias_B[2] = gKalmanFilter.rateBias_B[2];
+    //gKalmanFilter.ppsAccelBias_B[0] = gKalmanFilter.accelBias_B[0];
+    //gKalmanFilter.ppsAccelBias_B[1] = gKalmanFilter.accelBias_B[1];
+    //gKalmanFilter.ppsAccelBias_B[2] = gKalmanFilter.accelBias_B[2];
+    // save state covariance matrix
+    memcpy(&gKalmanFilter.ppsP[0][0], &gKalmanFilter.P[0][0], sizeof(gKalmanFilter.P));
 
-void enableGpsInAlgorithm(BOOL enable)
-{
-    gAlgorithm.Behavior.bit.useGPS = enable;
+    /* reset state transition matrix and state covariance matrix increment between pps and update
+     * phi is reset to an identity matrix, and dQ is reset to a zero matrix.
+     */
+    memset(&gKalmanFilter.phi[0][0], 0, sizeof(gKalmanFilter.phi));
+    memset(&gKalmanFilter.dQ[0][0], 0, sizeof(gKalmanFilter.dQ));
+    for (int i = 0; i < NUMBER_OF_EKF_STATES; i++)
+    {
+        gKalmanFilter.phi[i][i] = 1.0;
+    }
 }
 
 // Getters based on results structure passed to WriteResultsIntoOutputStream()
@@ -397,7 +438,9 @@ void EKF_GetOperationalSwitches(uint8_t *EKF_LinAccelSwitch, uint8_t *EKF_TurnSw
 // SETTERS: for EKF input and output structures
 
 // Populate the EKF input structure with sensor and GPS data (if used)
-void EKF_SetInputStruct(double *accels, double *rates, double *mags, gpsDataStruct_t *gps)
+void EKF_SetInputStruct(double *accels, double *rates, double *mags,
+                        gpsDataStruct_t *gps, odoDataStruct_t *odo,
+                        BOOL ppsDetected)
 {
     // Accelerometer signal is in [m/s/s]
     gEKFInput.accel_B[X_AXIS]    = (real)accels[X_AXIS] * GRAVITY;
@@ -450,8 +493,8 @@ void EKF_SetInputStruct(double *accels, double *rates, double *mags, gpsDataStru
         gEKFInput.vNedAnt[Z_AXIS] = gps->vNed[Z_AXIS];
 
         // Course and velocity data
-        gEKFInput.rawGroundSpeed = (real)sqrt(SQUARE(gEKFInput.vNed[0]) +
-                                                  SQUARE(gEKFInput.vNed[1]));// gps->rawGroundSpeed;
+        gEKFInput.rawGroundSpeed = (real)sqrt(SQUARE(gps->vNed[0]) +
+                                              SQUARE(gps->vNed[1]));// gps->rawGroundSpeed;
         gEKFInput.trueCourse = (real)gps->trueCourse;
         
         /* Remove lever arm effects in LLA/Velocity. To do this requires transformation matrix
@@ -490,6 +533,13 @@ void EKF_SetInputStruct(double *accels, double *rates, double *mags, gpsDataStru
                           &gKalmanFilter.rGPS_N[0]);
         }
     }
+
+    // odometer
+    gEKFInput.odoUpdate = odo->update;
+    gEKFInput.odoVelocity = odo->v;
+
+    // 1PPS signal from GNSS receiver
+    gEKFInput.ppsDetected = ppsDetected;
 }
 
 
@@ -732,4 +782,3 @@ static void RemoveLeverArm(double *lla, double *vNed, real *w, real *leverArmB, 
     ecef[Y_AXIS] = tmp * sinLon;
     ecef[Z_AXIS] = ((E_MINOR_OVER_MAJOR_SQ * (rn)) + lla[ALT]) * sinLat;
 }
-

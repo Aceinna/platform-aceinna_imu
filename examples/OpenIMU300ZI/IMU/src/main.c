@@ -81,7 +81,7 @@ void DebugInterfaceInit(void)
 {
     char status[100];
 
-    int debugChannel = platformGetSerialChannel(DEBUG_SERIAL_PORT);
+    int debugChannel = platformGetSerialChannel(DEBUG_SERIAL_PORT, TRUE);
 
     if(debugChannel == UART_CHANNEL_NONE){
         //nothing to do
@@ -89,7 +89,7 @@ void DebugInterfaceInit(void)
     }
 
     // Initialize the DEBUG USART (serial) port
-    InitDebugSerialCommunication(38400); 
+    InitDebugSerialCommunication(115200); 
 
     BoardGetResetStatus(status, sizeof(status));
 

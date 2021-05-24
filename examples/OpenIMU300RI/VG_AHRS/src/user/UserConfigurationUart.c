@@ -89,9 +89,10 @@ BOOL  UpdateSystemParameter(uint32_t number, uint64_t data, BOOL fApply)
             case  USER_UART_ORIENTATION:
                 {
                     uint64_t tmp = data;
-                    result = platformSetOrientation((uint16_t*)&data, fApply);
+                    uint16_t orientOut;
+                    result = platformSetOrientation((uint16_t*)&data, &orientOut, fApply);
                     if(fApply && result == TRUE){
-                        UpdateEcuOrientationSettings((uint16_t)data);
+                        UpdateEcuOrientationSettings(orientOut);
                         data = tmp;
                     }
                 }

@@ -162,3 +162,7 @@ void Initialize_Timing(void)
     timer.dacqFrequency = DACQ_200_HZ;     // default
 }
 
+void TimingVars_dacqFrequency(int freq)
+{
+    timer.dacqFrequency = freq;
+}

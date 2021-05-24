@@ -87,7 +87,7 @@ void DebugInterfaceInit(void)
         return;         // no resources 
     }
 
-    int debugChannel = platformGetSerialChannel(DEBUG_SERIAL_PORT);
+    int debugChannel = platformGetSerialChannel(DEBUG_SERIAL_PORT, TRUE);
 
     if(debugChannel == UART_CHANNEL_NONE){
         //nothing to do
@@ -99,7 +99,6 @@ void DebugInterfaceInit(void)
 
     BoardGetResetStatus(status, sizeof(status));
 
-//    ERROR_STRING(status);
 }
 
 void CreateTasks(void)
@@ -212,7 +211,7 @@ int main(void)
     // Initialize OS and create required tasks
     CreateTasks();
  
-    // Initialize the DEBUG serial port
+     // Initialize the DEBUG USART (serial) port
     DebugInterfaceInit();
 
     //InitTimer_Watchdog( ENABLE );

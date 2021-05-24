@@ -34,7 +34,9 @@ limitations under the License.
 #include "sensorsAPI.h"
 #include "spiAPI.h"
 #include "magAPI.h"
-
+#include "appVersion.h"
+#include "BitStatus.h"
+#include "EKF_Algorithm.h"
 
 uint8_t  _spiDataBuf[2][SPI_DATA_BUF_LEN];
 uint8_t  *_activeSpiDataBufPtr = _spiDataBuf[0];
@@ -43,10 +45,11 @@ uint8_t  _activeSpiDataBufIdx  = 0;
 
 
 uint8_t  _spiRegs[NUM_SPI_REGS];
+int16_t  _attitude[3];
 
 BOOL     _readOp  = FALSE;
 uint8_t  _regAddr = 0; 
-
+BOOL fSaveSpiConfig = FALSE;
 // Initialize SPI registers here
 // For default register assignments refer to 
 // UserMessaging.h
@@ -81,11 +84,42 @@ void InitUserSPIRegisters()
     _spiRegs[SPI_REG_PROD_ID_REQUEST+1]      = 0x00;    // product code LO
     _spiRegs[SPI_REG_SERIAL_NUM_REQUEST]     = arr[7];
     _spiRegs[SPI_REG_SERIAL_NUM_REQUEST+1]   = (arr[8] << 4) | arr[9];
+    // fill up orientation
+    uint16_t tmp = SpiOrientation();
+    _spiRegs[SPI_REG_ORIENTATION_LSB_CTRL]    = tmp & 0xff;                   
+    _spiRegs[SPI_REG_ORIENTATION_MSB_CTRL]    = (tmp >> 8) & 0xff;
+    // Fill up default DRDY rate
+    _spiRegs[SPI_REG_DRDY_RATE_CTRL]          = SpiSyncRate();  
+    _spiRegs[SPI_REG_DRDY_CTRL]               = 0x04;            
+    _spiRegs[SPI_REG_ACCEL_FILTER_TYPE_CTRL]  = SpiAccelLpfType();     
+    _spiRegs[SPI_REG_RATE_FILTER_TYPE_CTRL]   = SpiGyroLpfType();           
+    _spiRegs[SPI_REG_ACCEL_SENSOR_RANGE_CTRL] = SPI_ACCEL_SENSOR_RANGE_8G;
+    _spiRegs[SPI_REG_RATE_SENSOR_RANGE_CTRL]  = SPI_RATE_SENSOR_RANGE_500;
+    _spiRegs[SPI_REG_MAG_SENSOR_RANGE_CTRL]   = SPI_MAG_SENSOR_RANGE_2G;
+    // Fill up sensors data scale factor on the SPI bus
+    _spiRegs[SPI_REG_ACCEL_SENSOR_SCALE]      = 4;   // 4000 counts per 1 G -> 8G                       
+    _spiRegs[SPI_REG_RATE_SENSOR_SCALE]       = 64;  // 64 counts   per dps -> 500 dps
+    _spiRegs[SPI_REG_MAG_SENSOR_SCALE]        = 16;  // 16384 64 counts  per Gauss
     // Fill up HW/SW versions
     _spiRegs[SPI_REG_HW_VERSION_REQUEST]     = ReadUnitHwConfiguration();
-    _spiRegs[SPI_REG_SW_VERSION_REQUEST]     = unitSpiSwVersion();
-    _spiRegs[SPI_REG_ACCEL_FILTER_TYPE_CTRL] = IIR_05HZ_LPF;
-    _spiRegs[SPI_REG_RATE_FILTER_TYPE_CTRL]  = IIR_05HZ_LPF;
+    _spiRegs[SPI_REG_SW_VERSION_REQUEST]     = APP_SPI_SW_VERSION;
+    {
+        uint8_t regOffset;
+        magAlignUserParams_t params;
+        int16_t tmp[4];
+        getUserMagAlignParams(&params);
+        regOffset = SPI_REG_HARD_IRON_BIAS_X_MSB;
+        tmp[0] = (int16_t)((params.hardIron_X/10) * 32768 );       // +-10 Gauss 
+        tmp[1] = (int16_t)((params.hardIron_Y/10) * 32768 );       // +-10 Gauss 
+        tmp[2] = (int16_t)(params.softIron_Ratio * 32768 );            //  
+        tmp[3] = (int16_t)((params.softIron_Angle/3.141592) * 32768 ); // +-3.141592 rad 
+        for(int i = 0; i < 4; i++){
+            _spiRegs[regOffset++] = (tmp[i] >> 8) & 0xff;
+            _spiRegs[regOffset++] = tmp[i] & 0xff;
+        }
+    }
+
+
 }
 
 
@@ -93,15 +127,52 @@ void InitUserSPIRegisters()
 // Each  new data set get loaded into new buffer, while pervious
 // data set remains in old buffer. After loading active buffer get switched
 // When user requests data from outside - dtata from active buffer will be transmitted
-   BOOL loadSPIBurstData(spi_burst_data_t *data)
+BOOL loadSPIBurstData(ext_spi_burst_data_t *data)
 {
-    if(sizeof(spi_burst_data_t) > SPI_DATA_BUF_LEN){
-        return FALSE;
+    if(sizeof(ext_spi_burst_data_t) > SPI_DATA_BUF_LEN){
+        while(1);  // catch it here
     }
-    memcpy(_spiDataBuf[_emptySpiDataBufIdx], data, sizeof(spi_burst_data_t));
+    memcpy(_spiDataBuf[_emptySpiDataBufIdx], data, sizeof(ext_spi_burst_data_t));
     _activeSpiDataBufPtr = _spiDataBuf[_emptySpiDataBufIdx];
     _activeSpiDataBufIdx = _emptySpiDataBufIdx;   //active buffer;
     _emptySpiDataBufIdx ^= 1;   //new buffer;
+
+// Accelerometer data
+    _spiRegs[SPI_REG_XACCEL_REQUEST]   = data->accels[0] & 0xff;
+    _spiRegs[SPI_REG_XACCEL_REQUEST+1] = (data->accels[0] >> 8) & 0xff;
+    _spiRegs[SPI_REG_YACCEL_REQUEST]   = data->accels[1] & 0xff;
+    _spiRegs[SPI_REG_YACCEL_REQUEST+1] = (data->accels[1] >> 8) & 0xff;
+    _spiRegs[SPI_REG_ZACCEL_REQUEST]   = data->accels[2] & 0xff;
+    _spiRegs[SPI_REG_ZACCEL_REQUEST+1] = (data->accels[2] >> 8) & 0xff;
+// Gyro data
+    _spiRegs[SPI_REG_XRATE_REQUEST]   = data->rates[0] & 0xff;
+    _spiRegs[SPI_REG_XRATE_REQUEST+1] = (data->rates[0] >> 8) & 0xff;
+    _spiRegs[SPI_REG_YRATE_REQUEST]   = data->rates[1] & 0xff;
+    _spiRegs[SPI_REG_YRATE_REQUEST+1] = (data->rates[1] >> 8) & 0xff;
+    _spiRegs[SPI_REG_ZRATE_REQUEST]   = data->rates[2] & 0xff;
+    _spiRegs[SPI_REG_ZRATE_REQUEST+1] = (data->rates[2] >> 8) & 0xff;
+// Mag data
+    _spiRegs[SPI_REG_XMAG_REQUEST]    = data->mags[0] & 0xff;
+    _spiRegs[SPI_REG_XMAG_REQUEST+1]  = (data->mags[0] >> 8) & 0xff;
+    _spiRegs[SPI_REG_YMAG_REQUEST]    = data->mags[1] & 0xff;
+    _spiRegs[SPI_REG_YMAG_REQUEST+1]  = (data->mags[1] >> 8) & 0xff;
+    _spiRegs[SPI_REG_ZMAG_REQUEST]    = data->mags[2] & 0xff;
+    _spiRegs[SPI_REG_ZMAG_REQUEST+1]  = (data->mags[2] >> 8) & 0xff;
+// Temp data    
+    _spiRegs[SPI_REG_RTEMP_REQUEST]   = data->temp & 0xff;
+    _spiRegs[SPI_REG_RTEMP_REQUEST+1] = (data->temp >> 8) & 0xff;
+    _spiRegs[SPI_REG_BTEMP_REQUEST]   = data->temp & 0xff;
+    _spiRegs[SPI_REG_BTEMP_REQUEST+1] = (data->temp >> 8) & 0xff;
+// Master Status
+    _spiRegs[SPI_REG_MASTER_STATUS_REQUEST]   = data->status & 0xff;
+    _spiRegs[SPI_REG_MASTER_STATUS_REQUEST+1] = (data->status >> 8) & 0xff;
+// HW Status
+    _spiRegs[SPI_REG_HW_STATUS_REQUEST]       = gBitStatus.hwBIT.all & 0xff;
+    _spiRegs[SPI_REG_HW_STATUS_REQUEST+1]     = (gBitStatus.hwBIT.all >> 8) & 0xff;
+// SW Status
+    _spiRegs[SPI_REG_SW_STATUS_REQUEST]       = gBitStatus.swBIT.all & 0xff;
+    _spiRegs[SPI_REG_SW_STATUS_REQUEST+1]     = (gBitStatus.swBIT.all >> 8) & 0xff;
+
     return TRUE;
 }
 
@@ -120,22 +191,37 @@ uint8_t bufPtr = 0;
 void SPI_ProcessCommand(uint8_t cmd)
 {
     static uint8_t  regData[2] = {0,0};
-//    ext_spi_burst_data_t *bptr = (ext_spi_burst_data_t*)_activeSpiDataBufPtr;
     _readOp  = (cmd & 0x80) == 0;
     _regAddr = 0xff;  // reset reg addr    
     // command in cmd"
     // place result in "out", place len into *len
     if(_readOp){
       switch(cmd & 0x7F){
-        case SPI_REG_BURST_MSG_REQUEST:
+        case 0x3e:
             // sensors data
             burstCnt++;
             bufIdx[bufPtr++] = _activeSpiDataBufIdx;
             UserSPIPrepareForDataTransmit(_activeSpiDataBufPtr, sizeof(spi_burst_data_t));
             break;
+        case 0x3f:
+            // ext sensors data
+            burstCnt++;
+            bufIdx[bufPtr++] = _activeSpiDataBufIdx;
+            UserSPIPrepareForDataTransmit(_activeSpiDataBufPtr, sizeof(ext_spi_burst_data_t));
+            break;
+        case 0x3D:
+            // ext sensors data
+            burstCnt++;
+            bufIdx[bufPtr++] = _activeSpiDataBufIdx;
+            att_spi_burst_data_t *pld = (att_spi_burst_data_t*)_activeSpiDataBufPtr;
+            for(int i = 0; i < 3; i++){
+                pld->attitude[i] = _attitude[i]; 
+            }
+            UserSPIPrepareForDataTransmit(_activeSpiDataBufPtr, sizeof(att_spi_burst_data_t));
+            break;
         case SPI_REG_MAG_ALIGN_CTRL:
             {
-                uint8_t len = 1, state, regOffset;
+                uint8_t state, regOffset;
                 real    params[4];
                 int16_t tmp[4];
                 state = GetMagAlignEstimatedParams(params);
@@ -164,11 +250,39 @@ void SPI_ProcessCommand(uint8_t cmd)
     }
 }
 
+BOOL CheckSpiPacketRateDivider(uint8_t dataRate )
+{
+    switch( dataRate )
+    {
+        case OUTPUT_DATA_RATE_ZERO  :
+        case OUTPUT_DATA_RATE_200_HZ:
+        case OUTPUT_DATA_RATE_100_HZ:
+        case OUTPUT_DATA_RATE_50_HZ :
+        case OUTPUT_DATA_RATE_25_HZ :
+        case OUTPUT_DATA_RATE_20_HZ :
+        case OUTPUT_DATA_RATE_10_HZ :
+        case OUTPUT_DATA_RATE_5_HZ  :
+        case OUTPUT_DATA_RATE_4_HZ  :
+        case OUTPUT_DATA_RATE_2_HZ  :
+        case OUTPUT_DATA_RATE_1_HZ  :
+            return TRUE;
+            break;
+        default:
+            return FALSE;
+            break;
+    }
+} /* end CheckPacketRateDivider */
+
 
 BOOL CheckSpiSensorFilterType(uint8_t type)
 {
     switch(type){
       case UNFILTERED:
+      case FIR_40HZ_LPF:
+      case FIR_20HZ_LPF:
+      case FIR_10HZ_LPF:
+      case FIR_05HZ_LPF:
+      case IIR_02HZ_LPF:
       case IIR_05HZ_LPF:
       case IIR_10HZ_LPF:
       case IIR_20HZ_LPF:
@@ -180,6 +294,60 @@ BOOL CheckSpiSensorFilterType(uint8_t type)
             return FALSE; 
     }
 };
+
+BOOL CheckSpiSyncRate(uint8_t rate)
+{
+    if(rate < 10){
+        return TRUE;
+    }
+    return FALSE;
+}
+
+uint16_t GetSpiOrientationFromRegs()
+{
+    uint16_t tmp;
+    
+    tmp = (_spiRegs[SPI_REG_ORIENTATION_MSB_CTRL] << 8) | _spiRegs[SPI_REG_ORIENTATION_LSB_CTRL];
+    return tmp;
+}
+
+void SaveParam(uint8_t paramId)
+{
+    switch(paramId){
+        case 0:
+        case 0xff:
+            // save all parameters
+            gUserConfiguration.spiOrientation  =  GetSpiOrientationFromRegs();
+            gUserConfiguration.spiGyroLpfType  = _spiRegs[SPI_REG_RATE_FILTER_TYPE_CTRL];
+            gUserConfiguration.spiAccelLpfType = _spiRegs[SPI_REG_ACCEL_FILTER_TYPE_CTRL];
+        case SPI_REG_DRDY_RATE_CTRL:
+            gUserConfiguration.spiSyncRate     = _spiRegs[SPI_REG_DRDY_RATE_CTRL];
+            break;
+        case SPI_REG_ACCEL_FILTER_TYPE_CTRL:
+            gUserConfiguration.spiAccelLpfType = _spiRegs[SPI_REG_ACCEL_FILTER_TYPE_CTRL];
+            break;
+        case SPI_REG_RATE_FILTER_TYPE_CTRL: 
+            gUserConfiguration.spiGyroLpfType  = _spiRegs[SPI_REG_RATE_FILTER_TYPE_CTRL];
+            break;
+        case SPI_REG_ORIENTATION_MSB_CTRL:
+        case SPI_REG_ORIENTATION_LSB_CTRL:
+            gUserConfiguration.spiOrientation  =  GetSpiOrientationFromRegs();
+            break;
+        default:
+            return;
+    }
+
+    fSaveSpiConfig = TRUE;
+
+}
+
+void UpdateSpiUserConfig()
+{
+    if(fSaveSpiConfig){
+        SaveUserConfig();
+        fSaveSpiConfig = FALSE;
+    }
+}
 
 
 // Here SPI write transaction is processed
@@ -193,25 +361,27 @@ void SPI_ProcessData(uint8_t* in)
 {
     uint16_t tmp;
     static uint8_t orientShadow = 0xff;
+    static uint8_t resetShadow  = 0x00;
 
     if(!_readOp || _regAddr != 0xff){
         switch(_regAddr){
-        // Place read only registers here
-        case SPI_REG_MANUF_CODE_REQUEST:
-        case SPI_REG_MANUF_LOC_REQUEST:
-        case SPI_REG_UNIT_CODE_REQUEST:
-        case SPI_REG_UNIT_CODE_REQUEST+1:
-        case SPI_REG_PROD_ID_REQUEST:
-        case SPI_REG_PROD_ID_REQUEST+1:
-        case SPI_REG_SERIAL_NUM_REQUEST:
-        case SPI_REG_SERIAL_NUM_REQUEST+1:
-        case SPI_REG_HW_VERSION_REQUEST:
-        case SPI_REG_SW_VERSION_REQUEST:
+        case SPI_REG_RESET_MSB_CTRL:
+            if(in[1] == 0x55){
+                resetShadow = 1;
+            }else {
+                resetShadow = 1;
+            }
             break;
-        case SPI_REG_MAG_ALIGN_CTRL:
-            {
-                uint8_t len = 1;
-		        ProcessMagAlignCmds((magAlignCmdPayload*)&in[1], &len);
+        case SPI_REG_RESET_LSB_CTRL:
+            if(in[1] == 0xaa && resetShadow){
+                Reset();
+            }else {
+                resetShadow = 0;
+            }
+            break;
+        case SPI_REG_DRDY_RATE_CTRL:
+            if(CheckSpiSyncRate(in[1])){
+                _spiRegs[_regAddr] = in[1];
             }
             break;
         case SPI_REG_ORIENTATION_MSB_CTRL:
@@ -239,8 +409,16 @@ void SPI_ProcessData(uint8_t* in)
                 platformUpdateRateFilterType(in[1]);
             }
             break;
+        case SPI_REG_MAG_ALIGN_CTRL:
+            {
+                uint8_t len = 1;
+		        ProcessMagAlignCmds((magAlignCmdPayload*)&in[1], &len);
+            }
+            break;
+        case SPI_REG_SAVE_CFG_CTRL:
+            SaveParam(in[1]);
+            break;
         default:
-            _spiRegs[_regAddr] = in[1];
             break;
         }
     }
@@ -268,7 +446,7 @@ uint16_t overRange = 0;
  ******************************************************************************/
 int16_t prepare_sensor_value( float   dataIn, float limit, float scaleFactor)
 {
-    static uint16_t UpperLimit = 32760;
+    static uint16_t UpperLimit = 32766;
     float           tempFloat  = 0.0;
     int             sign;
     static int16_t  tempInt16  = 0x0000;
@@ -306,14 +484,18 @@ int16_t prepare_sensor_value( float   dataIn, float limit, float scaleFactor)
 // Fills SPI burst data buffer with latest samples 
 void FillSPIBurstDataBuffer()
 {
-    spi_burst_data_t data;
-    double Rates[3], Accels[3]; 
+    ext_spi_burst_data_t data;
+    double Rates[3], Accels[3], Mags[3]; 
     double temp;
+    real EulerAngles[3];
     float  t1;
 
     GetRateData_degPerSec(Rates);
     GetAccelData_g(Accels);
     GetBoardTempData(&temp);
+    GetMagData_G(Mags);
+    EKF_GetAttitude_EA_RAD(EulerAngles);
+
 
     data.status = 0;
     overRange   = 0;
@@ -321,37 +503,53 @@ void FillSPIBurstDataBuffer()
     for(int i = 0; i < 3; i++){
         data.accels[i] = prepare_sensor_value(Accels[i], GetSpiAccelLimit(), GetSpiAccelScaleFactor());
         data.rates[i]  = prepare_sensor_value(Rates[i], GetSpiRateLimit(), GetSpiRateScaleFactor());
+        t1 = Mags[i] * 16384;
+        data.mags[i]   = swap16((int16_t)t1);
+        t1 = EulerAngles[i] * 10430.378;    // 65536/2PI
+        _attitude[i]  = swap16((int16_t)t1);
     }
 
     if(overRange){
         data.status |= SENSOR_OVER_RANGE_STATUS_MASK;
     }
-    t1 = temp;
+    t1 = (temp - 31.0)/0.073111172849435;
     data.temp   = swap16((int16_t)t1);
     loadSPIBurstData(&data);
 }
 
-int  GetSpiPacketRateDivider()
-{
-    return _spiRegs[SPI_REG_DRDY_RATE_CTRL];
-}
-
 float GetSpiAccelScaleFactor()
 {
-    return 4000.0;  // so far limited to 5G        
+    return 4000.0;  // so far limited to 8G        
 }
 
 float GetSpiRateScaleFactor()
 {
-    return 100;
+    return 64;
 }
 
 float  GetSpiRateLimit()
 {
-    return 300.0;
+    return 500.0;
 }
 
 float    GetSpiAccelLimit()
 {
-    return 4.5;     // so far limited to 4,5G
+    return 8.0;     // so far limited to 8G
+}
+
+int  GetSpiPacketRateDivider()
+{
+    switch(_spiRegs[SPI_REG_DRDY_RATE_CTRL]){
+        case 0: return 0;   // 0 Hz
+        case 2: return 2;   // 100 Hz
+        case 3: return 4;   // 50 Hz
+        case 4: return 8;   // 25 Hz
+        case 5: return 10;  // 20 Hz
+        case 6: return 20;  // 10 Hz
+        case 7: return 40;  // 5 Hz
+        case 8: return 50;  // 4 Hz
+        case 9: return 100; // 2 Hz
+        default:
+            return 1;       // 200 Hz
+    }
 }

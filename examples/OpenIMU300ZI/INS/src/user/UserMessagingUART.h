@@ -44,7 +44,7 @@ typedef enum {
     PACKET_RATE_5HZ   = 5,       // packet rate 5  Hz
     PACKET_RATE_2HZ   = 2,       // packet rate 2  Hz
     PACKET_RATE_1HZ   = 1,       // packet rate 1  Hz
-} packet_rate_t;
+}packet_rate_t;
 
 
 // User Input packet payload has next structure:
@@ -70,7 +70,7 @@ typedef enum {
     // add new packet type here, before USR_IN_MAX
     USR_IN_MAG_ALIGN        ,
     USR_IN_MAX
-} UserInPacketType;
+}UserInPacketType;
 
 // User output packet codes, change at will
 typedef enum {
@@ -83,6 +83,7 @@ typedef enum {
     USR_OUT_SCALED1,
     USR_OUT_EKF1,
     USR_OUT_EKF2,
+    USR_OUT_ID,
     USR_OUT_MAX
 } UserOutPacketType;
 
@@ -91,7 +92,7 @@ typedef enum {
 #pragma pack(1)
 typedef struct {
     uint8_t  packetPayload[252];    // maximum 252 bytes     
-} userPacket;
+}userPacket;
 #define MAX_NUMBER_OF_USER_PARAMS_IN_THE_PACKET 30
 #define FIRST_30_PARAMS 0xFFFFFFFF
 
@@ -115,7 +116,6 @@ typedef struct {
     uint64_t   parameters[MAX_NUMBER_OF_USER_PARAMS_IN_THE_PACKET];  // up to 30 64-bit parameters  (little endian)
 }allUserParamsPayload;
 
-
 #pragma pack()
 
 
@@ -126,6 +126,7 @@ typedef struct {
 #define USR_OUT_SCALED1_PAYLOAD_LEN (52)
 #define USR_OUT_EKF1_PAYLOAD_LEN    (75)
 #define USR_OUT_EKF2_PAYLOAD_LEN    (123)
+#define USR_OUT_ID_PAYLOAD_LEN      (147)
 
 #define USER_OK      0x00
 #define USER_NAK     0x80
