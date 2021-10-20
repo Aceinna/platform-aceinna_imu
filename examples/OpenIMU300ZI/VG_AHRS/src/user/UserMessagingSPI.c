@@ -35,7 +35,7 @@ limitations under the License.
 #include "spiAPI.h"
 #include "magAPI.h"
 #include "appVersion.h"
-#include "BitStatus.h"
+#include "BITStatus.h"
 #include "EKF_Algorithm.h"
 
 uint8_t  _spiDataBuf[2][SPI_DATA_BUF_LEN];
