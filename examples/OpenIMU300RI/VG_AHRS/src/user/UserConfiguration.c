@@ -32,7 +32,7 @@ limitations under the License.
 #include "userAPI.h"
 
 #include "UserConfiguration.h"
-#include "UserMessagingUart.h"
+#include "UserMessagingUART.h"
 #include "eepromAPI.h"
 #include "Indices.h"
 #include "sae_j1939.h"

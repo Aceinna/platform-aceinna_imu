@@ -32,7 +32,7 @@ limitations under the License.
 #include "sensorsAPI.h"
 #include "userAPI.h"
 #include "magAPI.h"
-#include "magAlign.h"
+#include "MagAlign.h"
 #include "appVersion.h"
 
 #include "UserMessagingUART.h"

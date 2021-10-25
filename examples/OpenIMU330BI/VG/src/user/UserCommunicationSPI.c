@@ -37,7 +37,7 @@ limitations under the License.
 #include "hwAPI.h"
 #include "Indices.h"
 #include "EKF_Algorithm.h"
-#include "BitStatus.h"
+#include "BITStatus.h"
 #include "UserConfiguration.h"
 
 

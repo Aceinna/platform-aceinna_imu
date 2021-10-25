@@ -33,7 +33,7 @@ limitations under the License.
 #include "appVersion.h"
 #include "ucb_packet_struct.h"
 #include "magAPI.h"
-#include "magAlign.h"
+#include "MagAlign.h"
 
 #include "CommonMessages.h"
 #include "algorithm.h"

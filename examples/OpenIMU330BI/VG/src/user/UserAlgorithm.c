@@ -38,7 +38,7 @@ limitations under the License.
 #include "algorithm.h"
 #include "UserAlgorithm.h"
 #include "EKF_Algorithm.h"
-#include "BitStatus.h"
+#include "BITStatus.h"
 #include "TimingVars.h"
 #include "AlgorithmLimits.h"
 #include "math.h"

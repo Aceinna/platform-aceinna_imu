@@ -35,7 +35,7 @@ limitations under the License.
 #include "filter.h"
 #include "appVersion.h"
 #include "hwAPI.h"
-#include "BitStatus.h"
+#include "BITStatus.h"
 #include "UserConfiguration.h"
 
 
