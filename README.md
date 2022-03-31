@@ -39,22 +39,22 @@ Open-ANS is a highly-efficient software stack for the development of navigation 
 
 ### Build firmware
 - Open VSCode source code editor
-- Click ["Home"](http://docs.platformio.org/en/latest/ide/vscode.html?utm_source=github&utm_medium=aceinna#platformio-toolbar) button on the bottom of Aceinna Navigation Studio
+- Click ["Home"](https://docs.platformio.org/en/latest/ide/vscode.html?utm_source=github&utm_medium=aceinna#platformio-toolbar) button on the bottom of Aceinna Navigation Studio
 - Choose "Open Project" (if you have already Aceinna IMU project) or import pre-configured project from  "Custom IMU examples"
-- Click ["Build"](http://docs.platformio.org/en/latest/ide/vscode.html?utm_source=github&utm_medium=aceinna#platformio-toolbar) button on the bottom of Aceinna Navigation Studio
+- Click ["Build"](https://docs.platformio.org/en/latest/ide/vscode.html?utm_source=github&utm_medium=aceinna#platformio-toolbar) button on the bottom of Aceinna Navigation Studio
 
 ### Firmware upgrade
-- Click ["Upload"](http://docs.platformio.org/en/latest/ide/vscode.html?utm_source=github&utm_medium=aceinna#platformio-toolbar) button on the bottom of Aceinna Navigation Studio.
+- Click ["Upload"](https://docs.platformio.org/en/latest/ide/vscode.html?utm_source=github&utm_medium=aceinna#platformio-toolbar) button on the bottom of Aceinna Navigation Studio.
 
 ### Debug
-- Create a PlatformIO Account using ["Home"](http://docs.platformio.org/en/latest/ide/vscode.html?utm_source=github&utm_medium=aceinna#platformio-toolbar) button and "PIO Home > Account" menu
+- Create a PlatformIO Account using ["Home"](https://docs.platformio.org/en/latest/ide/vscode.html?utm_source=github&utm_medium=aceinna#platformio-toolbar) button and "PIO Home > Account" menu
 - Press "F5" or choose "Debug" in VSCode menu
 - Open "Debug" view at left bar.
 
 ### Data Record
 
 - Install [Git](https://www.git-scm.com)
-- Install [Python 2.7 Interpreter](http://docs.platformio.org/en/latest/faq.html?utm_source=github&utm_medium=aceinna#install-python-interpreter)
+- Install [Python Interpreter](https://docs.platformio.org/en/latest/faq.html?utm_source=github&utm_medium=aceinna#install-python-interpreter)
 - Open system terminal and install Aceinna's utilities
   ```sh
   git clone https://github.com/Aceinna/python-imu380
