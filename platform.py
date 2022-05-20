@@ -14,7 +14,7 @@
 
 from platform import system
 
-from platformio.managers.platform import PlatformBase
+from platformio.public import PlatformBase
 
 
 class Aceinna_imuPlatform(PlatformBase):
