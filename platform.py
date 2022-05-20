@@ -34,11 +34,11 @@ class Aceinna_imuPlatform(PlatformBase):
         if not any(jlink_conds) and jlink_pkgname in self.packages:
             del self.packages[jlink_pkgname]
 
-        return PlatformBase.configure_default_packages(self, variables,
+        return super().configure_default_packages(self, variables,
                                                        targets)
 
     def get_boards(self, id_=None):
-        result = PlatformBase.get_boards(self, id_)
+        result = super().get_boards(self, id_)
         if not result:
             return result
         if id_:
