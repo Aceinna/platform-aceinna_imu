@@ -26,7 +26,7 @@ limitations under the License.
 #ifndef _INS_APP_VERSION_H
 #define _INS_APP_VERSION_H
 
-#define  APP_VERSION_STRING  "OpenIMU300ZI INS 04.01.04"
+#define  APP_VERSION_STRING  "OpenIMU300ZI INS 04.02.01"
 #define  APP_SPI_SW_VERSION  115
 
 
